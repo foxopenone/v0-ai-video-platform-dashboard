@@ -1,6 +1,8 @@
 "use client"
 
-import { Coins, Zap, ChevronDown, User, Settings, LogOut, CreditCard } from "lucide-react"
+import { useState } from "react"
+import Image from "next/image"
+import { Coins, ChevronDown, User, Settings, LogOut, CreditCard, Globe } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -10,79 +12,98 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
+const LANGUAGES = [
+  { code: "EN", label: "English" },
+  { code: "中", label: "Chinese" },
+  { code: "한", label: "Korean" },
+  { code: "ع", label: "Arabic" },
+]
+
 export function Header() {
+  const [lang, setLang] = useState("EN")
+
   return (
-    <header className="sticky top-0 z-50 flex h-16 items-center justify-between border-b border-border/50 bg-background/80 px-6 backdrop-blur-xl">
-      <div className="flex items-center gap-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-          <Zap className="h-4 w-4 text-primary-foreground" />
-        </div>
-        <span className="text-lg font-semibold tracking-tight text-foreground">
-          ClipForge
+    <header className="sticky top-0 z-50 flex h-12 items-center justify-between border-b border-border/40 bg-background/80 px-5 backdrop-blur-xl">
+      {/* Logo */}
+      <div className="flex items-center gap-2.5">
+        <Image
+          src="/images/shortee-icon.png"
+          alt="Shortee.TV"
+          width={24}
+          height={24}
+          className="h-6 w-6"
+        />
+        <span className="brand-gradient-text text-base font-bold tracking-tight">
+          Shortee.TV
         </span>
       </div>
 
-      <nav className="hidden items-center gap-8 md:flex">
+      {/* Right Side */}
+      <div className="flex items-center gap-3">
+        {/* Pricing link */}
         <a
-          href="#workspace"
-          className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-        >
-          Workspace
-        </a>
-        <a
-          href="#projects"
-          className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-        >
-          Projects
-        </a>
-        <a
-          href="#discover"
-          className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-        >
-          Discover
-        </a>
-        <a
-          href="#"
-          className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          href="#pricing"
+          className="hidden text-xs font-medium text-muted-foreground transition-colors hover:text-foreground md:block"
         >
           Pricing
         </a>
-      </nav>
 
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2 rounded-full border border-border/50 bg-secondary/50 px-3 py-1.5">
-          <Coins className="h-3.5 w-3.5 text-primary" />
-          <span className="text-sm font-medium text-foreground">500</span>
-          <span className="text-xs text-muted-foreground">credits</span>
+        {/* Credits */}
+        <div className="flex items-center gap-1.5 rounded-full border border-border/40 bg-secondary/40 px-2.5 py-1">
+          <Coins className="h-3 w-3 text-[var(--brand-pink)]" />
+          <span className="font-mono text-xs font-semibold text-foreground">500</span>
         </div>
 
+        {/* Language Switcher */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2 rounded-full p-1 transition-colors hover:bg-secondary">
-              <Avatar className="h-8 w-8 border border-border/50">
-                <AvatarFallback className="bg-secondary text-sm font-medium text-foreground">
-                  JD
-                </AvatarFallback>
-              </Avatar>
-              <ChevronDown className="hidden h-3.5 w-3.5 text-muted-foreground md:block" />
+            <button className="flex items-center gap-1 rounded-md border border-border/40 bg-secondary/30 px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground">
+              <Globe className="h-3 w-3" />
+              <span className="font-medium">{lang}</span>
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuContent align="end" className="min-w-[120px]">
+            {LANGUAGES.map((l) => (
+              <DropdownMenuItem
+                key={l.code}
+                onClick={() => setLang(l.code)}
+                className={lang === l.code ? "text-foreground" : "text-muted-foreground"}
+              >
+                <span className="mr-2 w-5 text-center font-medium">{l.code}</span>
+                {l.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* User Avatar */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="flex items-center gap-1.5 rounded-full p-0.5 transition-colors hover:bg-secondary/50">
+              <Avatar className="h-7 w-7 border border-border/40">
+                <AvatarFallback className="brand-gradient text-[10px] font-bold text-[var(--brand-pink)]" style={{ background: 'linear-gradient(135deg, rgba(244,63,122,0.15), rgba(168,85,247,0.15))' }}>
+                  <span className="text-foreground">JD</span>
+                </AvatarFallback>
+              </Avatar>
+              <ChevronDown className="hidden h-3 w-3 text-muted-foreground md:block" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
             <DropdownMenuItem>
-              <User className="mr-2 h-4 w-4" />
+              <User className="mr-2 h-3.5 w-3.5" />
               Profile
             </DropdownMenuItem>
             <DropdownMenuItem>
-              <CreditCard className="mr-2 h-4 w-4" />
+              <CreditCard className="mr-2 h-3.5 w-3.5" />
               Billing
             </DropdownMenuItem>
             <DropdownMenuItem>
-              <Settings className="mr-2 h-4 w-4" />
+              <Settings className="mr-2 h-3.5 w-3.5" />
               Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="text-destructive">
-              <LogOut className="mr-2 h-4 w-4" />
+              <LogOut className="mr-2 h-3.5 w-3.5" />
               Sign Out
             </DropdownMenuItem>
           </DropdownMenuContent>

@@ -1,79 +1,136 @@
 "use client"
 
 import { useState } from "react"
-import { Mic, Music, Rocket, Settings2 } from "lucide-react"
-import { Switch } from "@/components/ui/switch"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Button } from "@/components/ui/button"
+  Mic, Music, Rocket,
+  Monitor, Globe2, Eye, Palette, Sparkles, Anchor,
+  ChevronDown, Wand2
+} from "lucide-react"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { AudioDrawer } from "@/components/dashboard/audio-drawer"
 import { submitProject } from "@/lib/mock-api"
 import { cn } from "@/lib/utils"
 
-const PLATFORMS = ["TikTok", "YouTube Shorts", "Instagram Reels", "Twitter/X", "LinkedIn"]
-const LANGUAGES = ["English", "Spanish", "Chinese", "Korean", "Arabic", "Portuguese", "Hindi", "Indonesian"]
-const POVS = ["First Person", "Second Person", "Third Person", "Neutral"]
-const TONES = ["Professional", "Casual", "Humorous", "Inspirational", "Educational", "Dramatic"]
-const STYLES = ["Documentary", "Vlog", "News", "Cinematic", "Minimal", "Storytelling"]
-const HOOKS = ["Question", "Bold Statement", "Statistic", "Controversy", "Story Opener", "Challenge"]
+const PARAMS = [
+  {
+    key: "platform",
+    label: "Platform",
+    icon: Monitor,
+    options: ["TikTok", "YouTube Shorts", "Instagram Reels", "Twitter/X", "LinkedIn"],
+  },
+  {
+    key: "language",
+    label: "Language",
+    icon: Globe2,
+    options: ["English", "Spanish", "Chinese", "Korean", "Arabic", "Portuguese", "Hindi", "Indonesian"],
+  },
+  {
+    key: "pov",
+    label: "POV",
+    icon: Eye,
+    options: ["First Person", "Second Person", "Third Person", "Neutral"],
+  },
+  {
+    key: "tone",
+    label: "Tone",
+    icon: Palette,
+    options: ["Professional", "Casual", "Humorous", "Inspirational", "Educational", "Dramatic"],
+  },
+  {
+    key: "style",
+    label: "Style",
+    icon: Sparkles,
+    options: ["Documentary", "Vlog", "News", "Cinematic", "Minimal", "Storytelling"],
+  },
+  {
+    key: "hook",
+    label: "Hook",
+    icon: Anchor,
+    options: ["Question", "Bold Statement", "Statistic", "Controversy", "Story Opener", "Challenge"],
+  },
+] as const
 
-interface SelectFieldProps {
+type ParamKey = (typeof PARAMS)[number]["key"]
+
+interface TileProps {
   label: string
-  placeholder: string
-  options: string[]
   value: string
+  icon: React.ComponentType<{ className?: string }>
+  options: readonly string[]
   onChange: (value: string) => void
 }
 
-function SelectField({ label, placeholder, options, value, onChange }: SelectFieldProps) {
+function ParamTile({ label, value, icon: Icon, options, onChange }: TileProps) {
+  const [open, setOpen] = useState(false)
+
   return (
-    <div className="flex flex-col gap-1.5">
-      <label className="text-xs font-medium text-muted-foreground">{label}</label>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="h-9 border-border/30 bg-secondary/30 text-sm text-foreground hover:bg-secondary/50 focus:ring-primary/30">
-          <SelectValue placeholder={placeholder} />
-        </SelectTrigger>
-        <SelectContent>
-          {options.map((opt) => (
-            <SelectItem key={opt} value={opt.toLowerCase().replace(/[/ ]/g, "-")}>
-              {opt}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          className={cn(
+            "flex items-center gap-2 rounded-md border px-2.5 py-2 text-left transition-all",
+            value
+              ? "border-[var(--brand-pink)]/20 bg-[var(--brand-pink)]/5"
+              : "border-border/40 bg-secondary/20 hover:border-border/60 hover:bg-secondary/35"
+          )}
+        >
+          <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <div className="flex-1 overflow-hidden">
+            <p className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</p>
+            <p className="truncate text-[11px] font-medium text-foreground">
+              {value || "Select"}
+            </p>
+          </div>
+          <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground/50" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-44 p-1" align="start">
+        {options.map((opt) => (
+          <button
+            key={opt}
+            onClick={() => { onChange(opt); setOpen(false) }}
+            className={cn(
+              "flex w-full items-center rounded-md px-2.5 py-1.5 text-xs transition-colors",
+              value === opt
+                ? "bg-[var(--brand-pink)]/10 font-medium text-foreground"
+                : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+            )}
+          >
+            {opt}
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
   )
 }
 
 export function ConfigForm() {
   const [mode, setMode] = useState<"full_auto" | "step_review">("full_auto")
-  const [platform, setPlatform] = useState("")
-  const [language, setLanguage] = useState("")
-  const [pov, setPov] = useState("")
-  const [tone, setTone] = useState("")
-  const [style, setStyle] = useState("")
-  const [hook, setHook] = useState("")
+  const [params, setParams] = useState<Record<ParamKey, string>>({
+    platform: "",
+    language: "",
+    pov: "",
+    tone: "",
+    style: "",
+    hook: "",
+  })
   const [voiceDrawerOpen, setVoiceDrawerOpen] = useState(false)
   const [bgmDrawerOpen, setBgmDrawerOpen] = useState(false)
   const [selectedVoice, setSelectedVoice] = useState<string | null>(null)
+  const [selectedVoiceName, setSelectedVoiceName] = useState<string | null>(null)
   const [selectedBgm, setSelectedBgm] = useState<string | null>(null)
+  const [selectedBgmName, setSelectedBgmName] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const handleSubmit = async () => {
     setSubmitting(true)
     await submitProject({
       mode,
-      platform,
-      language,
-      pov,
-      tone,
-      style,
-      hook,
+      ...params,
       voice: selectedVoice,
       bgm: selectedBgm,
     })
@@ -81,154 +138,111 @@ export function ConfigForm() {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <Settings2 className="h-4 w-4 text-primary" />
-          Configuration
-        </h3>
+    <div className="flex h-full flex-col gap-4">
+      {/* Mode Toggle - Premium segmented control */}
+      <div className="flex rounded-lg border border-border/40 bg-secondary/20 p-0.5">
+        <button
+          onClick={() => setMode("full_auto")}
+          className={cn(
+            "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all",
+            mode === "full_auto"
+              ? "brand-gradient text-[#fff] shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Wand2 className="h-3 w-3" />
+          Full Auto
+        </button>
+        <button
+          onClick={() => setMode("step_review")}
+          className={cn(
+            "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all",
+            mode === "step_review"
+              ? "brand-gradient text-[#fff] shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Eye className="h-3 w-3" />
+          Step Review
+        </button>
       </div>
 
-      {/* Work Mode Toggle */}
-      <div className="mb-5 flex items-center justify-between rounded-lg border border-border/30 bg-secondary/20 p-3">
-        <div>
-          <p className="text-sm font-medium text-foreground">Work Mode</p>
-          <p className="text-xs text-muted-foreground">
-            {mode === "full_auto" ? "Fully automated pipeline" : "Review each step"}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              "text-xs font-medium transition-colors",
-              mode === "full_auto" ? "text-primary" : "text-muted-foreground"
-            )}
-          >
-            Auto
-          </span>
-          <Switch
-            checked={mode === "step_review"}
-            onCheckedChange={(checked) =>
-              setMode(checked ? "step_review" : "full_auto")
-            }
+      {/* Parameter tiles grid - compact, converged */}
+      <div className="grid grid-cols-3 gap-2">
+        {PARAMS.map((p) => (
+          <ParamTile
+            key={p.key}
+            label={p.label}
+            value={params[p.key]}
+            icon={p.icon}
+            options={p.options}
+            onChange={(val) => setParams((prev) => ({ ...prev, [p.key]: val }))}
           />
-          <span
-            className={cn(
-              "text-xs font-medium transition-colors",
-              mode === "step_review" ? "text-primary" : "text-muted-foreground"
-            )}
-          >
-            Review
-          </span>
-        </div>
+        ))}
       </div>
 
-      {/* Dropdowns Grid */}
-      <div className="mb-5 grid grid-cols-2 gap-3">
-        <SelectField
-          label="Platform"
-          placeholder="Select platform"
-          options={PLATFORMS}
-          value={platform}
-          onChange={setPlatform}
-        />
-        <SelectField
-          label="Language"
-          placeholder="Select language"
-          options={LANGUAGES}
-          value={language}
-          onChange={setLanguage}
-        />
-        <SelectField
-          label="POV"
-          placeholder="Select POV"
-          options={POVS}
-          value={pov}
-          onChange={setPov}
-        />
-        <SelectField
-          label="Tone"
-          placeholder="Select tone"
-          options={TONES}
-          value={tone}
-          onChange={setTone}
-        />
-        <SelectField
-          label="Style"
-          placeholder="Select style"
-          options={STYLES}
-          value={style}
-          onChange={setStyle}
-        />
-        <SelectField
-          label="Hook"
-          placeholder="Select hook"
-          options={HOOKS}
-          value={hook}
-          onChange={setHook}
-        />
+      {/* Audio Slots */}
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          onClick={() => setVoiceDrawerOpen(true)}
+          className={cn(
+            "flex items-center gap-2 rounded-md border px-3 py-2.5 transition-all",
+            selectedVoice
+              ? "border-[var(--brand-pink)]/25 bg-[var(--brand-pink)]/5"
+              : "border-border/40 bg-secondary/20 hover:border-border/60 hover:bg-secondary/35"
+          )}
+        >
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-secondary/60">
+            <Mic className="h-3.5 w-3.5 text-[var(--brand-pink)]" />
+          </div>
+          <div className="flex-1 overflow-hidden text-left">
+            <p className="truncate text-[11px] font-medium text-foreground">
+              {selectedVoiceName || "Add Voice"}
+            </p>
+            <p className="text-[9px] text-muted-foreground">Eleven Labs</p>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setBgmDrawerOpen(true)}
+          className={cn(
+            "flex items-center gap-2 rounded-md border px-3 py-2.5 transition-all",
+            selectedBgm
+              ? "border-[var(--brand-purple)]/25 bg-[var(--brand-purple)]/5"
+              : "border-border/40 bg-secondary/20 hover:border-border/60 hover:bg-secondary/35"
+          )}
+        >
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-secondary/60">
+            <Music className="h-3.5 w-3.5 text-[var(--brand-purple)]" />
+          </div>
+          <div className="flex-1 overflow-hidden text-left">
+            <p className="truncate text-[11px] font-medium text-foreground">
+              {selectedBgmName || "Add BGM"}
+            </p>
+            <p className="text-[9px] text-muted-foreground">Background</p>
+          </div>
+        </button>
       </div>
 
-      {/* Audio Selectors */}
-      <div className="mb-5 flex flex-col gap-2">
-        <label className="text-xs font-medium text-muted-foreground">Audio</label>
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={() => setVoiceDrawerOpen(true)}
-            className={cn(
-              "flex items-center gap-2.5 rounded-lg border p-3 transition-all",
-              selectedVoice
-                ? "border-primary/50 bg-primary/5"
-                : "border-border/30 bg-secondary/20 hover:border-border/50 hover:bg-secondary/40"
-            )}
-          >
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary">
-              <Mic className="h-4 w-4 text-primary" />
-            </div>
-            <div className="text-left">
-              <p className="text-xs font-medium text-foreground">
-                {selectedVoice ? "Voice Selected" : "Select Voice"}
-              </p>
-              <p className="text-[10px] text-muted-foreground">Eleven Labs</p>
-            </div>
-          </button>
+      {/* Spacer */}
+      <div className="flex-1" />
 
-          <button
-            onClick={() => setBgmDrawerOpen(true)}
-            className={cn(
-              "flex items-center gap-2.5 rounded-lg border p-3 transition-all",
-              selectedBgm
-                ? "border-primary/50 bg-primary/5"
-                : "border-border/30 bg-secondary/20 hover:border-border/50 hover:bg-secondary/40"
-            )}
-          >
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary">
-              <Music className="h-4 w-4 text-primary" />
-            </div>
-            <div className="text-left">
-              <p className="text-xs font-medium text-foreground">
-                {selectedBgm ? "BGM Selected" : "Select BGM"}
-              </p>
-              <p className="text-[10px] text-muted-foreground">Background Music</p>
-            </div>
-          </button>
-        </div>
-      </div>
-
-      {/* Submit Button */}
-      <Button
+      {/* Launch button with neon glow */}
+      <button
         onClick={handleSubmit}
         disabled={submitting}
-        className="mt-auto w-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
-        size="lg"
+        className={cn(
+          "brand-gradient brand-glow flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold text-[#fff] transition-all hover:opacity-90 disabled:opacity-50",
+          submitting && "animate-pulse"
+        )}
       >
         {submitting ? (
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#fff]/30 border-t-[#fff]" />
         ) : (
           <Rocket className="h-4 w-4" />
         )}
-        {submitting ? "Launching..." : "Launch Pipeline"}
-      </Button>
+        {submitting ? "Generating..." : "Start Generation"}
+      </button>
 
       {/* Audio Drawers */}
       <AudioDrawer
@@ -236,8 +250,9 @@ export function ConfigForm() {
         open={voiceDrawerOpen}
         onOpenChange={setVoiceDrawerOpen}
         selectedId={selectedVoice}
-        onSelect={(id) => {
+        onSelect={(id, name) => {
           setSelectedVoice(id)
+          setSelectedVoiceName(name)
           setVoiceDrawerOpen(false)
         }}
       />
@@ -246,8 +261,9 @@ export function ConfigForm() {
         open={bgmDrawerOpen}
         onOpenChange={setBgmDrawerOpen}
         selectedId={selectedBgm}
-        onSelect={(id) => {
+        onSelect={(id, name) => {
           setSelectedBgm(id)
+          setSelectedBgmName(name)
           setBgmDrawerOpen(false)
         }}
       />

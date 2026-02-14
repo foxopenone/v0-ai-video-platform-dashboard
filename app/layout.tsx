@@ -7,12 +7,12 @@ const _inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 const _jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-jetbrains-mono' })
 
 export const metadata: Metadata = {
-  title: 'ClipForge - AI Short-Video Automation',
+  title: 'Shortee.TV - AI Video Production Suite',
   description: 'Professional AI-powered short-video automation platform. Upload, configure, and generate optimized short-form content at scale.',
 }
 
 export const viewport: Viewport = {
-  themeColor: '#0a0a0f',
+  themeColor: '#0b0a14',
 }
 
 export default function RootLayout({

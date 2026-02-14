@@ -91,40 +91,31 @@ export function UploadZone() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-medium text-foreground">
-          Upload Videos
-        </h3>
-        <span className="text-xs text-muted-foreground">
-          {files.length}/15 files
-        </span>
-      </div>
-
+      {/* Drop Zone - compact */}
       <div
-        onDragOver={(e) => {
-          e.preventDefault()
-          setIsDragOver(true)
-        }}
+        onDragOver={(e) => { e.preventDefault(); setIsDragOver(true) }}
         onDragLeave={() => setIsDragOver(false)}
         onDrop={handleDrop}
         onClick={() => inputRef.current?.click()}
         className={cn(
-          "group flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed px-6 py-10 transition-all",
+          "group flex cursor-pointer items-center gap-3 rounded-lg border border-dashed px-4 py-4 transition-all",
           isDragOver
-            ? "border-primary bg-primary/5"
-            : "border-border/50 hover:border-primary/50 hover:bg-secondary/30",
+            ? "border-[var(--brand-pink)] bg-[var(--brand-pink)]/5"
+            : "border-border/50 hover:border-[var(--brand-pink)]/40 hover:bg-secondary/20",
           files.length >= 15 && "pointer-events-none opacity-40"
         )}
       >
-        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-secondary">
-          <Upload className="h-5 w-5 text-muted-foreground transition-colors group-hover:text-primary" />
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary/60">
+          <Upload className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-[var(--brand-pink)]" />
         </div>
-        <p className="mb-1 text-sm font-medium text-foreground">
-          Drop video files here
-        </p>
-        <p className="text-xs text-muted-foreground">
-          MP4, MOV, AVI, MKV up to 500MB each
-        </p>
+        <div className="flex-1">
+          <p className="text-xs font-medium text-foreground">
+            Drop videos or click to browse
+          </p>
+          <p className="text-[10px] text-muted-foreground">
+            MP4, MOV, AVI, MKV &middot; Max 15 files &middot; {files.length}/15
+          </p>
+        </div>
         <input
           ref={inputRef}
           type="file"
@@ -135,49 +126,44 @@ export function UploadZone() {
         />
       </div>
 
+      {/* Compact file list */}
       {files.length > 0 && (
-        <ScrollArea className="mt-4 flex-1">
-          <div className="flex flex-col gap-2 pr-3">
-            {files.map((file) => (
+        <ScrollArea className="mt-3 flex-1">
+          <div className="flex flex-col gap-1.5">
+            {files.map((file, index) => (
               <div
                 key={file.id}
-                className="group/item flex items-center gap-3 rounded-lg border border-border/30 bg-secondary/30 p-3 transition-colors hover:bg-secondary/50"
+                className="group/item flex items-center gap-2.5 rounded-md bg-secondary/20 px-3 py-2 transition-colors hover:bg-secondary/35"
               >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-secondary">
-                  <Film className="h-4 w-4 text-muted-foreground" />
-                </div>
+                <span className="w-5 shrink-0 text-center font-mono text-[10px] text-muted-foreground">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <Film className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
                 <div className="flex-1 overflow-hidden">
-                  <div className="flex items-center justify-between">
-                    <p className="truncate text-xs font-medium text-foreground">
-                      {file.name}
-                    </p>
-                    <div className="ml-2 flex shrink-0 items-center gap-1.5">
-                      {file.status === "complete" && (
-                        <CheckCircle2 className="h-3.5 w-3.5 text-[hsl(142,71%,45%)]" />
-                      )}
-                      {file.status === "error" && (
-                        <AlertCircle className="h-3.5 w-3.5 text-destructive" />
-                      )}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          removeFile(file.id)
-                        }}
-                        className="rounded p-0.5 opacity-0 transition-opacity hover:bg-secondary group-hover/item:opacity-100"
-                      >
-                        <X className="h-3 w-3 text-muted-foreground" />
-                      </button>
-                    </div>
-                  </div>
-                  {(file.status === "uploading" || file.status === "queued") && (
-                    <div className="mt-1.5 flex items-center gap-2">
-                      <Progress value={file.progress} className="h-1" />
-                      <span className="shrink-0 text-[10px] font-mono text-muted-foreground">
-                        {Math.round(file.progress)}%
-                      </span>
-                    </div>
-                  )}
+                  <p className="truncate text-[11px] font-medium text-foreground/90">
+                    {file.name}
+                  </p>
                 </div>
+                {(file.status === "uploading" || file.status === "queued") && (
+                  <div className="flex w-20 items-center gap-1.5">
+                    <Progress value={file.progress} className="h-[3px] flex-1" />
+                    <span className="w-7 shrink-0 text-right font-mono text-[9px] text-muted-foreground">
+                      {Math.round(file.progress)}%
+                    </span>
+                  </div>
+                )}
+                {file.status === "complete" && (
+                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-[hsl(var(--success))]" />
+                )}
+                {file.status === "error" && (
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />
+                )}
+                <button
+                  onClick={(e) => { e.stopPropagation(); removeFile(file.id) }}
+                  className="rounded p-0.5 opacity-0 transition-opacity hover:bg-secondary group-hover/item:opacity-100"
+                >
+                  <X className="h-3 w-3 text-muted-foreground" />
+                </button>
               </div>
             ))}
           </div>
