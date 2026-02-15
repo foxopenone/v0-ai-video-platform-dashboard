@@ -79,10 +79,13 @@ function ParamTile({ label, value, icon: Icon, options, onChange }: TileProps) {
               : "border-border/40 bg-secondary/20 hover:border-border/60 hover:bg-secondary/35"
           )}
         >
-          <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <Icon className={cn("h-3.5 w-3.5 shrink-0", value ? "text-[var(--brand-pink)]" : "text-foreground/70")} />
           <div className="flex-1 overflow-hidden">
-            <p className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</p>
-            <p className="truncate text-[11px] font-medium text-foreground">
+            <p className="text-[9px] font-medium uppercase tracking-wider text-foreground/90">{label}</p>
+            <p className={cn(
+              "truncate text-[11px]",
+              value ? "font-medium text-foreground" : "text-muted-foreground/60"
+            )}>
               {value || "Select"}
             </p>
           </div>
