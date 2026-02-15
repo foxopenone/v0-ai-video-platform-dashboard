@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useRef } from "react"
-import { Upload, X, Film, CheckCircle2, AlertCircle } from "lucide-react"
+import { Upload, X, Film, CheckCircle2, AlertCircle, Smartphone } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { uploadVideo } from "@/lib/mock-api"
@@ -19,6 +19,40 @@ interface UploadFile {
 function extractNumericSuffix(filename: string): number {
   const match = filename.match(/(?:EP|ep|Ep|e|E)(\d+)/i) || filename.match(/(\d+)/)
   return match ? parseInt(match[1], 10) : 999
+}
+
+/** SVG portrait guide illustration shown in the empty state */
+function PortraitGuide() {
+  return (
+    <div className="flex flex-col items-center gap-3">
+      {/* 9:16 dashed frame */}
+      <div className="relative flex h-44 w-[99px] items-center justify-center rounded-xl border-2 border-dashed border-muted-foreground/20">
+        {/* Phone notch hint */}
+        <div className="absolute top-2 left-1/2 h-1 w-6 -translate-x-1/2 rounded-full bg-muted-foreground/10" />
+        {/* Play triangle in center */}
+        <svg
+          width="28"
+          height="32"
+          viewBox="0 0 28 32"
+          fill="none"
+          className="text-muted-foreground/15"
+        >
+          <path
+            d="M26 14.268a2 2 0 010 3.464L4 29.856a2 2 0 01-3-1.732V3.876A2 2 0 014 2.144l22 12.124z"
+            fill="currentColor"
+          />
+        </svg>
+        {/* Aspect label */}
+        <span className="absolute -right-7 top-1/2 -translate-y-1/2 -rotate-90 whitespace-nowrap text-[8px] font-medium tracking-widest text-muted-foreground/25">
+          9 : 16
+        </span>
+      </div>
+      <div className="flex items-center gap-1.5 text-muted-foreground/30">
+        <Smartphone className="h-3 w-3" />
+        <span className="text-[10px] font-medium">Portrait Video</span>
+      </div>
+    </div>
+  )
 }
 
 export function UploadZone() {
@@ -89,33 +123,69 @@ export function UploadZone() {
     setFiles((prev) => prev.filter((f) => f.id !== id))
   }
 
+  const hasFiles = files.length > 0
+
   return (
     <div className="flex h-full flex-col">
-      {/* Drop Zone - compact */}
+      {/* Drop Zone */}
       <div
         onDragOver={(e) => { e.preventDefault(); setIsDragOver(true) }}
         onDragLeave={() => setIsDragOver(false)}
         onDrop={handleDrop}
         onClick={() => inputRef.current?.click()}
         className={cn(
-          "group flex cursor-pointer items-center gap-3 rounded-lg border border-dashed px-4 py-4 transition-all",
+          "group relative flex cursor-pointer flex-col overflow-hidden rounded-lg border border-dashed transition-all",
+          hasFiles ? "min-h-[100px]" : "min-h-[280px]",
           isDragOver
             ? "border-[var(--brand-pink)] bg-[var(--brand-pink)]/5"
-            : "border-border/50 hover:border-[var(--brand-pink)]/40 hover:bg-secondary/20",
+            : "border-border/40 hover:border-[var(--brand-pink)]/30 hover:bg-secondary/10",
           files.length >= 15 && "pointer-events-none opacity-40"
         )}
       >
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary/60">
-          <Upload className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-[var(--brand-pink)]" />
-        </div>
-        <div className="flex-1">
-          <p className="text-xs font-medium text-foreground">
-            Drop videos or click to browse
-          </p>
-          <p className="text-[10px] text-muted-foreground">
-            MP4, MOV, AVI, MKV &middot; Max 15 files &middot; {files.length}/15
-          </p>
-        </div>
+        {/* Empty state: Portrait guide in center, upload CTA in lower third */}
+        {!hasFiles && (
+          <>
+            {/* Upper 2/3: Portrait frame guide */}
+            <div className="flex flex-1 items-center justify-center pt-2">
+              <PortraitGuide />
+            </div>
+
+            {/* Lower 1/3: Upload CTA */}
+            <div className="flex flex-col items-center gap-2 pb-5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary/50 transition-colors group-hover:bg-[var(--brand-pink)]/10">
+                <Upload className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-[var(--brand-pink)]" />
+              </div>
+              <div className="text-center">
+                <p className="text-xs font-medium text-foreground/80">
+                  Drop videos or click to browse
+                </p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">
+                  MP4, MOV, AVI, MKV &middot; Max 15 files
+                </p>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Has files: compact inline trigger */}
+        {hasFiles && (
+          <div className="flex items-center gap-3 px-4 py-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary/50">
+              <Upload className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-[var(--brand-pink)]" />
+            </div>
+            <div className="flex-1">
+              <p className="text-xs font-medium text-foreground">
+                Drop more or click to browse
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                {files.length}/15 files &middot; Portrait 9:16 recommended
+              </p>
+            </div>
+            {/* Tiny 9:16 indicator */}
+            <div className="hidden h-8 w-[18px] shrink-0 rounded border border-dashed border-muted-foreground/20 sm:block" />
+          </div>
+        )}
+
         <input
           ref={inputRef}
           type="file"
@@ -127,7 +197,7 @@ export function UploadZone() {
       </div>
 
       {/* Compact file list */}
-      {files.length > 0 && (
+      {hasFiles && (
         <ScrollArea className="mt-3 flex-1">
           <div className="flex flex-col gap-1.5">
             {files.map((file, index) => (

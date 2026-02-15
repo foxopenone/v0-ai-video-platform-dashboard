@@ -12,6 +12,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { AudioDrawer } from "@/components/dashboard/audio-drawer"
+import { ReviewModal } from "@/components/dashboard/review-modal"
 import { submitProject } from "@/lib/mock-api"
 import { cn } from "@/lib/utils"
 
@@ -125,6 +126,7 @@ export function ConfigForm() {
   const [selectedBgm, setSelectedBgm] = useState<string | null>(null)
   const [selectedBgmName, setSelectedBgmName] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [reviewOpen, setReviewOpen] = useState(false)
 
   const handleSubmit = async () => {
     setSubmitting(true)
@@ -135,6 +137,10 @@ export function ConfigForm() {
       bgm: selectedBgm,
     })
     setSubmitting(false)
+    // If Step Review mode, open review modal after submission
+    if (mode === "step_review") {
+      setReviewOpen(true)
+    }
   }
 
   return (
@@ -266,6 +272,13 @@ export function ConfigForm() {
           setSelectedBgmName(name)
           setBgmDrawerOpen(false)
         }}
+      />
+
+      {/* Step Review Modal */}
+      <ReviewModal
+        open={reviewOpen}
+        onOpenChange={setReviewOpen}
+        projectTitle="New Project"
       />
     </div>
   )

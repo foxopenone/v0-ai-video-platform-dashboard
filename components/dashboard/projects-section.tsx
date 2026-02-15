@@ -9,7 +9,7 @@ import {
   Film,
   ChevronLeft,
   ChevronRight,
-  FolderOpen,
+  Play,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { fetchProjects } from "@/lib/mock-api"
@@ -29,7 +29,7 @@ const STATUS_CONFIG = {
   processing: {
     label: "Processing",
     icon: Loader2,
-    className: "border-primary/30 bg-primary/10 text-primary",
+    className: "border-[var(--brand-pink)]/30 bg-[var(--brand-pink)]/10 text-[var(--brand-pink)]",
     iconClass: "animate-spin",
   },
   pending_review: {
@@ -41,7 +41,7 @@ const STATUS_CONFIG = {
   completed: {
     label: "Completed",
     icon: CheckCircle2,
-    className: "border-[hsl(142,71%,45%)]/30 bg-[hsl(142,71%,45%)]/10 text-[hsl(142,71%,45%)]",
+    className: "border-[hsl(var(--success))]/30 bg-[hsl(var(--success))]/10 text-[hsl(var(--success))]",
     iconClass: "",
   },
 }
@@ -60,7 +60,7 @@ export function ProjectsSection() {
 
   const scroll = (direction: "left" | "right") => {
     if (!scrollRef.current) return
-    const amount = 320
+    const amount = 220
     scrollRef.current.scrollBy({
       left: direction === "left" ? -amount : amount,
       behavior: "smooth",
@@ -80,12 +80,14 @@ export function ProjectsSection() {
           <button
             onClick={() => scroll("left")}
             className="flex h-8 w-8 items-center justify-center rounded-lg border border-border/30 bg-secondary/30 text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
+            aria-label="Scroll left"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
           <button
             onClick={() => scroll("right")}
             className="flex h-8 w-8 items-center justify-center rounded-lg border border-border/30 bg-secondary/30 text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
+            aria-label="Scroll right"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
@@ -97,10 +99,10 @@ export function ProjectsSection() {
         className="scrollbar-hide flex gap-4 overflow-x-auto pb-2"
       >
         {loading
-          ? Array.from({ length: 4 }).map((_, i) => (
+          ? Array.from({ length: 5 }).map((_, i) => (
               <div
                 key={i}
-                className="h-48 w-72 shrink-0 animate-pulse rounded-xl bg-secondary/30"
+                className="aspect-[9/16] w-40 shrink-0 animate-pulse rounded-xl bg-secondary/30"
               />
             ))
           : projects.map((project) => {
@@ -109,46 +111,61 @@ export function ProjectsSection() {
               return (
                 <div
                   key={project.id}
-                  className="group w-72 shrink-0 cursor-pointer rounded-xl border border-border/30 bg-card p-4 transition-all hover:border-border/60 hover:bg-card/80"
+                  className="group relative w-40 shrink-0 cursor-pointer overflow-hidden rounded-xl border border-border/30 bg-card transition-all hover:border-border/60"
                 >
-                  {/* Thumbnail area */}
-                  <div className="mb-3 flex h-24 items-center justify-center rounded-lg bg-secondary/40">
-                    <FolderOpen className="h-8 w-8 text-muted-foreground/40" />
-                  </div>
+                  {/* 9:16 vertical thumbnail area */}
+                  <div className="relative aspect-[9/16] w-full overflow-hidden bg-secondary/30">
+                    {/* Phone frame lines for visual context */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      {/* Decorative film grain / abstract visual */}
+                      <div className="absolute inset-0 opacity-[0.03]" style={{
+                        backgroundImage: `radial-gradient(circle at 30% 40%, var(--brand-pink), transparent 60%), radial-gradient(circle at 70% 60%, var(--brand-purple), transparent 60%)`
+                      }} />
+                      <Play className="h-8 w-8 text-muted-foreground/20 transition-colors group-hover:text-[var(--brand-pink)]/40" />
+                    </div>
 
-                  {/* Info */}
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 overflow-hidden">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {project.title}
-                      </p>
-                      <div className="mt-1 flex items-center gap-2">
-                        <Film className="h-3 w-3 text-muted-foreground" />
-                        <span className="text-xs text-muted-foreground">
-                          {project.episodes} episodes
-                        </span>
-                        <Clock className="ml-1 h-3 w-3 text-muted-foreground" />
-                        <span className="text-xs text-muted-foreground">
-                          {project.date}
-                        </span>
+                    {/* Top-left episode count */}
+                    <div className="absolute left-2 top-2 flex items-center gap-1 rounded-md bg-background/60 px-1.5 py-0.5 backdrop-blur-sm">
+                      <Film className="h-2.5 w-2.5 text-muted-foreground" />
+                      <span className="text-[9px] font-medium text-foreground/80">
+                        {project.episodes} EP
+                      </span>
+                    </div>
+
+                    {/* Bottom overlay with info + badge */}
+                    <div className="absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-gradient-to-t from-background/90 via-background/50 to-transparent px-2.5 pb-2.5 pt-8">
+                      {/* Title + date */}
+                      <div>
+                        <p className="truncate text-xs font-medium leading-tight text-foreground">
+                          {project.title}
+                        </p>
+                        <div className="mt-0.5 flex items-center gap-1">
+                          <Clock className="h-2.5 w-2.5 text-muted-foreground" />
+                          <span className="text-[9px] text-muted-foreground">
+                            {project.date}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Status badge pinned to bottom */}
+                      <div className="flex items-center justify-between">
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "gap-1 border px-1.5 py-0.5 text-[9px] font-medium",
+                            config.className
+                          )}
+                        >
+                          <StatusIcon className={cn("h-2.5 w-2.5", config.iconClass)} />
+                          {config.label}
+                        </Badge>
+                        {project.status === "processing" && (
+                          <span className="font-mono text-[9px] text-muted-foreground">
+                            {project.progress}%
+                          </span>
+                        )}
                       </div>
                     </div>
-                  </div>
-
-                  {/* Status badge + progress */}
-                  <div className="mt-3 flex items-center justify-between">
-                    <Badge
-                      variant="outline"
-                      className={cn("gap-1 text-[10px] font-medium", config.className)}
-                    >
-                      <StatusIcon className={cn("h-3 w-3", config.iconClass)} />
-                      {config.label}
-                    </Badge>
-                    {project.status === "processing" && (
-                      <span className="text-xs font-mono text-muted-foreground">
-                        {project.progress}%
-                      </span>
-                    )}
                   </div>
                 </div>
               )

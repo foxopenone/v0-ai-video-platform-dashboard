@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Play, Pause, Check, Mic, Music } from "lucide-react"
+import { Play, Pause, Check, Mic, Music, Volume2 } from "lucide-react"
 import {
   Sheet,
   SheetContent,
@@ -35,7 +35,7 @@ interface AudioDrawerProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   selectedId: string | null
-  onSelect: (id: string) => void
+  onSelect: (id: string, name: string) => void
 }
 
 export function AudioDrawer({
@@ -67,33 +67,42 @@ export function AudioDrawer({
     }
   }, [open, type])
 
+  // Clean up on close
+  useEffect(() => {
+    if (!open) {
+      audioRef.current?.pause()
+      setPlayingId(null)
+    }
+  }, [open])
+
   const handlePlay = (id: string) => {
     if (playingId === id) {
       audioRef.current?.pause()
       setPlayingId(null)
       return
     }
-    // Simulate audio preview
     setPlayingId(id)
+    // Simulate 3s audio preview
     setTimeout(() => setPlayingId(null), 3000)
   }
 
   const items = type === "voice" ? voices : bgms
+  const isVoice = type === "voice"
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full border-border/50 bg-background sm:max-w-md">
+      <SheetContent className="w-full border-border/30 bg-background sm:max-w-md">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2 text-foreground">
-            {type === "voice" ? (
-              <Mic className="h-4 w-4 text-primary" />
+            {isVoice ? (
+              <Mic className="h-4 w-4 text-[var(--brand-pink)]" />
             ) : (
-              <Music className="h-4 w-4 text-primary" />
+              <Music className="h-4 w-4 text-[var(--brand-purple)]" />
             )}
-            {type === "voice" ? "Select Voice" : "Select Background Music"}
+            {isVoice ? "Select Voice" : "Select Background Music"}
           </SheetTitle>
           <SheetDescription className="text-muted-foreground">
-            {type === "voice"
+            {isVoice
               ? "Choose a narrator voice powered by Eleven Labs"
               : "Pick background music for your videos"}
           </SheetDescription>
@@ -105,23 +114,26 @@ export function AudioDrawer({
               ? Array.from({ length: 6 }).map((_, i) => (
                   <div
                     key={i}
-                    className="h-16 animate-pulse rounded-lg bg-secondary/50"
+                    className="h-16 animate-pulse rounded-lg bg-secondary/40"
                   />
                 ))
               : items.map((item) => {
                   const isSelected = selectedId === item.id
                   const isPlaying = playingId === item.id
+                  const brandColor = isVoice ? "var(--brand-pink)" : "var(--brand-purple)"
+
                   return (
                     <button
                       key={item.id}
-                      onClick={() => onSelect(item.id)}
+                      onClick={() => onSelect(item.id, item.name)}
                       className={cn(
                         "group flex items-center gap-3 rounded-lg border p-3 text-left transition-all",
                         isSelected
-                          ? "border-primary/50 bg-primary/5"
-                          : "border-border/30 bg-secondary/20 hover:border-border/50 hover:bg-secondary/40"
+                          ? "border-[var(--brand-pink)]/30 bg-[var(--brand-pink)]/5"
+                          : "border-border/20 bg-secondary/15 hover:border-border/40 hover:bg-secondary/30"
                       )}
                     >
+                      {/* Play/Pause button */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
@@ -130,9 +142,10 @@ export function AudioDrawer({
                         className={cn(
                           "flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all",
                           isPlaying
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-foreground"
+                            ? "brand-gradient text-[#fff]"
+                            : "bg-secondary/60 text-muted-foreground hover:text-foreground"
                         )}
+                        aria-label={isPlaying ? "Pause preview" : "Play preview"}
                       >
                         {isPlaying ? (
                           <Pause className="h-4 w-4" />
@@ -141,29 +154,42 @@ export function AudioDrawer({
                         )}
                       </button>
 
+                      {/* Name and meta */}
                       <div className="flex-1 overflow-hidden">
                         <p className="truncate text-sm font-medium text-foreground">
                           {item.name}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {type === "voice"
-                            ? `${(item as VoiceItem).accent} - ${(item as VoiceItem).gender}`
-                            : `${(item as BGMItem).mood} - ${(item as BGMItem).duration}`}
+                          {isVoice
+                            ? `${(item as VoiceItem).accent} \u00b7 ${(item as VoiceItem).gender}`
+                            : `${(item as BGMItem).mood} \u00b7 ${(item as BGMItem).duration}`}
                         </p>
                       </div>
 
-                      <div className="flex shrink-0 items-center gap-2">
-                        {type === "bgm" && (
-                          <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                            {(item as BGMItem).mood}
-                          </Badge>
-                        )}
-                        {isSelected && (
-                          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary">
-                            <Check className="h-3 w-3 text-primary-foreground" />
-                          </div>
-                        )}
-                      </div>
+                      {/* Waveform indicator when playing */}
+                      {isPlaying && (
+                        <Volume2
+                          className="h-4 w-4 shrink-0 animate-pulse"
+                          style={{ color: brandColor }}
+                        />
+                      )}
+
+                      {/* Mood badge for BGM */}
+                      {!isVoice && !isPlaying && (
+                        <Badge
+                          variant="outline"
+                          className="shrink-0 border-border/30 text-[10px] text-muted-foreground"
+                        >
+                          {(item as BGMItem).mood}
+                        </Badge>
+                      )}
+
+                      {/* Selected check */}
+                      {isSelected && (
+                        <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full brand-gradient">
+                          <Check className="h-3 w-3 text-[#fff]" />
+                        </div>
+                      )}
                     </button>
                   )
                 })}

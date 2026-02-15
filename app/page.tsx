@@ -20,7 +20,7 @@ export default function Page() {
       <footer className="border-t border-border/30 px-6 py-6">
         <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
           <p className="text-xs text-muted-foreground">
-            ClipForge AI Platform. All rights reserved.
+            Shortee.TV &middot; AI Video Production Suite. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
             <a href="#" className="text-xs text-muted-foreground transition-colors hover:text-foreground">

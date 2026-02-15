@@ -24,16 +24,15 @@ function FeedCard({ item }: { item: FeedItem }) {
   const [liked, setLiked] = useState(false)
 
   return (
-    <div className="group mb-4 break-inside-avoid rounded-xl border border-border/20 bg-card transition-all hover:border-border/40 hover:bg-card/80">
-      {/* Video preview */}
-      <div
-        className={cn(
-          "relative flex items-center justify-center overflow-hidden rounded-t-xl bg-secondary/30",
-          item.aspect === "9:16" ? "aspect-[9/14]" : "aspect-square"
-        )}
-      >
+    <div className="group mb-4 break-inside-avoid overflow-hidden rounded-xl border border-border/20 bg-card transition-all hover:border-border/40 hover:bg-card/80">
+      {/* Video preview - all 9:16 vertical */}
+      <div className="relative flex aspect-[9/14] items-center justify-center overflow-hidden bg-secondary/30">
+        {/* Subtle brand tinted background */}
+        <div className="absolute inset-0 opacity-[0.04]" style={{
+          backgroundImage: `radial-gradient(ellipse at 50% 30%, var(--brand-pink), transparent 70%)`
+        }} />
         <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent" />
-        <Play className="h-10 w-10 text-muted-foreground/20" />
+        <Play className="h-10 w-10 text-muted-foreground/15 transition-transform group-hover:scale-110" />
         <div className="absolute bottom-3 left-3 right-3">
           <p className="text-sm font-medium leading-tight text-foreground drop-shadow-lg">
             {item.title}
@@ -48,11 +47,12 @@ function FeedCard({ item }: { item: FeedItem }) {
           <button
             onClick={() => setLiked(!liked)}
             className="rounded-full p-1 transition-colors hover:bg-secondary"
+            aria-label={liked ? "Unlike" : "Like"}
           >
             <Heart
               className={cn(
                 "h-3.5 w-3.5 transition-colors",
-                liked ? "fill-[hsl(0,84%,60%)] text-[hsl(0,84%,60%)]" : "text-muted-foreground"
+                liked ? "fill-[var(--brand-pink)] text-[var(--brand-pink)]" : "text-muted-foreground"
               )}
             />
           </button>
@@ -91,7 +91,7 @@ export function DiscoveryFeed() {
     <section id="discover" className="px-6 py-10">
       <div className="mb-6">
         <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
-          <Sparkles className="h-4 w-4 text-primary" />
+          <Sparkles className="h-4 w-4 text-[var(--brand-pink)]" />
           Discovery
         </h2>
         <p className="text-sm text-muted-foreground">
@@ -100,19 +100,16 @@ export function DiscoveryFeed() {
       </div>
 
       {loading ? (
-        <div className="columns-2 gap-4 md:columns-3 lg:columns-4">
+        <div className="columns-2 gap-4 md:columns-3 lg:columns-4 xl:columns-5">
           {Array.from({ length: 8 }).map((_, i) => (
             <div
               key={i}
-              className={cn(
-                "mb-4 animate-pulse rounded-xl bg-secondary/30",
-                i % 3 === 0 ? "h-72" : "h-56"
-              )}
+              className="mb-4 aspect-[9/14] animate-pulse rounded-xl bg-secondary/30"
             />
           ))}
         </div>
       ) : (
-        <div className="columns-2 gap-4 md:columns-3 lg:columns-4">
+        <div className="columns-2 gap-4 md:columns-3 lg:columns-4 xl:columns-5">
           {items.map((item) => (
             <FeedCard key={item.id} item={item} />
           ))}
