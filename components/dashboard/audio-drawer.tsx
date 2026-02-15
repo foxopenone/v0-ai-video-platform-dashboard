@@ -123,11 +123,19 @@ export function AudioDrawer({
                   const brandColor = isVoice ? "var(--brand-pink)" : "var(--brand-purple)"
 
                   return (
-                    <button
+                    <div
                       key={item.id}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => onSelect(item.id, item.name)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault()
+                          onSelect(item.id, item.name)
+                        }
+                      }}
                       className={cn(
-                        "group flex items-center gap-3 rounded-lg border p-3 text-left transition-all",
+                        "group flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-left transition-all",
                         isSelected
                           ? "border-[var(--brand-pink)]/30 bg-[var(--brand-pink)]/5"
                           : "border-border/20 bg-secondary/15 hover:border-border/40 hover:bg-secondary/30"
@@ -190,7 +198,7 @@ export function AudioDrawer({
                           <Check className="h-3 w-3 text-[#fff]" />
                         </div>
                       )}
-                    </button>
+                    </div>
                   )
                 })}
           </div>
