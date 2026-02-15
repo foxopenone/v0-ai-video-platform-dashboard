@@ -1,12 +1,9 @@
-import dynamic from "next/dynamic"
+"use client"
+
+import { Header } from "@/components/dashboard/header"
 import { WorkspaceSection } from "@/components/dashboard/workspace-section"
 import { ProjectsSection } from "@/components/dashboard/projects-section"
 import { DiscoveryFeed } from "@/components/dashboard/discovery-feed"
-
-const Header = dynamic(
-  () => import("@/components/dashboard/header").then((mod) => mod.Header),
-  { ssr: false }
-)
 
 export default function Page() {
   return (
