@@ -29,10 +29,12 @@ function extractNumericSuffix(filename: string): number {
   return match ? parseInt(match[1], 10) : 999
 }
 
-function getEpisodeLabel(filename: string, index: number): string {
+function getEpisodeLabel(filename: string): string {
   const match = filename.match(/(?:EP|ep|Ep)(\d+)/i)
   if (match) return `EP${match[1].padStart(2, "0")}`
-  return `EP${String(index + 1).padStart(2, "0")}`
+  const numMatch = filename.match(/(\d+)/)
+  if (numMatch) return `EP${numMatch[1].padStart(2, "0")}`
+  return filename.replace(/\.[^.]+$/, "").slice(0, 6)
 }
 
 function PortraitGuide() {
@@ -136,26 +138,22 @@ export function UploadZone() {
 
       if (videoFiles.length === 0) return
 
-      const currentCount = files.length
-
-      const uploadFiles: UploadFile[] = videoFiles.map((file, i) => ({
+      const uploadFiles: UploadFile[] = videoFiles.map((file) => ({
         id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
         file,
         name: file.name,
         progress: 0,
         status: "queued" as const,
         sortKey: extractNumericSuffix(file.name),
-        episodeLabel: getEpisodeLabel(file.name, currentCount + i),
+        episodeLabel: getEpisodeLabel(file.name),
       }))
 
-      const sortedNew = uploadFiles.sort((a, b) => a.sortKey - b.sortKey)
-
       setFiles((prev) => {
-        const combined = [...prev, ...sortedNew]
+        const combined = [...prev, ...uploadFiles]
         return combined.sort((a, b) => a.sortKey - b.sortKey).slice(0, 15)
       })
 
-      for (const uf of sortedNew) {
+      for (const uf of uploadFiles) {
         setFiles((prev) =>
           prev.map((f) =>
             f.id === uf.id ? { ...f, status: "uploading" } : f
