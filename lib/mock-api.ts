@@ -81,6 +81,57 @@ export async function fetchProjects() {
   ]
 }
 
+// Review Room API
+export async function fetchProjectDetail(projectId: string) {
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  const projects = await fetchProjects()
+  const p = projects.find((x) => x.id === projectId)
+  if (!p) return null
+
+  // Generate mock episode data
+  const episodes = Array.from({ length: p.episodes }, (_, i) => ({
+    id: `${projectId}-ep${i + 1}`,
+    number: i + 1,
+    title: `Episode ${String(i + 1).padStart(2, "0")}`,
+    status: (p.status === "completed"
+      ? "locked"
+      : i < Math.floor(p.episodes * 0.3)
+        ? "locked"
+        : i === Math.floor(p.episodes * 0.3)
+          ? "reviewing"
+          : "pending") as "locked" | "reviewing" | "pending",
+    videoUrl: null as string | null,
+  }))
+
+  return {
+    ...p,
+    synopsis:
+      "A compelling series exploring the transformative power of AI in content creation. Each episode takes viewers on a journey through different aspects of automation, from script generation to voice synthesis, revealing how creators are leveraging technology to produce engaging short-form content at unprecedented scale. The narrative weaves together expert insights, real-world case studies, and practical demonstrations.",
+    script: Array.from({ length: p.episodes }, (_, i) => ({
+      ep: i + 1,
+      text: `[EP${String(i + 1).padStart(2, "0")} Script]\n\nHook: "What if you could create a week's worth of content in just one hour?"\n\nNarration: In this episode, we explore the cutting-edge tools that are revolutionizing how creators approach short-form video production...\n\nCTA: "Follow for more insights on AI-powered content creation."`,
+    })),
+    episodes,
+    finalized: episodes.filter((e) => e.status === "locked").length,
+  }
+}
+
+export async function reviewSynopsis(projectId: string, action: "approve" | "retry", feedback?: string) {
+  return triggerWebhook("review/synopsis", { projectId, action, feedback })
+}
+
+export async function reviewScript(projectId: string, action: "approve" | "retry", edits?: string) {
+  return triggerWebhook("review/script", { projectId, action, edits })
+}
+
+export async function reviewEpisode(projectId: string, episodeId: string, action: "approve" | "retry") {
+  return triggerWebhook("review/episode", { projectId, episodeId, action })
+}
+
+export async function downloadEpisode(episodeId: string) {
+  return triggerWebhook("download/episode", { episodeId })
+}
+
 export async function fetchDiscoveryFeed() {
   await new Promise((resolve) => setTimeout(resolve, 500))
   return [

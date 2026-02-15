@@ -59,7 +59,11 @@ const GRADIENTS = [
   "radial-gradient(ellipse at 25% 60%, rgba(168,85,247,0.22), rgba(244,63,122,0.08) 50%, rgba(10,10,20,0.95))",
 ]
 
-export function ProjectsSection() {
+interface ProjectsSectionProps {
+  onProjectClick?: (projectId: string) => void
+}
+
+export function ProjectsSection({ onProjectClick }: ProjectsSectionProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -125,6 +129,15 @@ export function ProjectsSection() {
                 <div
                   key={project.id}
                   className="group relative cursor-pointer"
+                  onClick={() => onProjectClick?.(project.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault()
+                      onProjectClick?.(project.id)
+                    }
+                  }}
                 >
                   <div
                     className="relative aspect-[9/16] w-full overflow-hidden rounded-xl border border-border/25 shadow-sm ring-1 ring-inset ring-[hsla(0,0%,100%,0.04)] transition-all group-hover:border-border/50"

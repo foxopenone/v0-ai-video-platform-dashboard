@@ -1,11 +1,24 @@
 "use client"
 
+import { useState } from "react"
 import { Header } from "@/components/dashboard/header"
 import { WorkspaceSection } from "@/components/dashboard/workspace-section"
 import { ProjectsSection } from "@/components/dashboard/projects-section"
 import { DiscoveryFeed } from "@/components/dashboard/discovery-feed"
+import { ReviewRoom } from "@/components/dashboard/review-room"
 
 export default function Page() {
+  const [reviewProjectId, setReviewProjectId] = useState<string | null>(null)
+
+  if (reviewProjectId) {
+    return (
+      <ReviewRoom
+        projectId={reviewProjectId}
+        onClose={() => setReviewProjectId(null)}
+      />
+    )
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <Header />
@@ -13,7 +26,7 @@ export default function Page() {
       <main className="mx-auto w-full max-w-[1400px] flex-1 px-6 py-5">
         <WorkspaceSection />
         <div className="my-5 h-px bg-border/20" />
-        <ProjectsSection />
+        <ProjectsSection onProjectClick={(id) => setReviewProjectId(id)} />
         <div className="my-5 h-px bg-border/20" />
         <DiscoveryFeed />
       </main>

@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import {
-  Mic, Music, Rocket,
+  Mic, Music, Rocket, CheckCircle2,
   Monitor, Globe2, Eye, Palette, Sparkles, Anchor,
   ChevronDown, Wand2
 } from "lucide-react"
@@ -129,6 +129,7 @@ export function ConfigForm() {
   const [selectedBgm, setSelectedBgm] = useState<string | null>(null)
   const [selectedBgmName, setSelectedBgmName] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
 
   const handleSubmit = async () => {
@@ -140,6 +141,9 @@ export function ConfigForm() {
       bgm: selectedBgm,
     })
     setSubmitting(false)
+    setSubmitted(true)
+    // Reset feedback after 3s
+    setTimeout(() => setSubmitted(false), 3000)
     // If Step Review mode, open review modal after submission
     if (mode === "step_review") {
       setReviewOpen(true)
@@ -265,18 +269,23 @@ export function ConfigForm() {
       {/* Launch button with persistent glow halo */}
       <button
         onClick={handleSubmit}
-        disabled={submitting}
+        disabled={submitting || submitted}
         className={cn(
-          "brand-gradient brand-glow relative flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-[#fff] transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-50",
+          "relative flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-50",
+          submitted
+            ? "border border-[hsl(var(--success))]/30 bg-[hsl(var(--success))]/10 text-[hsl(var(--success))]"
+            : "brand-gradient brand-glow text-[#fff] hover:brightness-110",
           submitting && "animate-pulse"
         )}
       >
         {submitting ? (
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#fff]/30 border-t-[#fff]" />
+        ) : submitted ? (
+          <CheckCircle2 className="h-4 w-4" />
         ) : (
           <Rocket className="h-4 w-4" />
         )}
-        {submitting ? "Generating..." : "Start Generation"}
+        {submitting ? "Generating..." : submitted ? "Task Sent" : "Start Generation"}
       </button>
 
       {/* Audio Drawers */}
