@@ -187,59 +187,59 @@ export function ConfigForm() {
         ))}
       </div>
 
-      {/* Audio Slots */}
+      {/* Audio Slots - taller cards to fill vertical space */}
       <div className="grid grid-cols-2 gap-2">
         <button
           onClick={() => setVoiceDrawerOpen(true)}
           className={cn(
-            "flex items-center gap-2 rounded-md border px-3 py-2.5 transition-all",
+            "flex flex-col items-center gap-2.5 rounded-lg border px-3 py-4 transition-all",
             selectedVoice
               ? "border-[var(--brand-pink)]/25 bg-[var(--brand-pink)]/5"
               : "border-border/40 bg-secondary/20 hover:border-border/60 hover:bg-secondary/35"
           )}
         >
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-secondary/60">
-            <Mic className="h-3.5 w-3.5 text-[var(--brand-pink)]" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/60">
+            <Mic className="h-4 w-4 text-[var(--brand-pink)]" />
           </div>
-          <div className="flex-1 overflow-hidden text-left">
-            <p className="truncate text-[11px] font-medium text-foreground">
+          <div className="w-full overflow-hidden text-center">
+            <p className="truncate text-xs font-medium text-foreground">
               {selectedVoiceName || "Add Voice"}
             </p>
-            <p className="text-[9px] text-muted-foreground">Eleven Labs</p>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">Eleven Labs AI</p>
           </div>
         </button>
 
         <button
           onClick={() => setBgmDrawerOpen(true)}
           className={cn(
-            "flex items-center gap-2 rounded-md border px-3 py-2.5 transition-all",
+            "flex flex-col items-center gap-2.5 rounded-lg border px-3 py-4 transition-all",
             selectedBgm
               ? "border-[var(--brand-purple)]/25 bg-[var(--brand-purple)]/5"
               : "border-border/40 bg-secondary/20 hover:border-border/60 hover:bg-secondary/35"
           )}
         >
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-secondary/60">
-            <Music className="h-3.5 w-3.5 text-[var(--brand-purple)]" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/60">
+            <Music className="h-4 w-4 text-[var(--brand-purple)]" />
           </div>
-          <div className="flex-1 overflow-hidden text-left">
-            <p className="truncate text-[11px] font-medium text-foreground">
+          <div className="w-full overflow-hidden text-center">
+            <p className="truncate text-xs font-medium text-foreground">
               {selectedBgmName || "Add BGM"}
             </p>
-            <p className="text-[9px] text-muted-foreground">Background</p>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">Background Music</p>
           </div>
         </button>
       </div>
 
-      {/* Spacer */}
-      <div className="flex-1" />
+      {/* Spacer pushes button to bottom */}
+      <div className="min-h-4 flex-1" />
 
-      {/* Launch button with neon glow */}
+      {/* Launch button - active glow pulsing ring */}
       <button
         onClick={handleSubmit}
         disabled={submitting}
         className={cn(
-          "brand-gradient brand-glow flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold text-[#fff] transition-all hover:opacity-90 disabled:opacity-50",
-          submitting && "animate-pulse"
+          "brand-gradient relative flex w-full items-center justify-center gap-2 rounded-lg py-3 text-sm font-semibold text-[#fff] transition-all hover:opacity-90 disabled:opacity-50",
+          submitting ? "animate-pulse" : "brand-glow"
         )}
       >
         {submitting ? (

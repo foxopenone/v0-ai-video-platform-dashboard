@@ -111,10 +111,10 @@ export function ProjectsSection() {
               return (
                 <div
                   key={project.id}
-                  className="group relative w-40 shrink-0 cursor-pointer overflow-hidden rounded-xl border border-border/30 bg-card transition-all hover:border-border/60"
+                  className="group relative w-40 shrink-0 cursor-pointer overflow-hidden rounded-xl bg-card transition-all"
                 >
-                  {/* 9:16 vertical thumbnail area */}
-                  <div className="relative aspect-[9/16] w-full overflow-hidden bg-secondary/30">
+                  {/* 9:16 vertical thumbnail area with premium border */}
+                  <div className="relative aspect-[9/16] w-full overflow-hidden rounded-xl border border-border/20 bg-secondary/30">
                     {/* Phone frame lines for visual context */}
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
                       {/* Decorative film grain / abstract visual */}

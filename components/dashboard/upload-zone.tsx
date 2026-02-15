@@ -3,7 +3,6 @@
 import { useState, useCallback, useRef } from "react"
 import { Upload, X, Film, CheckCircle2, AlertCircle, Smartphone } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { uploadVideo } from "@/lib/mock-api"
 import { cn } from "@/lib/utils"
 
@@ -14,6 +13,7 @@ interface UploadFile {
   progress: number
   status: "queued" | "uploading" | "complete" | "error"
   sortKey: number
+  episodeLabel: string
 }
 
 function extractNumericSuffix(filename: string): number {
@@ -21,15 +21,18 @@ function extractNumericSuffix(filename: string): number {
   return match ? parseInt(match[1], 10) : 999
 }
 
+function getEpisodeLabel(filename: string, index: number): string {
+  const match = filename.match(/(?:EP|ep|Ep)(\d+)/i)
+  if (match) return `EP${match[1].padStart(2, "0")}`
+  return `EP${String(index + 1).padStart(2, "0")}`
+}
+
 /** SVG portrait guide illustration shown in the empty state */
 function PortraitGuide() {
   return (
     <div className="flex flex-col items-center gap-3">
-      {/* 9:16 dashed frame */}
       <div className="relative flex h-44 w-[99px] items-center justify-center rounded-xl border-2 border-dashed border-muted-foreground/20">
-        {/* Phone notch hint */}
         <div className="absolute top-2 left-1/2 h-1 w-6 -translate-x-1/2 rounded-full bg-muted-foreground/10" />
-        {/* Play triangle in center */}
         <svg
           width="28"
           height="32"
@@ -42,7 +45,6 @@ function PortraitGuide() {
             fill="currentColor"
           />
         </svg>
-        {/* Aspect label */}
         <span className="absolute -right-7 top-1/2 -translate-y-1/2 -rotate-90 whitespace-nowrap text-[8px] font-medium tracking-widest text-muted-foreground/25">
           9 : 16
         </span>
@@ -55,13 +57,72 @@ function PortraitGuide() {
   )
 }
 
+/** Horizontal film-strip thumbnail for each uploaded file */
+function FilmStripItem({
+  file,
+  onRemove,
+}: {
+  file: UploadFile
+  onRemove: () => void
+}) {
+  const isUploading = file.status === "uploading" || file.status === "queued"
+  return (
+    <div className="group relative flex w-16 shrink-0 flex-col items-center gap-1">
+      {/* Tiny 9:16 thumbnail */}
+      <div
+        className={cn(
+          "relative flex h-[72px] w-[40px] items-center justify-center rounded-lg border transition-all",
+          file.status === "complete"
+            ? "border-[hsl(var(--success))]/30 bg-[hsl(var(--success))]/5"
+            : file.status === "error"
+              ? "border-destructive/30 bg-destructive/5"
+              : "border-border/30 bg-secondary/30"
+        )}
+      >
+        {isUploading && (
+          <div
+            className="absolute inset-x-0 bottom-0 rounded-b-lg bg-[var(--brand-pink)]/15 transition-all"
+            style={{ height: `${file.progress}%` }}
+          />
+        )}
+        {file.status === "complete" ? (
+          <CheckCircle2 className="h-3 w-3 text-[hsl(var(--success))]" />
+        ) : file.status === "error" ? (
+          <AlertCircle className="h-3 w-3 text-destructive" />
+        ) : (
+          <Film className="h-3 w-3 text-muted-foreground/40" />
+        )}
+        {/* Remove button */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onRemove()
+          }}
+          className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-secondary/80 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/80 hover:text-destructive-foreground group-hover:opacity-100"
+        >
+          <X className="h-2 w-2" />
+        </button>
+      </div>
+      {/* Episode label */}
+      <span className="text-center font-mono text-[8px] font-medium leading-tight text-muted-foreground/70">
+        {file.episodeLabel}
+      </span>
+      {/* Mini progress bar */}
+      {isUploading && (
+        <Progress value={file.progress} className="h-[2px] w-10" />
+      )}
+    </div>
+  )
+}
+
 export function UploadZone() {
   const [files, setFiles] = useState<UploadFile[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const filmStripRef = useRef<HTMLDivElement>(null)
 
   const processFiles = useCallback(
-    async (newFiles: FileList | File[]) => {
+    async (newFiles: FileList | File[]) {
       const fileArray = Array.from(newFiles)
       const videoFiles = fileArray
         .filter((f) => f.type.startsWith("video/") || /\.(mp4|mov|avi|mkv|webm)$/i.test(f.name))
@@ -69,13 +130,16 @@ export function UploadZone() {
 
       if (videoFiles.length === 0) return
 
-      const uploadFiles: UploadFile[] = videoFiles.map((file) => ({
+      const currentCount = files.length
+
+      const uploadFiles: UploadFile[] = videoFiles.map((file, i) => ({
         id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
         file,
         name: file.name,
         progress: 0,
         status: "queued" as const,
         sortKey: extractNumericSuffix(file.name),
+        episodeLabel: getEpisodeLabel(file.name, currentCount + i),
       }))
 
       const sortedNew = uploadFiles.sort((a, b) => a.sortKey - b.sortKey)
@@ -124,33 +188,48 @@ export function UploadZone() {
   }
 
   const hasFiles = files.length > 0
+  const completeCount = files.filter((f) => f.status === "complete").length
 
   return (
     <div className="flex h-full flex-col">
-      {/* Drop Zone */}
+      {/* File counter when files exist */}
+      {hasFiles && (
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            Source Videos
+          </span>
+          <span className="font-mono text-[11px] font-medium text-foreground/70">
+            <span className="text-[var(--brand-pink)]">{completeCount}</span>
+            <span className="text-muted-foreground">/{files.length} uploaded</span>
+            <span className="ml-1 text-muted-foreground/50">of 15 max</span>
+          </span>
+        </div>
+      )}
+
+      {/* Primary Drop Zone */}
       <div
-        onDragOver={(e) => { e.preventDefault(); setIsDragOver(true) }}
+        onDragOver={(e) => {
+          e.preventDefault()
+          setIsDragOver(true)
+        }}
         onDragLeave={() => setIsDragOver(false)}
         onDrop={handleDrop}
         onClick={() => inputRef.current?.click()}
         className={cn(
           "group relative flex cursor-pointer flex-col overflow-hidden rounded-lg border border-dashed transition-all",
-          hasFiles ? "min-h-[100px]" : "min-h-[280px]",
+          hasFiles ? "flex-shrink-0" : "flex-1",
           isDragOver
             ? "border-[var(--brand-pink)] bg-[var(--brand-pink)]/5"
             : "border-border/40 hover:border-[var(--brand-pink)]/30 hover:bg-secondary/10",
           files.length >= 15 && "pointer-events-none opacity-40"
         )}
       >
-        {/* Empty state: Portrait guide in center, upload CTA in lower third */}
+        {/* Empty state: Portrait guide in upper 2/3, CTA in lower 1/3 */}
         {!hasFiles && (
           <>
-            {/* Upper 2/3: Portrait frame guide */}
             <div className="flex flex-1 items-center justify-center pt-2">
               <PortraitGuide />
             </div>
-
-            {/* Lower 1/3: Upload CTA */}
             <div className="flex flex-col items-center gap-2 pb-5">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary/50 transition-colors group-hover:bg-[var(--brand-pink)]/10">
                 <Upload className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-[var(--brand-pink)]" />
@@ -167,22 +246,14 @@ export function UploadZone() {
           </>
         )}
 
-        {/* Has files: compact inline trigger */}
+        {/* With files: compact centered drop target */}
         {hasFiles && (
-          <div className="flex items-center gap-3 px-4 py-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary/50">
-              <Upload className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-[var(--brand-pink)]" />
-            </div>
-            <div className="flex-1">
-              <p className="text-xs font-medium text-foreground">
-                Drop more or click to browse
-              </p>
-              <p className="text-[10px] text-muted-foreground">
-                {files.length}/15 files &middot; Portrait 9:16 recommended
-              </p>
-            </div>
-            {/* Tiny 9:16 indicator */}
-            <div className="hidden h-8 w-[18px] shrink-0 rounded border border-dashed border-muted-foreground/20 sm:block" />
+          <div className="flex items-center justify-center gap-2 px-4 py-3">
+            <Upload className="h-3.5 w-3.5 text-muted-foreground transition-colors group-hover:text-[var(--brand-pink)]" />
+            <span className="text-[11px] font-medium text-foreground/70">
+              Drop more or click to add
+            </span>
+            <div className="hidden h-6 w-[14px] shrink-0 rounded border border-dashed border-muted-foreground/20 sm:block" />
           </div>
         )}
 
@@ -196,48 +267,22 @@ export function UploadZone() {
         />
       </div>
 
-      {/* Compact file list */}
+      {/* Horizontal Film-Strip */}
       {hasFiles && (
-        <ScrollArea className="mt-3 flex-1">
-          <div className="flex flex-col gap-1.5">
-            {files.map((file, index) => (
-              <div
+        <div className="mt-3 flex-1">
+          <div
+            ref={filmStripRef}
+            className="scrollbar-hide flex gap-2 overflow-x-auto pb-1"
+          >
+            {files.map((file) => (
+              <FilmStripItem
                 key={file.id}
-                className="group/item flex items-center gap-2.5 rounded-md bg-secondary/20 px-3 py-2 transition-colors hover:bg-secondary/35"
-              >
-                <span className="w-5 shrink-0 text-center font-mono text-[10px] text-muted-foreground">
-                  {String(index + 1).padStart(2, "0")}
-                </span>
-                <Film className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
-                <div className="flex-1 overflow-hidden">
-                  <p className="truncate text-[11px] font-medium text-foreground/90">
-                    {file.name}
-                  </p>
-                </div>
-                {(file.status === "uploading" || file.status === "queued") && (
-                  <div className="flex w-20 items-center gap-1.5">
-                    <Progress value={file.progress} className="h-[3px] flex-1" />
-                    <span className="w-7 shrink-0 text-right font-mono text-[9px] text-muted-foreground">
-                      {Math.round(file.progress)}%
-                    </span>
-                  </div>
-                )}
-                {file.status === "complete" && (
-                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-[hsl(var(--success))]" />
-                )}
-                {file.status === "error" && (
-                  <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />
-                )}
-                <button
-                  onClick={(e) => { e.stopPropagation(); removeFile(file.id) }}
-                  className="rounded p-0.5 opacity-0 transition-opacity hover:bg-secondary group-hover/item:opacity-100"
-                >
-                  <X className="h-3 w-3 text-muted-foreground" />
-                </button>
-              </div>
+                file={file}
+                onRemove={() => removeFile(file.id)}
+              />
             ))}
           </div>
-        </ScrollArea>
+        </div>
       )}
     </div>
   )

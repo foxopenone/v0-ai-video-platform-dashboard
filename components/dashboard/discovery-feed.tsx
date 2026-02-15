@@ -24,9 +24,9 @@ function FeedCard({ item }: { item: FeedItem }) {
   const [liked, setLiked] = useState(false)
 
   return (
-    <div className="group mb-4 break-inside-avoid overflow-hidden rounded-xl border border-border/20 bg-card transition-all hover:border-border/40 hover:bg-card/80">
-      {/* Video preview - all 9:16 vertical */}
-      <div className="relative flex aspect-[9/14] items-center justify-center overflow-hidden bg-secondary/30">
+    <div className="group mb-4 break-inside-avoid overflow-hidden rounded-xl border border-border/25 bg-card transition-all hover:border-border/50 hover:bg-card/80">
+      {/* Video preview - all 9:16 vertical with premium border */}
+      <div className="relative flex aspect-[9/14] items-center justify-center overflow-hidden rounded-t-xl border-b border-border/15 bg-secondary/30">
         {/* Subtle brand tinted background */}
         <div className="absolute inset-0 opacity-[0.04]" style={{
           backgroundImage: `radial-gradient(ellipse at 50% 30%, var(--brand-pink), transparent 70%)`
