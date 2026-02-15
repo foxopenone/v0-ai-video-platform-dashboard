@@ -36,30 +36,29 @@ function FeedCard({ item, index }: { item: FeedItem; index: number }) {
   const [liked, setLiked] = useState(false)
 
   return (
-    <div className="group mb-3 break-inside-avoid overflow-hidden rounded-xl border border-border/25 bg-card transition-all hover:border-border/50">
+    <div className="group overflow-hidden rounded-xl border border-border/25 bg-card ring-1 ring-inset ring-[hsla(0,0%,100%,0.03)] transition-all hover:border-border/50">
       {/* Strict 9:16 vertical thumbnail with gradient + play overlay */}
       <div
-        className="relative flex aspect-[9/16] items-center justify-center overflow-hidden rounded-t-xl"
+        className="relative flex aspect-[9/16] items-center justify-center overflow-hidden"
         style={{ backgroundImage: FEED_GRADIENTS[index % FEED_GRADIENTS.length] }}
       >
-        {/* Bottom vignette */}
         <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent" />
 
-        {/* Play overlay */}
-        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-background/25 backdrop-blur-sm transition-transform group-hover:scale-110">
-          <Play className="h-5 w-5 text-foreground/50 transition-colors group-hover:text-[var(--brand-pink)]" />
+        {/* Play overlay on hover */}
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-background/25 opacity-0 backdrop-blur-sm transition-all group-hover:scale-110 group-hover:opacity-100">
+          <Play className="h-4 w-4 text-foreground/70" />
         </div>
 
         {/* Title at bottom */}
-        <div className="absolute inset-x-0 bottom-0 px-2.5 pb-2.5 pt-8">
-          <p className="text-xs font-medium leading-snug text-foreground drop-shadow-lg">
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-background/95 via-background/60 to-transparent px-2.5 pb-2 pt-8">
+          <p className="text-[11px] font-medium leading-snug text-foreground drop-shadow-lg">
             {item.title}
           </p>
         </div>
       </div>
 
-      {/* Info bar */}
-      <div className="flex items-center justify-between px-2.5 py-2">
+      {/* Compact info bar */}
+      <div className="flex items-center justify-between px-2.5 py-1.5">
         <div className="flex-1 overflow-hidden">
           <p className="truncate text-[10px] text-muted-foreground">{item.author}</p>
           <div className="mt-0.5 flex items-center gap-2.5">
@@ -80,7 +79,7 @@ function FeedCard({ item, index }: { item: FeedItem; index: number }) {
         >
           <Heart
             className={cn(
-              "h-3.5 w-3.5 transition-colors",
+              "h-3 w-3 transition-colors",
               liked
                 ? "fill-[var(--brand-pink)] text-[var(--brand-pink)]"
                 : "text-muted-foreground"
@@ -116,16 +115,16 @@ export function DiscoveryFeed() {
       </div>
 
       {loading ? (
-        <div className="columns-2 gap-3 md:columns-3 lg:columns-4 xl:columns-5">
-          {Array.from({ length: 8 }).map((_, i) => (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+          {Array.from({ length: 12 }).map((_, i) => (
             <div
               key={i}
-              className="mb-3 aspect-[9/16] animate-pulse rounded-xl bg-secondary/20"
+              className="aspect-[9/16] animate-pulse rounded-xl bg-secondary/20"
             />
           ))}
         </div>
       ) : (
-        <div className="columns-2 gap-3 md:columns-3 lg:columns-4 xl:columns-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
           {items.map((item, i) => (
             <FeedCard key={item.id} item={item} index={i} />
           ))}

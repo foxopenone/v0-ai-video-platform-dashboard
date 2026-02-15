@@ -106,15 +106,16 @@ export function ProjectsSection() {
         </div>
       </div>
 
+      {/* Responsive grid -- cards stretch to fill full container width */}
       <div
         ref={scrollRef}
-        className="scrollbar-hide flex gap-3 overflow-x-auto pb-1"
+        className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
       >
         {loading
           ? Array.from({ length: 6 }).map((_, i) => (
               <div
                 key={i}
-                className="aspect-[9/16] w-36 shrink-0 animate-pulse rounded-xl bg-secondary/20"
+                className="aspect-[9/16] animate-pulse rounded-xl bg-secondary/20"
               />
             ))
           : projects.map((project, idx) => {
@@ -123,24 +124,22 @@ export function ProjectsSection() {
               return (
                 <div
                   key={project.id}
-                  className="group relative w-36 shrink-0 cursor-pointer"
+                  className="group relative cursor-pointer"
                 >
-                  {/* 9:16 card with gradient fill + inner ring border */}
                   <div
-                    className="relative aspect-[9/16] w-full overflow-hidden rounded-xl border border-border/25 shadow-sm ring-1 ring-inset ring-[hsla(0,0%,100%,0.04)]"
+                    className="relative aspect-[9/16] w-full overflow-hidden rounded-xl border border-border/25 shadow-sm ring-1 ring-inset ring-[hsla(0,0%,100%,0.04)] transition-all group-hover:border-border/50"
                     style={{ backgroundImage: GRADIENTS[idx % GRADIENTS.length] }}
                   >
-                    {/* Subtle noise overlay for depth */}
                     <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-background/60" />
 
-                    {/* Play button overlay */}
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-background/30 backdrop-blur-sm transition-transform group-hover:scale-110">
-                        <Play className="h-4 w-4 text-foreground/60 transition-colors group-hover:text-[var(--brand-pink)]" />
+                    {/* Play overlay on hover */}
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-background/30 backdrop-blur-sm">
+                        <Play className="h-4 w-4 text-foreground/80" />
                       </div>
                     </div>
 
-                    {/* Top-left episode count */}
+                    {/* Episode count */}
                     <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-md bg-background/50 px-1.5 py-0.5 backdrop-blur-sm">
                       <Film className="h-2.5 w-2.5 text-muted-foreground" />
                       <span className="text-[9px] font-medium text-foreground/80">
@@ -148,7 +147,7 @@ export function ProjectsSection() {
                       </span>
                     </div>
 
-                    {/* Bottom overlay with title + badge */}
+                    {/* Bottom info */}
                     <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1.5 bg-gradient-to-t from-background/95 via-background/70 to-transparent px-2.5 pb-2.5 pt-10">
                       <div>
                         <p className="truncate text-[11px] font-medium leading-tight text-foreground">
@@ -161,7 +160,6 @@ export function ProjectsSection() {
                           </span>
                         </div>
                       </div>
-
                       <div className="flex items-center justify-between">
                         <Badge
                           variant="outline"
@@ -170,9 +168,7 @@ export function ProjectsSection() {
                             config.className
                           )}
                         >
-                          <StatusIcon
-                            className={cn("h-2.5 w-2.5", config.iconClass)}
-                          />
+                          <StatusIcon className={cn("h-2.5 w-2.5", config.iconClass)} />
                           {config.label}
                         </Badge>
                         {project.status === "processing" && (
