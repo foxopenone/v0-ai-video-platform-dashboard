@@ -1,7 +1,14 @@
 "use client"
 
 import { useState, useCallback, useRef } from "react"
-import { Upload, X, Film, CheckCircle2, AlertCircle, Smartphone } from "lucide-react"
+import {
+  Upload,
+  X,
+  Film,
+  CheckCircle2,
+  AlertCircle,
+  Smartphone,
+} from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { uploadVideo } from "@/lib/mock-api"
 import { cn } from "@/lib/utils"
@@ -17,7 +24,8 @@ interface UploadFile {
 }
 
 function extractNumericSuffix(filename: string): number {
-  const match = filename.match(/(?:EP|ep|Ep|e|E)(\d+)/i) || filename.match(/(\d+)/)
+  const match =
+    filename.match(/(?:EP|ep|Ep|e|E)(\d+)/i) || filename.match(/(\d+)/)
   return match ? parseInt(match[1], 10) : 999
 }
 
@@ -27,7 +35,6 @@ function getEpisodeLabel(filename: string, index: number): string {
   return `EP${String(index + 1).padStart(2, "0")}`
 }
 
-/** SVG portrait guide illustration shown in the empty state */
 function PortraitGuide() {
   return (
     <div className="flex flex-col items-center gap-3">
@@ -57,7 +64,6 @@ function PortraitGuide() {
   )
 }
 
-/** Horizontal film-strip thumbnail for each uploaded file */
 function FilmStripItem({
   file,
   onRemove,
@@ -68,7 +74,6 @@ function FilmStripItem({
   const isUploading = file.status === "uploading" || file.status === "queued"
   return (
     <div className="group relative flex w-16 shrink-0 flex-col items-center gap-1">
-      {/* Tiny 9:16 thumbnail */}
       <div
         className={cn(
           "relative flex h-[72px] w-[40px] items-center justify-center rounded-lg border transition-all",
@@ -92,7 +97,6 @@ function FilmStripItem({
         ) : (
           <Film className="h-3 w-3 text-muted-foreground/40" />
         )}
-        {/* Remove button */}
         <button
           onClick={(e) => {
             e.stopPropagation()
@@ -103,11 +107,9 @@ function FilmStripItem({
           <X className="h-2 w-2" />
         </button>
       </div>
-      {/* Episode label */}
       <span className="text-center font-mono text-[8px] font-medium leading-tight text-muted-foreground/70">
         {file.episodeLabel}
       </span>
-      {/* Mini progress bar */}
       {isUploading && (
         <Progress value={file.progress} className="h-[2px] w-10" />
       )}
@@ -122,10 +124,14 @@ export function UploadZone() {
   const filmStripRef = useRef<HTMLDivElement>(null)
 
   const processFiles = useCallback(
-    async (newFiles: FileList | File[]) {
+    async (newFiles: FileList | File[]) => {
       const fileArray = Array.from(newFiles)
       const videoFiles = fileArray
-        .filter((f) => f.type.startsWith("video/") || /\.(mp4|mov|avi|mkv|webm)$/i.test(f.name))
+        .filter(
+          (f) =>
+            f.type.startsWith("video/") ||
+            /\.(mp4|mov|avi|mkv|webm)$/i.test(f.name)
+        )
         .slice(0, 15 - files.length)
 
       if (videoFiles.length === 0) return
@@ -151,7 +157,9 @@ export function UploadZone() {
 
       for (const uf of sortedNew) {
         setFiles((prev) =>
-          prev.map((f) => (f.id === uf.id ? { ...f, status: "uploading" } : f))
+          prev.map((f) =>
+            f.id === uf.id ? { ...f, status: "uploading" } : f
+          )
         )
         try {
           await uploadVideo(uf.file, (progress) => {
@@ -161,12 +169,16 @@ export function UploadZone() {
           })
           setFiles((prev) =>
             prev.map((f) =>
-              f.id === uf.id ? { ...f, status: "complete", progress: 100 } : f
+              f.id === uf.id
+                ? { ...f, status: "complete", progress: 100 }
+                : f
             )
           )
         } catch {
           setFiles((prev) =>
-            prev.map((f) => (f.id === uf.id ? { ...f, status: "error" } : f))
+            prev.map((f) =>
+              f.id === uf.id ? { ...f, status: "error" } : f
+            )
           )
         }
       }
@@ -192,7 +204,6 @@ export function UploadZone() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* File counter when files exist */}
       {hasFiles && (
         <div className="mb-2 flex items-center justify-between">
           <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -200,13 +211,14 @@ export function UploadZone() {
           </span>
           <span className="font-mono text-[11px] font-medium text-foreground/70">
             <span className="text-[var(--brand-pink)]">{completeCount}</span>
-            <span className="text-muted-foreground">/{files.length} uploaded</span>
+            <span className="text-muted-foreground">
+              /{files.length} uploaded
+            </span>
             <span className="ml-1 text-muted-foreground/50">of 15 max</span>
           </span>
         </div>
       )}
 
-      {/* Primary Drop Zone */}
       <div
         onDragOver={(e) => {
           e.preventDefault()
@@ -224,7 +236,6 @@ export function UploadZone() {
           files.length >= 15 && "pointer-events-none opacity-40"
         )}
       >
-        {/* Empty state: Portrait guide in upper 2/3, CTA in lower 1/3 */}
         {!hasFiles && (
           <>
             <div className="flex flex-1 items-center justify-center pt-2">
@@ -239,14 +250,13 @@ export function UploadZone() {
                   Drop videos or click to browse
                 </p>
                 <p className="mt-0.5 text-[10px] text-muted-foreground">
-                  MP4, MOV, AVI, MKV &middot; Max 15 files
+                  {"MP4, MOV, AVI, MKV \u00b7 Max 15 files"}
                 </p>
               </div>
             </div>
           </>
         )}
 
-        {/* With files: compact centered drop target */}
         {hasFiles && (
           <div className="flex items-center justify-center gap-2 px-4 py-3">
             <Upload className="h-3.5 w-3.5 text-muted-foreground transition-colors group-hover:text-[var(--brand-pink)]" />
@@ -263,11 +273,14 @@ export function UploadZone() {
           accept="video/*"
           multiple
           className="hidden"
-          onChange={(e) => e.target.files && processFiles(e.target.files)}
+          onChange={(e) => {
+            if (e.target.files) {
+              processFiles(e.target.files)
+            }
+          }}
         />
       </div>
 
-      {/* Horizontal Film-Strip */}
       {hasFiles && (
         <div className="mt-3 flex-1">
           <div
