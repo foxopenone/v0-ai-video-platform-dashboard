@@ -2,23 +2,22 @@ import { Header } from "@/components/dashboard/header"
 import { WorkspaceSection } from "@/components/dashboard/workspace-section"
 import { ProjectsSection } from "@/components/dashboard/projects-section"
 import { DiscoveryFeed } from "@/components/dashboard/discovery-feed"
-import { Separator } from "@/components/ui/separator"
 
 export default function Page() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <Header />
 
-      <main className="flex-1">
+      <main className="mx-auto w-full max-w-[1400px] flex-1 px-6 py-5">
         <WorkspaceSection />
-        <Separator className="mx-5 bg-border/20" />
+        <div className="my-5 h-px bg-border/20" />
         <ProjectsSection />
-        <Separator className="mx-5 bg-border/20" />
+        <div className="my-5 h-px bg-border/20" />
         <DiscoveryFeed />
       </main>
 
-      <footer className="border-t border-border/20 px-5 py-4">
-        <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
+      <footer className="border-t border-border/20">
+        <div className="mx-auto flex w-full max-w-[1400px] flex-col items-center justify-between gap-4 px-6 py-4 md:flex-row">
           <p className="text-xs text-muted-foreground">
             Shortee.TV &middot; AI Video Production Suite. All rights reserved.
           </p>

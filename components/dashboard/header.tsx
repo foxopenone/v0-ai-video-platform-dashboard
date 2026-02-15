@@ -23,7 +23,8 @@ export function Header() {
   const [lang, setLang] = useState("EN")
 
   return (
-    <header className="sticky top-0 z-50 flex h-12 items-center justify-between border-b border-border/40 bg-background/80 px-5 backdrop-blur-xl">
+    <header className="sticky top-0 z-50 border-b border-border/40 bg-background/80 backdrop-blur-xl">
+      <div className="mx-auto flex h-12 w-full max-w-[1400px] items-center justify-between px-6">
       {/* Logo */}
       <div className="flex items-center gap-2.5">
         <Image
@@ -108,6 +109,7 @@ export function Header() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+      </div>
       </div>
     </header>
   )

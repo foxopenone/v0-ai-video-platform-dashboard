@@ -104,7 +104,7 @@ export function DiscoveryFeed() {
   }, [])
 
   return (
-    <section id="discover" className="px-5 py-5">
+    <section id="discover">
       <div className="mb-4">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <Sparkles className="h-3.5 w-3.5 text-[var(--brand-pink)]" />

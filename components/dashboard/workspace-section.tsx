@@ -5,7 +5,7 @@ import { ConfigForm } from "@/components/dashboard/config-form"
 
 export function WorkspaceSection() {
   return (
-    <section id="workspace" className="px-5 pb-5 pt-5">
+    <section id="workspace">
       <div className="mb-4">
         <h2 className="text-sm font-semibold text-foreground">Workspace</h2>
         <p className="text-xs text-muted-foreground">

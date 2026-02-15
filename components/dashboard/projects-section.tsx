@@ -80,7 +80,7 @@ export function ProjectsSection() {
   }
 
   return (
-    <section id="projects" className="px-5 py-5">
+    <section id="projects">
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold text-foreground">My Projects</h2>
