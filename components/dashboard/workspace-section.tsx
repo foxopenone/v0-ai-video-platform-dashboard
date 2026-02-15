@@ -5,23 +5,23 @@ import { ConfigForm } from "@/components/dashboard/config-form"
 
 export function WorkspaceSection() {
   return (
-    <section id="workspace" className="px-6 py-8">
-      <div className="mb-6">
-        <h2 className="text-lg font-semibold text-foreground">Workspace</h2>
-        <p className="text-sm text-muted-foreground">
-          Upload your source videos and configure the automation pipeline
+    <section id="workspace" className="px-5 pb-5 pt-5">
+      <div className="mb-4">
+        <h2 className="text-sm font-semibold text-foreground">Workspace</h2>
+        <p className="text-xs text-muted-foreground">
+          Upload source videos and configure the automation pipeline
         </p>
       </div>
 
-      {/* Equal-height row: grid + items-stretch ensures both cells share max height */}
-      <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-2">
-        {/* Left: Upload Area -- min-h ensures both sides have a reasonable baseline */}
-        <div className="flex min-h-[520px] flex-col rounded-xl border border-border/30 bg-card p-5">
+      {/* Equal-height row: flex + items-stretch forces same height on both sides */}
+      <div className="flex flex-col items-stretch gap-4 lg:flex-row">
+        {/* Left: Upload Area */}
+        <div className="flex h-[540px] flex-1 flex-col rounded-xl border border-border/30 bg-card p-4 lg:flex-[1.15]">
           <UploadZone />
         </div>
 
-        {/* Right: Config Form -- flex-col stretches child, button pins to bottom */}
-        <div className="flex min-h-[520px] flex-col rounded-xl border border-border/30 bg-card p-5">
+        {/* Right: Config Form -- pinned button via flex-col + flex-1 spacer inside */}
+        <div className="flex h-[540px] flex-1 flex-col rounded-xl border border-border/30 bg-card p-4">
           <ConfigForm />
         </div>
       </div>

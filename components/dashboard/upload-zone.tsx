@@ -203,7 +203,7 @@ export function UploadZone() {
   const completeCount = files.filter((f) => f.status === "complete").length
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex h-full flex-col">
       {/* Counter row - only when files present */}
       {hasFiles && (
         <div className="mb-2 flex items-center justify-between">

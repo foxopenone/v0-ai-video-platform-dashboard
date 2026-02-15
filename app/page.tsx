@@ -11,13 +11,13 @@ export default function Page() {
 
       <main className="flex-1">
         <WorkspaceSection />
-        <Separator className="mx-6 bg-border/30" />
+        <Separator className="mx-5 bg-border/20" />
         <ProjectsSection />
-        <Separator className="mx-6 bg-border/30" />
+        <Separator className="mx-5 bg-border/20" />
         <DiscoveryFeed />
       </main>
 
-      <footer className="border-t border-border/30 px-6 py-6">
+      <footer className="border-t border-border/20 px-5 py-4">
         <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
           <p className="text-xs text-muted-foreground">
             Shortee.TV &middot; AI Video Production Suite. All rights reserved.

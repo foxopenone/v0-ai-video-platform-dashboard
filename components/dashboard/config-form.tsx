@@ -144,7 +144,7 @@ export function ConfigForm() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
+    <div className="flex h-full flex-col gap-3">
       {/* Mode Toggle - Premium segmented control */}
       <div className="flex rounded-lg border border-border/40 bg-secondary/20 p-0.5">
         <button
@@ -188,7 +188,7 @@ export function ConfigForm() {
       </div>
 
       {/* Audio Slots - expanded cards with waveform hint */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-2">
         <button
           onClick={() => setVoiceDrawerOpen(true)}
           className={cn(
@@ -256,8 +256,8 @@ export function ConfigForm() {
         </button>
       </div>
 
-      {/* Flexible spacer - pushes button flush with bottom of card */}
-      <div className="min-h-2 flex-1" />
+      {/* Spacer fills remaining vertical space, pinning button to bottom */}
+      <div className="flex-1" />
 
       {/* Launch button with persistent glow halo */}
       <button
