@@ -144,7 +144,7 @@ export function ConfigForm() {
   }
 
   return (
-    <div className="flex h-full flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       {/* Mode Toggle - Premium segmented control */}
       <div className="flex rounded-lg border border-border/40 bg-secondary/20 p-0.5">
         <button
@@ -187,19 +187,32 @@ export function ConfigForm() {
         ))}
       </div>
 
-      {/* Audio Slots - taller cards to fill vertical space */}
-      <div className="grid grid-cols-2 gap-2">
+      {/* Audio Slots - expanded cards with waveform hint */}
+      <div className="grid grid-cols-2 gap-3">
         <button
           onClick={() => setVoiceDrawerOpen(true)}
           className={cn(
-            "flex flex-col items-center gap-2.5 rounded-lg border px-3 py-4 transition-all",
+            "flex flex-col items-center gap-3 rounded-xl border px-4 py-5 transition-all",
             selectedVoice
               ? "border-[var(--brand-pink)]/25 bg-[var(--brand-pink)]/5"
-              : "border-border/40 bg-secondary/20 hover:border-border/60 hover:bg-secondary/35"
+              : "border-border/40 bg-secondary/15 hover:border-border/60 hover:bg-secondary/30"
           )}
         >
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/60">
-            <Mic className="h-4 w-4 text-[var(--brand-pink)]" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary/50">
+            <Mic className="h-4.5 w-4.5 text-[var(--brand-pink)]" />
+          </div>
+          {/* Mini waveform decoration */}
+          <div className="flex items-end gap-[2px]">
+            {[3, 5, 8, 12, 8, 10, 6, 4, 7, 11, 6, 3].map((h, i) => (
+              <div
+                key={i}
+                className={cn(
+                  "w-[2px] rounded-full",
+                  selectedVoice ? "bg-[var(--brand-pink)]/40" : "bg-muted-foreground/15"
+                )}
+                style={{ height: h }}
+              />
+            ))}
           </div>
           <div className="w-full overflow-hidden text-center">
             <p className="truncate text-xs font-medium text-foreground">
@@ -212,14 +225,27 @@ export function ConfigForm() {
         <button
           onClick={() => setBgmDrawerOpen(true)}
           className={cn(
-            "flex flex-col items-center gap-2.5 rounded-lg border px-3 py-4 transition-all",
+            "flex flex-col items-center gap-3 rounded-xl border px-4 py-5 transition-all",
             selectedBgm
               ? "border-[var(--brand-purple)]/25 bg-[var(--brand-purple)]/5"
-              : "border-border/40 bg-secondary/20 hover:border-border/60 hover:bg-secondary/35"
+              : "border-border/40 bg-secondary/15 hover:border-border/60 hover:bg-secondary/30"
           )}
         >
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/60">
-            <Music className="h-4 w-4 text-[var(--brand-purple)]" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary/50">
+            <Music className="h-4.5 w-4.5 text-[var(--brand-purple)]" />
+          </div>
+          {/* Mini waveform decoration */}
+          <div className="flex items-end gap-[2px]">
+            {[4, 7, 5, 10, 13, 8, 6, 11, 5, 9, 4, 6].map((h, i) => (
+              <div
+                key={i}
+                className={cn(
+                  "w-[2px] rounded-full",
+                  selectedBgm ? "bg-[var(--brand-purple)]/40" : "bg-muted-foreground/15"
+                )}
+                style={{ height: h }}
+              />
+            ))}
           </div>
           <div className="w-full overflow-hidden text-center">
             <p className="truncate text-xs font-medium text-foreground">
@@ -230,16 +256,16 @@ export function ConfigForm() {
         </button>
       </div>
 
-      {/* Spacer pushes button to bottom */}
-      <div className="min-h-4 flex-1" />
+      {/* Flexible spacer - pushes button flush with bottom of card */}
+      <div className="min-h-2 flex-1" />
 
-      {/* Launch button - active glow pulsing ring */}
+      {/* Launch button with persistent glow halo */}
       <button
         onClick={handleSubmit}
         disabled={submitting}
         className={cn(
-          "brand-gradient relative flex w-full items-center justify-center gap-2 rounded-lg py-3 text-sm font-semibold text-[#fff] transition-all hover:opacity-90 disabled:opacity-50",
-          submitting ? "animate-pulse" : "brand-glow"
+          "brand-gradient brand-glow relative flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-[#fff] transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-50",
+          submitting && "animate-pulse"
         )}
       >
         {submitting ? (

@@ -13,20 +13,16 @@ export function WorkspaceSection() {
         </p>
       </div>
 
-      {/* Equal-height columns via items-stretch */}
-      <div className="grid items-stretch gap-6 lg:grid-cols-2">
-        {/* Left: Upload Area */}
-        <div className="flex rounded-xl border border-border/30 bg-card p-5">
-          <div className="flex w-full flex-col">
-            <UploadZone />
-          </div>
+      {/* Equal-height row: grid + items-stretch ensures both cells share max height */}
+      <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-2">
+        {/* Left: Upload Area -- min-h ensures both sides have a reasonable baseline */}
+        <div className="flex min-h-[520px] flex-col rounded-xl border border-border/30 bg-card p-5">
+          <UploadZone />
         </div>
 
-        {/* Right: Config Form - flex-col with justify-between handled inside ConfigForm */}
-        <div className="flex rounded-xl border border-border/30 bg-card p-5">
-          <div className="flex w-full flex-col">
-            <ConfigForm />
-          </div>
+        {/* Right: Config Form -- flex-col stretches child, button pins to bottom */}
+        <div className="flex min-h-[520px] flex-col rounded-xl border border-border/30 bg-card p-5">
+          <ConfigForm />
         </div>
       </div>
     </section>

@@ -203,7 +203,8 @@ export function UploadZone() {
   const completeCount = files.filter((f) => f.status === "complete").length
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* Counter row - only when files present */}
       {hasFiles && (
         <div className="mb-2 flex items-center justify-between">
           <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -219,6 +220,7 @@ export function UploadZone() {
         </div>
       )}
 
+      {/* Drop zone - stretches to fill available space when empty */}
       <div
         onDragOver={(e) => {
           e.preventDefault()
@@ -229,19 +231,20 @@ export function UploadZone() {
         onClick={() => inputRef.current?.click()}
         className={cn(
           "group relative flex cursor-pointer flex-col overflow-hidden rounded-lg border border-dashed transition-all",
-          hasFiles ? "flex-shrink-0" : "flex-1",
+          hasFiles ? "shrink-0" : "flex-1",
           isDragOver
             ? "border-[var(--brand-pink)] bg-[var(--brand-pink)]/5"
             : "border-border/40 hover:border-[var(--brand-pink)]/30 hover:bg-secondary/10",
           files.length >= 15 && "pointer-events-none opacity-40"
         )}
       >
+        {/* Empty state: portrait guide centered + CTA in lower third */}
         {!hasFiles && (
           <>
-            <div className="flex flex-1 items-center justify-center pt-2">
+            <div className="flex flex-1 items-center justify-center">
               <PortraitGuide />
             </div>
-            <div className="flex flex-col items-center gap-2 pb-5">
+            <div className="flex flex-col items-center gap-2 pb-6">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary/50 transition-colors group-hover:bg-[var(--brand-pink)]/10">
                 <Upload className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-[var(--brand-pink)]" />
               </div>
@@ -257,6 +260,7 @@ export function UploadZone() {
           </>
         )}
 
+        {/* Compact drop trigger when files already added */}
         {hasFiles && (
           <div className="flex items-center justify-center gap-2 px-4 py-3">
             <Upload className="h-3.5 w-3.5 text-muted-foreground transition-colors group-hover:text-[var(--brand-pink)]" />
@@ -281,8 +285,9 @@ export function UploadZone() {
         />
       </div>
 
+      {/* Film-strip: horizontal scroll of episode thumbnails */}
       {hasFiles && (
-        <div className="mt-3 flex-1">
+        <div className="mt-3">
           <div
             ref={filmStripRef}
             className="scrollbar-hide flex gap-2 overflow-x-auto pb-1"
