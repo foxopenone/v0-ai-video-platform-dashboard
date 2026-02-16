@@ -203,10 +203,13 @@ export function ConfigForm({
         status: "READY_TO_PROCESS",
       }
 
-      // ── Strict Fetch: standard cors mode, explicit Content-Type ──
+      // ── Strict Fetch: standard cors, explicit Content-Type + API key ──
       const res = await fetch(JOB_INGESTION_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-KEY": "7043cdf229ea2c813b1ec646264cda891c047a69",
+        },
         body: JSON.stringify(payload),
       })
 
