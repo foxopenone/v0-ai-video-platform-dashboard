@@ -187,6 +187,8 @@ export function ConfigForm({
     const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
     try {
+      console.log("[v0] STEP 1: All R2 Uploads Completed. Video_Files:", r2Keys)
+
       const payload = {
         user_id: userId,
         job_id: jobId,
@@ -200,8 +202,10 @@ export function ConfigForm({
         Voice_Select: selectedVoice || "default_voice",
         BGM_Select: selectedBgm || "default_bgm",
         Work_Mode: mode === "full_auto" ? "Full_Auto" : "Step_Review",
-        status: "UPLOADED_TO_R2",
+        status: "READY_TO_PROCESS",
       }
+
+      console.log("[v0] STEP 2: Firing job-ingestion-v56 with X-API-KEY...", JSON.stringify(payload, null, 2))
 
       // ── Strict Fetch: standard cors, explicit Content-Type + API key ──
       const res = await fetch(JOB_INGESTION_URL, {
@@ -213,11 +217,14 @@ export function ConfigForm({
         body: JSON.stringify(payload),
       })
 
+      console.log("[v0] STEP 3: Response received from n8n. Status:", res.status)
+
       if (!res.ok) {
-        throw new Error(`Server responded with status ${res.status}`)
+        const body = await res.text().catch(() => "")
+        throw new Error(`Error: ${res.status} — ${body || res.statusText}`)
       }
 
-      // ── Success: show green banner, clear uploads, insert card ──
+      // ── Success: ONLY now clear uploads & insert card (after 200) ──
       setSubmitted(true)
       clearUploads?.()
       onProjectInsert?.({
@@ -237,12 +244,13 @@ export function ConfigForm({
         setReviewOpen(true)
       }
     } catch (err) {
-      // ── Failure: show red error, allow retry ──
+      // ── Failure: show red error with status code, NO redirect, allow retry ──
       const msg = err instanceof Error ? err.message : "An unknown error occurred"
+      console.error("[v0] DISPATCH FAILED:", msg)
       setErrorMsg(msg)
     } finally {
       setSubmitting(false)
-      // URL stays on current page -- absolutely no redirects
+      // Page stays on current workspace -- absolutely no redirects ever
     }
   }
 
@@ -384,7 +392,7 @@ export function ConfigForm({
         {submitting
           ? "Processing..."
           : submitted
-            ? "\uD83D\uDE80 Mission Started!"
+            ? "Dispatcher Triggered!"
             : hasFilesUploading
               ? "Waiting for uploads..."
               : totalFileCount === 0
@@ -395,7 +403,7 @@ export function ConfigForm({
       {/* Success message */}
       {submitted && (
         <p className="mt-1.5 text-center text-xs font-medium text-emerald-400">
-          Mission Started Successfully!
+          Dispatcher Triggered!
         </p>
       )}
 
