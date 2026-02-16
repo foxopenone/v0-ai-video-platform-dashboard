@@ -61,9 +61,10 @@ const GRADIENTS = [
 
 interface ProjectsSectionProps {
   onProjectClick?: (projectId: string) => void
+  insertedProjects?: Project[]
 }
 
-export function ProjectsSection({ onProjectClick }: ProjectsSectionProps) {
+export function ProjectsSection({ onProjectClick, insertedProjects = [] }: ProjectsSectionProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -74,6 +75,9 @@ export function ProjectsSection({ onProjectClick }: ProjectsSectionProps) {
       setLoading(false)
     })
   }, [])
+
+  // Merge inserted placeholder cards at the front
+  const allProjects = [...insertedProjects, ...projects]
 
   const scroll = (direction: "left" | "right") => {
     if (!scrollRef.current) return
@@ -122,7 +126,7 @@ export function ProjectsSection({ onProjectClick }: ProjectsSectionProps) {
                 className="aspect-[9/16] animate-pulse rounded-xl bg-secondary/20"
               />
             ))
-          : projects.map((project, idx) => {
+          : allProjects.map((project, idx) => {
               const config = STATUS_CONFIG[project.status]
               const StatusIcon = config.icon
               return (

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useRef } from "react"
+import { useState, useCallback, useRef, useEffect } from "react"
 import {
   Upload,
   X,
@@ -25,9 +25,27 @@ interface UploadFile {
   episodeLabel: string
 }
 
+export interface UploadFileRef {
+  id: string
+  file: File
+  name: string
+  r2Key?: string
+  status: "queued" | "uploading" | "complete" | "error"
+}
+
 interface UploadZoneProps {
   /** Called whenever the set of successfully-uploaded r2 keys changes */
   onR2KeysChange?: (keys: string[]) => void
+  /** Expose a getter for raw file refs so parent can trigger uploads */
+  onFilesRef?: (getter: () => UploadFileRef[]) => void
+  /** Expose a clear function */
+  onClearRef?: (clearer: () => void) => void
+  /** Expose progress/complete/error setters so parent can drive status */
+  onControlRef?: (ctrl: {
+    setProgress: (fileId: string, progress: number) => void
+    setComplete: (fileId: string, r2Key: string) => void
+    setError: (fileId: string, errorMsg: string) => void
+  }) => void
   userId?: string
 }
 
@@ -131,12 +149,60 @@ function FilmStripItem({
   )
 }
 
-export function UploadZone({ onR2KeysChange, userId = "anonymous" }: UploadZoneProps) {
+export function UploadZone({ onR2KeysChange, onFilesRef, onClearRef, onControlRef, userId = "anonymous" }: UploadZoneProps) {
   const [files, setFiles] = useState<UploadFile[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const filmStripRef = useRef<HTMLDivElement>(null)
   const jobIdRef = useRef(generateJobId())
+  const filesRef = useRef(files)
+  filesRef.current = files
+
+  // Expose getters to parent
+  useEffect(() => {
+    onFilesRef?.(() =>
+      filesRef.current.map((f) => ({
+        id: f.id,
+        file: f.file,
+        name: f.name,
+        r2Key: f.r2Key,
+        status: f.status,
+      }))
+    )
+    onClearRef?.(() => {
+      setFiles([])
+      jobIdRef.current = generateJobId()
+      onR2KeysChange?.([])
+    })
+    onControlRef?.({
+      setProgress: (fileId, progress) => {
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.id === fileId ? { ...f, status: "uploading" as const, progress } : f
+          )
+        )
+      },
+      setComplete: (fileId, r2Key) => {
+        setFiles((prev) => {
+          const updated = prev.map((f) =>
+            f.id === fileId
+              ? { ...f, status: "complete" as const, progress: 100, r2Key }
+              : f
+          )
+          const keys = updated.filter((f) => f.r2Key).map((f) => f.r2Key!)
+          onR2KeysChange?.(keys)
+          return updated
+        })
+      },
+      setError: (fileId, errorMsg) => {
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.id === fileId ? { ...f, status: "error" as const, errorMsg } : f
+          )
+        )
+      },
+    })
+  }, [onFilesRef, onClearRef, onControlRef, onR2KeysChange])
 
   const processFiles = useCallback(
     async (newFiles: FileList | File[]) => {

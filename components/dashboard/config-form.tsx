@@ -13,15 +13,17 @@ import {
 } from "@/components/ui/popover"
 import { AudioDrawer } from "@/components/dashboard/audio-drawer"
 import { ReviewModal } from "@/components/dashboard/review-modal"
-import { submitProject } from "@/lib/mock-api"
+import { uploadVideoToR2 } from "@/lib/mock-api"
 import { cn } from "@/lib/utils"
+
+const WEBHOOK1_URL = "https://n8n-production-8abb.up.railway.app/webhook/Webhook1"
 
 const PARAMS = [
   {
     key: "platform",
     label: "Platform",
     icon: Monitor,
-    options: ["TikTok", "YouTube Shorts", "Instagram Reels", "Twitter/X", "LinkedIn"],
+    options: ["TikTok", "Reels", "YouTube_Shorts", "YouTube_Long"],
   },
   {
     key: "language",
@@ -33,25 +35,25 @@ const PARAMS = [
     key: "pov",
     label: "POV",
     icon: Eye,
-    options: ["First Person", "Second Person", "Third Person", "Neutral"],
+    options: ["God_View", "Female_Lead", "Male_Lead"],
   },
   {
     key: "tone",
     label: "Tone",
     icon: Palette,
-    options: ["Professional", "Casual", "Humorous", "Inspirational", "Educational", "Dramatic"],
+    options: ["Roast", "Suspense", "Hype", "Emotional", "Recap", "Gossip"],
   },
   {
     key: "style",
     label: "Style",
     icon: Sparkles,
-    options: ["Documentary", "Vlog", "News", "Cinematic", "Minimal", "Storytelling"],
+    options: ["Meme", "Deep_Dive", "Fast_Paced", "Villain_Vibe", "Romance"],
   },
   {
     key: "hook",
     label: "Hook",
     icon: Anchor,
-    options: ["Question", "Bold Statement", "Statistic", "Controversy", "Story Opener", "Challenge"],
+    options: ["POV_Shock", "Question", "Roast", "Suspense", "Emotional"],
   },
 ] as const
 
@@ -112,11 +114,49 @@ function ParamTile({ label, value, icon: Icon, options, onChange }: TileProps) {
   )
 }
 
-interface ConfigFormProps {
-  r2Keys?: string[]
+export interface UploadFileRef {
+  id: string
+  file: File
+  name: string
+  r2Key?: string
+  status: "queued" | "uploading" | "complete" | "error"
 }
 
-export function ConfigForm({ r2Keys = [] }: ConfigFormProps) {
+export interface InsertedProject {
+  id: string
+  title: string
+  status: "processing"
+  progress: number
+  date: string
+  thumbnail: null
+  episodes: number
+}
+
+interface ConfigFormProps {
+  r2Keys?: string[]
+  /** Raw file refs from upload zone so we can trigger R2 upload from here */
+  getUploadFiles?: () => UploadFileRef[]
+  /** Notify upload zone about per-file progress */
+  onFileProgress?: (fileId: string, progress: number) => void
+  /** Notify upload zone that a file completed with r2Key */
+  onFileComplete?: (fileId: string, r2Key: string) => void
+  /** Notify upload zone that a file errored */
+  onFileError?: (fileId: string, errorMsg: string) => void
+  /** Clear all uploads after success */
+  clearUploads?: () => void
+  /** Insert a placeholder card in My Projects */
+  onProjectInsert?: (project: InsertedProject) => void
+}
+
+export function ConfigForm({
+  r2Keys = [],
+  getUploadFiles,
+  onFileProgress,
+  onFileComplete,
+  onFileError,
+  clearUploads,
+  onProjectInsert,
+}: ConfigFormProps) {
   const [mode, setMode] = useState<"full_auto" | "step_review">("full_auto")
   const [params, setParams] = useState<Record<ParamKey, string>>({
     platform: "",
@@ -134,24 +174,110 @@ export function ConfigForm({ r2Keys = [] }: ConfigFormProps) {
   const [selectedBgmName, setSelectedBgmName] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [reviewOpen, setReviewOpen] = useState(false)
+
+  // Resolve param value: user selection or first option in list (default)
+  const resolveParam = (key: ParamKey): string => {
+    if (params[key]) return params[key]
+    const paramDef = PARAMS.find((p) => p.key === key)
+    return paramDef ? paramDef.options[0] : ""
+  }
 
   const handleSubmit = async () => {
     setSubmitting(true)
-    await submitProject({
-      mode,
-      ...params,
-      voice: selectedVoice,
-      bgm: selectedBgm,
-      r2_keys: r2Keys,
-    })
-    setSubmitting(false)
-    setSubmitted(true)
-    // Reset feedback after 3s
-    setTimeout(() => setSubmitted(false), 3000)
-    // If Step Review mode, open review modal after submission
-    if (mode === "step_review") {
-      setReviewOpen(true)
+    setErrorMsg(null)
+    setSubmitted(false)
+
+    const userId = "anonymous" // reserved for future auth
+    const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+
+    // ── Billing Check Placeholder ──
+    console.log(`[Billing Check] Initializing credit deduction for job: ${jobId}`)
+
+    try {
+      // ── Phase 1: R2 Direct Upload ──
+      const uploadFiles = getUploadFiles?.() ?? []
+      // Only upload files that don't already have an r2Key
+      const filesToUpload = uploadFiles.filter((f) => !f.r2Key && f.file)
+      const collectedR2Keys: string[] = [
+        // Keep already-uploaded keys
+        ...uploadFiles.filter((f) => f.r2Key).map((f) => f.r2Key!),
+      ]
+
+      for (const uf of filesToUpload) {
+        try {
+          const r2Key = await uploadVideoToR2(
+            uf.file,
+            userId,
+            jobId,
+            (progress) => onFileProgress?.(uf.id, progress)
+          )
+          onFileComplete?.(uf.id, r2Key)
+          collectedR2Keys.push(r2Key)
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Upload failed"
+          onFileError?.(uf.id, msg)
+          throw new Error(`Upload failed for ${uf.name}: ${msg}`)
+        }
+      }
+
+      // ── Phase 2: Trigger 01a Dispatch ──
+      const payload = {
+        user_id: userId,
+        job_id: jobId,
+        Video_Files: collectedR2Keys,
+        Platform: resolveParam("platform"),
+        Language: resolveParam("language"),
+        POV: resolveParam("pov"),
+        Tone: resolveParam("tone"),
+        Style_Variant: resolveParam("style"),
+        Hook_Pattern: resolveParam("hook"),
+        Voice_Select: selectedVoice || "default_voice",
+        BGM_Select: selectedBgm || "default_bgm",
+        Work_Mode: mode === "full_auto" ? "Full_Auto" : "Step_Review",
+        status: "UPLOADED_TO_R2",
+        created_at: new Date().toISOString(),
+      }
+
+      console.log("[01a Dispatch] Payload:", JSON.stringify(payload, null, 2))
+
+      const res = await fetch(WEBHOOK1_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+
+      if (!res.ok) {
+        throw new Error(`Webhook1 failed with status ${res.status}`)
+      }
+
+      console.log("%c[SUCCESS] 01a dispatched for job: " + jobId, "color: green")
+
+      // ── Success: clear uploads & insert placeholder card ──
+      setSubmitted(true)
+      clearUploads?.()
+      onProjectInsert?.({
+        id: jobId,
+        title: `New Project (${collectedR2Keys.length} EP)`,
+        status: "processing",
+        progress: 0,
+        date: new Date().toISOString().slice(0, 10),
+        thumbnail: null,
+        episodes: collectedR2Keys.length,
+      })
+
+      setTimeout(() => setSubmitted(false), 3000)
+
+      if (mode === "step_review") {
+        setReviewOpen(true)
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "An error occurred"
+      setErrorMsg(msg)
+      console.error("[Generation Error]", msg)
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -290,8 +416,15 @@ export function ConfigForm({ r2Keys = [] }: ConfigFormProps) {
         ) : (
           <Rocket className="h-4 w-4" />
         )}
-        {submitting ? "Generating..." : submitted ? "Task Sent" : "Start Generation"}
+        {submitting ? "Processing..." : submitted ? "Task Sent" : "Start Generation"}
       </button>
+
+      {/* Error message */}
+      {errorMsg && (
+        <p className="mt-1 text-center text-[11px] font-medium text-destructive">
+          {errorMsg}
+        </p>
+      )}
 
       {/* Audio Drawers */}
       <AudioDrawer
