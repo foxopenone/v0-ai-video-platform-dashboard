@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/popover"
 import { AudioDrawer } from "@/components/dashboard/audio-drawer"
 import { ReviewModal } from "@/components/dashboard/review-modal"
-import { uploadVideoToR2 } from "@/lib/mock-api"
 import { cn } from "@/lib/utils"
 
 const WEBHOOK1_URL = "https://n8n-production-8abb.up.railway.app/webhook/Webhook1"
@@ -114,14 +113,6 @@ function ParamTile({ label, value, icon: Icon, options, onChange }: TileProps) {
   )
 }
 
-export interface UploadFileRef {
-  id: string
-  file: File
-  name: string
-  r2Key?: string
-  status: "queued" | "uploading" | "complete" | "error"
-}
-
 export interface InsertedProject {
   id: string
   title: string
@@ -133,16 +124,11 @@ export interface InsertedProject {
 }
 
 interface ConfigFormProps {
+  /** All r2_keys collected from UploadZone pre-uploads */
   r2Keys?: string[]
-  /** Raw file refs from upload zone so we can trigger R2 upload from here */
-  getUploadFiles?: () => UploadFileRef[]
-  /** Notify upload zone about per-file progress */
-  onFileProgress?: (fileId: string, progress: number) => void
-  /** Notify upload zone that a file completed with r2Key */
-  onFileComplete?: (fileId: string, r2Key: string) => void
-  /** Notify upload zone that a file errored */
-  onFileError?: (fileId: string, errorMsg: string) => void
-  /** Clear all uploads after success */
+  /** Total file count in upload zone (includes still-uploading) */
+  totalFileCount?: number
+  /** Clear completed uploads after successful ignition */
   clearUploads?: () => void
   /** Insert a placeholder card in My Projects */
   onProjectInsert?: (project: InsertedProject) => void
@@ -150,10 +136,7 @@ interface ConfigFormProps {
 
 export function ConfigForm({
   r2Keys = [],
-  getUploadFiles,
-  onFileProgress,
-  onFileComplete,
-  onFileError,
+  totalFileCount = 0,
   clearUploads,
   onProjectInsert,
 }: ConfigFormProps) {
@@ -177,6 +160,10 @@ export function ConfigForm({
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [reviewOpen, setReviewOpen] = useState(false)
 
+  // All files must have r2_key before ignition is allowed
+  const allUploaded = totalFileCount > 0 && r2Keys.length === totalFileCount
+  const hasFilesUploading = totalFileCount > 0 && r2Keys.length < totalFileCount
+
   // Resolve param value: user selection or first option in list (default)
   const resolveParam = (key: ParamKey): string => {
     if (params[key]) return params[key]
@@ -185,48 +172,22 @@ export function ConfigForm({
   }
 
   const handleSubmit = async () => {
+    // Pre-check: all files must have r2_key
+    if (!allUploaded) return
+
     setSubmitting(true)
     setErrorMsg(null)
     setSubmitted(false)
 
-    const userId = "anonymous" // reserved for future auth
+    const userId = "anonymous"
     const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
-    // ── Billing Check Placeholder ──
-    console.log(`[Billing Check] Initializing credit deduction for job: ${jobId}`)
-
     try {
-      // ── Phase 1: R2 Direct Upload ──
-      const uploadFiles = getUploadFiles?.() ?? []
-      // Only upload files that don't already have an r2Key
-      const filesToUpload = uploadFiles.filter((f) => !f.r2Key && f.file)
-      const collectedR2Keys: string[] = [
-        // Keep already-uploaded keys
-        ...uploadFiles.filter((f) => f.r2Key).map((f) => f.r2Key!),
-      ]
-
-      for (const uf of filesToUpload) {
-        try {
-          const r2Key = await uploadVideoToR2(
-            uf.file,
-            userId,
-            jobId,
-            (progress) => onFileProgress?.(uf.id, progress)
-          )
-          onFileComplete?.(uf.id, r2Key)
-          collectedR2Keys.push(r2Key)
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : "Upload failed"
-          onFileError?.(uf.id, msg)
-          throw new Error(`Upload failed for ${uf.name}: ${msg}`)
-        }
-      }
-
-      // ── Phase 2: Trigger 01a Dispatch ──
+      // Single POST to Webhook1 -- no uploads happen here
       const payload = {
         user_id: userId,
         job_id: jobId,
-        Video_Files: collectedR2Keys,
+        Video_Files: r2Keys,
         Platform: resolveParam("platform"),
         Language: resolveParam("language"),
         POV: resolveParam("pov"),
@@ -236,11 +197,8 @@ export function ConfigForm({
         Voice_Select: selectedVoice || "default_voice",
         BGM_Select: selectedBgm || "default_bgm",
         Work_Mode: mode === "full_auto" ? "Full_Auto" : "Step_Review",
-        status: "UPLOADED_TO_R2",
-        created_at: new Date().toISOString(),
+        status: "READY_TO_PROCESS",
       }
-
-      console.log("[01a Dispatch] Payload:", JSON.stringify(payload, null, 2))
 
       const res = await fetch(WEBHOOK1_URL, {
         method: "POST",
@@ -252,19 +210,17 @@ export function ConfigForm({
         throw new Error(`Webhook1 failed with status ${res.status}`)
       }
 
-      console.log("%c[SUCCESS] 01a dispatched for job: " + jobId, "color: green")
-
-      // ── Success: clear uploads & insert placeholder card ──
+      // Success: clear uploads & insert placeholder card
       setSubmitted(true)
       clearUploads?.()
       onProjectInsert?.({
         id: jobId,
-        title: `New Project (${collectedR2Keys.length} EP)`,
+        title: `New Project (${r2Keys.length} EP)`,
         status: "processing",
         progress: 0,
         date: new Date().toISOString().slice(0, 10),
         thumbnail: null,
-        episodes: collectedR2Keys.length,
+        episodes: r2Keys.length,
       })
 
       setTimeout(() => setSubmitted(false), 3000)
@@ -275,7 +231,6 @@ export function ConfigForm({
     } catch (err) {
       const msg = err instanceof Error ? err.message : "An error occurred"
       setErrorMsg(msg)
-      console.error("[Generation Error]", msg)
     } finally {
       setSubmitting(false)
     }
@@ -397,10 +352,10 @@ export function ConfigForm({
       {/* Spacer fills remaining vertical space, pinning button to bottom */}
       <div className="flex-1" />
 
-      {/* Launch button with persistent glow halo */}
+      {/* Launch button -- disabled until all uploads have r2_key */}
       <button
         onClick={handleSubmit}
-        disabled={submitting || submitted}
+        disabled={submitting || submitted || !allUploaded}
         className={cn(
           "relative flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-50",
           submitted
@@ -416,7 +371,15 @@ export function ConfigForm({
         ) : (
           <Rocket className="h-4 w-4" />
         )}
-        {submitting ? "Processing..." : submitted ? "Task Sent" : "Start Generation"}
+        {submitting
+          ? "Dispatching..."
+          : submitted
+            ? "Task Sent"
+            : hasFilesUploading
+              ? "Waiting for uploads..."
+              : totalFileCount === 0
+                ? "Upload videos first"
+                : "Start Generation"}
       </button>
 
       {/* Error message */}

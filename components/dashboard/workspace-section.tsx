@@ -3,7 +3,6 @@
 import { useState, useRef, useCallback } from "react"
 import { UploadZone } from "@/components/dashboard/upload-zone"
 import { ConfigForm } from "@/components/dashboard/config-form"
-import type { UploadFileRef } from "@/components/dashboard/upload-zone"
 import type { InsertedProject } from "@/components/dashboard/config-form"
 
 interface WorkspaceSectionProps {
@@ -12,21 +11,14 @@ interface WorkspaceSectionProps {
 
 export function WorkspaceSection({ onProjectInsert }: WorkspaceSectionProps) {
   const [r2Keys, setR2Keys] = useState<string[]>([])
-
-  // Refs to bridge UploadZone controls into ConfigForm
-  const getFilesRef = useRef<(() => UploadFileRef[]) | null>(null)
+  const [totalFileCount, setTotalFileCount] = useState(0)
   const clearUploadsRef = useRef<(() => void) | null>(null)
-  const controlRef = useRef<{
-    setProgress: (fileId: string, progress: number) => void
-    setComplete: (fileId: string, r2Key: string) => void
-    setError: (fileId: string, errorMsg: string) => void
-  } | null>(null)
 
-  const getUploadFiles = useCallback(() => getFilesRef.current?.() ?? [], [])
-  const clearUploads = useCallback(() => clearUploadsRef.current?.(), [])
-  const onFileProgress = useCallback((fileId: string, progress: number) => controlRef.current?.setProgress(fileId, progress), [])
-  const onFileComplete = useCallback((fileId: string, r2Key: string) => controlRef.current?.setComplete(fileId, r2Key), [])
-  const onFileError = useCallback((fileId: string, msg: string) => controlRef.current?.setError(fileId, msg), [])
+  const clearUploads = useCallback(() => {
+    clearUploadsRef.current?.()
+    setR2Keys([])
+    setTotalFileCount(0)
+  }, [])
 
   return (
     <section id="workspace">
@@ -41,19 +33,15 @@ export function WorkspaceSection({ onProjectInsert }: WorkspaceSectionProps) {
         <div className="flex h-[540px] flex-1 flex-col rounded-xl border border-border/30 bg-card p-4 lg:flex-[1.15]">
           <UploadZone
             onR2KeysChange={setR2Keys}
-            onFilesRef={(getter) => { getFilesRef.current = getter }}
+            onTotalCountChange={setTotalFileCount}
             onClearRef={(clearer) => { clearUploadsRef.current = clearer }}
-            onControlRef={(ctrl) => { controlRef.current = ctrl }}
           />
         </div>
 
         <div className="flex h-[540px] flex-1 flex-col rounded-xl border border-border/30 bg-card p-4">
           <ConfigForm
             r2Keys={r2Keys}
-            getUploadFiles={getUploadFiles}
-            onFileProgress={onFileProgress}
-            onFileComplete={onFileComplete}
-            onFileError={onFileError}
+            totalFileCount={totalFileCount}
             clearUploads={clearUploads}
             onProjectInsert={onProjectInsert}
           />
