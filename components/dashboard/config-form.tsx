@@ -243,13 +243,13 @@ export function ConfigForm({
         setReviewOpen(true)
       }
     } catch (err) {
-      // ── Failure: show red error with status code, NO redirect, allow retry ──
-      const msg = err instanceof Error ? err.message : "An unknown error occurred"
-      console.error("[v0] DISPATCH FAILED:", msg)
-      setErrorMsg(msg)
+      // ── Failure: UI-only feedback, NO redirect, NO page change ──
+      console.error("DISPATCH FAILED:", err)
+      setErrorMsg("Service busy, please try again.")
+      setSubmitting(false)
+      return // stays on current page
     } finally {
       setSubmitting(false)
-      // Page stays on current workspace -- absolutely no redirects ever
     }
   }
 
