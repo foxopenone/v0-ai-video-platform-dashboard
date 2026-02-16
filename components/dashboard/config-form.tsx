@@ -15,7 +15,7 @@ import { AudioDrawer } from "@/components/dashboard/audio-drawer"
 import { ReviewModal } from "@/components/dashboard/review-modal"
 import { cn } from "@/lib/utils"
 
-const WEBHOOK1_URL = "https://n8n-production-8abb.up.railway.app/webhook/Webhook1"
+const JOB_INGESTION_URL = "https://n8n-production-8abb.up.railway.app/webhook/job-ingestion-v56"
 
 const PARAMS = [
   {
@@ -172,8 +172,12 @@ export function ConfigForm({
   }
 
   const handleSubmit = async () => {
-    // Pre-check: all files must have r2_key
+    // ── Payload Integrity Check ──
     if (!allUploaded) return
+    if (r2Keys.length === 0) {
+      setErrorMsg("Video_Files is empty. Please upload at least one video.")
+      return
+    }
 
     setSubmitting(true)
     setErrorMsg(null)
@@ -183,7 +187,6 @@ export function ConfigForm({
     const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
     try {
-      // Single POST to Webhook1 -- no uploads happen here
       const payload = {
         user_id: userId,
         job_id: jobId,
@@ -200,17 +203,18 @@ export function ConfigForm({
         status: "READY_TO_PROCESS",
       }
 
-      const res = await fetch(WEBHOOK1_URL, {
+      // ── Strict Fetch: standard cors mode, explicit Content-Type ──
+      const res = await fetch(JOB_INGESTION_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
 
       if (!res.ok) {
-        throw new Error(`Webhook1 failed with status ${res.status}`)
+        throw new Error(`Server responded with status ${res.status}`)
       }
 
-      // Success: clear uploads & insert placeholder card
+      // ── Success: show green banner, clear uploads, insert card ──
       setSubmitted(true)
       clearUploads?.()
       onProjectInsert?.({
@@ -223,16 +227,19 @@ export function ConfigForm({
         episodes: r2Keys.length,
       })
 
-      setTimeout(() => setSubmitted(false), 3000)
+      // Auto-dismiss success after 4s
+      setTimeout(() => setSubmitted(false), 4000)
 
       if (mode === "step_review") {
         setReviewOpen(true)
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "An error occurred"
+      // ── Failure: show red error, allow retry ──
+      const msg = err instanceof Error ? err.message : "An unknown error occurred"
       setErrorMsg(msg)
     } finally {
       setSubmitting(false)
+      // URL stays on current page -- absolutely no redirects
     }
   }
 
@@ -359,7 +366,7 @@ export function ConfigForm({
         className={cn(
           "relative flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-50",
           submitted
-            ? "border border-[hsl(var(--success))]/30 bg-[hsl(var(--success))]/10 text-[hsl(var(--success))]"
+            ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
             : "brand-gradient brand-glow text-[#fff] hover:brightness-110",
           submitting && "animate-pulse"
         )}
@@ -372,9 +379,9 @@ export function ConfigForm({
           <Rocket className="h-4 w-4" />
         )}
         {submitting
-          ? "Dispatching..."
+          ? "Processing..."
           : submitted
-            ? "Task Sent"
+            ? "Mission Started"
             : hasFilesUploading
               ? "Waiting for uploads..."
               : totalFileCount === 0
@@ -382,9 +389,16 @@ export function ConfigForm({
                 : "Start Generation"}
       </button>
 
-      {/* Error message */}
-      {errorMsg && (
-        <p className="mt-1 text-center text-[11px] font-medium text-destructive">
+      {/* Success message */}
+      {submitted && (
+        <p className="mt-1.5 text-center text-xs font-medium text-emerald-400">
+          Mission Started Successfully!
+        </p>
+      )}
+
+      {/* Error message -- allows retry */}
+      {errorMsg && !submitted && (
+        <p className="mt-1.5 text-center text-xs font-medium text-red-400">
           {errorMsg}
         </p>
       )}

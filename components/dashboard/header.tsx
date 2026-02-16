@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Image from "next/image"
-import { Coins, ChevronDown, User, Settings, LogOut, CreditCard, Globe } from "lucide-react"
+import { ChevronDown, User, Settings, LogOut, Globe } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -41,20 +41,6 @@ export function Header() {
 
       {/* Right Side */}
       <div className="flex items-center gap-3">
-        {/* Pricing link */}
-        <a
-          href="#pricing"
-          className="hidden text-xs font-medium text-muted-foreground transition-colors hover:text-foreground md:block"
-        >
-          Pricing
-        </a>
-
-        {/* Credits */}
-        <div className="flex items-center gap-1.5 rounded-full border border-border/40 bg-secondary/40 px-2.5 py-1">
-          <Coins className="h-3 w-3 text-[var(--brand-pink)]" />
-          <span className="font-mono text-xs font-semibold text-foreground">500</span>
-        </div>
-
         {/* Language Switcher */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -93,10 +79,6 @@ export function Header() {
             <DropdownMenuItem>
               <User className="mr-2 h-3.5 w-3.5" />
               Profile
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              <CreditCard className="mr-2 h-3.5 w-3.5" />
-              Billing
             </DropdownMenuItem>
             <DropdownMenuItem>
               <Settings className="mr-2 h-3.5 w-3.5" />
