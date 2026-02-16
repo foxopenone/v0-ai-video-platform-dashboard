@@ -1,9 +1,12 @@
 "use client"
 
+import { useState } from "react"
 import { UploadZone } from "@/components/dashboard/upload-zone"
 import { ConfigForm } from "@/components/dashboard/config-form"
 
 export function WorkspaceSection() {
+  const [r2Keys, setR2Keys] = useState<string[]>([])
+
   return (
     <section id="workspace">
       <div className="mb-4">
@@ -13,16 +16,13 @@ export function WorkspaceSection() {
         </p>
       </div>
 
-      {/* Equal-height row: flex + items-stretch forces same height on both sides */}
       <div className="flex flex-col items-stretch gap-4 lg:flex-row">
-        {/* Left: Upload Area */}
         <div className="flex h-[540px] flex-1 flex-col rounded-xl border border-border/30 bg-card p-4 lg:flex-[1.15]">
-          <UploadZone />
+          <UploadZone onR2KeysChange={setR2Keys} />
         </div>
 
-        {/* Right: Config Form -- pinned button via flex-col + flex-1 spacer inside */}
         <div className="flex h-[540px] flex-1 flex-col rounded-xl border border-border/30 bg-card p-4">
-          <ConfigForm />
+          <ConfigForm r2Keys={r2Keys} />
         </div>
       </div>
     </section>

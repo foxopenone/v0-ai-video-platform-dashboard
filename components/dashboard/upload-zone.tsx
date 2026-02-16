@@ -10,7 +10,7 @@ import {
   Smartphone,
 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
-import { uploadVideo } from "@/lib/mock-api"
+import { uploadVideoToR2 } from "@/lib/mock-api"
 import { cn } from "@/lib/utils"
 
 interface UploadFile {
@@ -19,8 +19,20 @@ interface UploadFile {
   name: string
   progress: number
   status: "queued" | "uploading" | "complete" | "error"
+  errorMsg?: string
+  r2Key?: string
   sortKey: number
   episodeLabel: string
+}
+
+interface UploadZoneProps {
+  /** Called whenever the set of successfully-uploaded r2 keys changes */
+  onR2KeysChange?: (keys: string[]) => void
+  userId?: string
+}
+
+function generateJobId() {
+  return `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 }
 
 function extractNumericSuffix(filename: string): number {
@@ -119,11 +131,12 @@ function FilmStripItem({
   )
 }
 
-export function UploadZone() {
+export function UploadZone({ onR2KeysChange, userId = "anonymous" }: UploadZoneProps) {
   const [files, setFiles] = useState<UploadFile[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const filmStripRef = useRef<HTMLDivElement>(null)
+  const jobIdRef = useRef(generateJobId())
 
   const processFiles = useCallback(
     async (newFiles: FileList | File[]) => {
@@ -153,33 +166,46 @@ export function UploadZone() {
         return combined.sort((a, b) => a.sortKey - b.sortKey).slice(0, 15)
       })
 
-      for (const uf of uploadFiles) {
+      // Upload concurrently (up to all files at once)
+      const uploadPromises = uploadFiles.map(async (uf) => {
         setFiles((prev) =>
           prev.map((f) =>
             f.id === uf.id ? { ...f, status: "uploading" } : f
           )
         )
         try {
-          await uploadVideo(uf.file, (progress) => {
-            setFiles((prev) =>
-              prev.map((f) => (f.id === uf.id ? { ...f, progress } : f))
-            )
-          })
-          setFiles((prev) =>
-            prev.map((f) =>
+          const r2Key = await uploadVideoToR2(
+            uf.file,
+            userId,
+            jobIdRef.current,
+            (progress) => {
+              setFiles((prev) =>
+                prev.map((f) => (f.id === uf.id ? { ...f, progress } : f))
+              )
+            }
+          )
+          setFiles((prev) => {
+            const updated = prev.map((f) =>
               f.id === uf.id
-                ? { ...f, status: "complete", progress: 100 }
+                ? { ...f, status: "complete" as const, progress: 100, r2Key }
                 : f
             )
-          )
-        } catch {
+            // Notify parent of all completed r2 keys
+            const keys = updated.filter((f) => f.r2Key).map((f) => f.r2Key!)
+            onR2KeysChange?.(keys)
+            return updated
+          })
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : "Upload failed"
           setFiles((prev) =>
             prev.map((f) =>
-              f.id === uf.id ? { ...f, status: "error" } : f
+              f.id === uf.id ? { ...f, status: "error" as const, errorMsg } : f
             )
           )
         }
-      }
+      })
+
+      await Promise.allSettled(uploadPromises)
     },
     [files.length]
   )
@@ -194,7 +220,12 @@ export function UploadZone() {
   )
 
   const removeFile = (id: string) => {
-    setFiles((prev) => prev.filter((f) => f.id !== id))
+    setFiles((prev) => {
+      const updated = prev.filter((f) => f.id !== id)
+      const keys = updated.filter((f) => f.r2Key).map((f) => f.r2Key!)
+      onR2KeysChange?.(keys)
+      return updated
+    })
   }
 
   const hasFiles = files.length > 0

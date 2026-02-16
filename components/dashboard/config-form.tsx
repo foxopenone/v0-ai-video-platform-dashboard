@@ -112,7 +112,11 @@ function ParamTile({ label, value, icon: Icon, options, onChange }: TileProps) {
   )
 }
 
-export function ConfigForm() {
+interface ConfigFormProps {
+  r2Keys?: string[]
+}
+
+export function ConfigForm({ r2Keys = [] }: ConfigFormProps) {
   const [mode, setMode] = useState<"full_auto" | "step_review">("full_auto")
   const [params, setParams] = useState<Record<ParamKey, string>>({
     platform: "",
@@ -139,6 +143,7 @@ export function ConfigForm() {
       ...params,
       voice: selectedVoice,
       bgm: selectedBgm,
+      r2_keys: r2Keys,
     })
     setSubmitting(false)
     setSubmitted(true)

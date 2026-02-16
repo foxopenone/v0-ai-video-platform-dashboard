@@ -22,23 +22,75 @@ export async function submitProject(data: WebhookPayload) {
   return triggerWebhook("submit-project", data)
 }
 
-export async function uploadVideo(file: File, onProgress: (progress: number) => void) {
-  // Simulate upload progress
-  return new Promise<{ success: boolean; url: string }>((resolve) => {
-    let progress = 0
-    const interval = setInterval(() => {
-      progress += Math.random() * 15 + 5
-      if (progress >= 100) {
-        progress = 100
-        clearInterval(interval)
-        resolve({
-          success: true,
-          url: `https://storage.example.com/${file.name}`,
-        })
-      }
-      onProgress(Math.min(progress, 100))
-    }, 300)
+// ── R2 Direct Upload ──────────────────────────────────────────────
+const UPLOAD_TICKET_URL =
+  "https://n8n-production-8abb.up.railway.app/webhook/get-upload-ticket"
+
+/**
+ * Get a pre-signed upload ticket from the n8n webhook,
+ * then PUT the file directly to R2 with real progress tracking.
+ * Returns the r2_key on success.
+ */
+export async function uploadVideoToR2(
+  file: File,
+  userId: string,
+  jobId: string,
+  onProgress: (progress: number) => void
+): Promise<string> {
+  // Phase 1 – obtain upload ticket
+  onProgress(2) // small tick so the UI shows activity immediately
+  const ticketRes = await fetch(UPLOAD_TICKET_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      user_id: userId,
+      job_id: jobId,
+      filename: file.name,
+    }),
   })
+
+  if (!ticketRes.ok) {
+    const errorMsg = await ticketRes.text()
+    throw new Error(`Ticket request failed: ${errorMsg}`)
+  }
+
+  const data = await ticketRes.json()
+  if (!data.upload_url || !data.r2_key) {
+    throw new Error("Invalid ticket structure from server")
+  }
+
+  const { upload_url, r2_key } = data
+
+  // Phase 2 – PUT to R2 with XHR for real progress
+  onProgress(5)
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open("PUT", upload_url)
+
+    xhr.upload.addEventListener("progress", (e) => {
+      if (e.lengthComputable) {
+        // Map 5-100 range so the ticket phase occupies 0-5
+        const pct = 5 + (e.loaded / e.total) * 95
+        onProgress(Math.round(pct))
+      }
+    })
+
+    xhr.addEventListener("load", () => {
+      if (xhr.status === 200) {
+        onProgress(100)
+        resolve()
+      } else {
+        reject(new Error(`R2 upload failed with status ${xhr.status}`))
+      }
+    })
+
+    xhr.addEventListener("error", () => reject(new Error("Network error during R2 upload")))
+    xhr.addEventListener("abort", () => reject(new Error("Upload aborted")))
+
+    xhr.send(file)
+  })
+
+  return r2_key
 }
 
 export async function fetchVoices() {
