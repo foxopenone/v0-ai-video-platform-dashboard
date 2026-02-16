@@ -15,7 +15,8 @@ import { AudioDrawer } from "@/components/dashboard/audio-drawer"
 import { ReviewModal } from "@/components/dashboard/review-modal"
 import { cn } from "@/lib/utils"
 
-const JOB_DISPATCHER_URL = "https://n8n-production-8abb.up.railway.app/webhook/job-dispatcher-01a"
+// Proxied through /api/dispatch to avoid CORS preflight issues with X-API-KEY
+const JOB_DISPATCHER_URL = "/api/dispatch"
 
 const PARAMS = [
   {
@@ -204,15 +205,12 @@ export function ConfigForm({
         status: "READY_TO_PROCESS",
       }
 
-      console.log("[v0] STEP 2: Firing job-dispatcher-01a with X-API-KEY...", JSON.stringify(payload, null, 2))
+      console.log("[v0] STEP 2: Firing /api/dispatch proxy...", JSON.stringify(payload, null, 2))
 
-      // ── Strict Fetch: standard cors, explicit Content-Type + API key ──
+      // ── Same-origin fetch to our proxy — no CORS, no custom headers on client ──
       const res = await fetch(JOB_DISPATCHER_URL, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-API-KEY": "7043cdf229ea2c813b1ec646264cda891c047a69",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
 
@@ -243,11 +241,11 @@ export function ConfigForm({
         setReviewOpen(true)
       }
     } catch (err) {
-      // ── Failure: UI-only feedback, NO redirect, NO page change ──
-      console.error("DISPATCH FAILED:", err)
-      setErrorMsg("Service busy, please try again.")
-      setSubmitting(false)
-      return // stays on current page
+      // ── Failure: show RAW error below button. NO redirect. NO page change. ──
+      const raw = err instanceof Error ? err.message : String(err)
+      console.error("[v0] DISPATCH FAILED:", raw)
+      setErrorMsg(raw)
+      // Page stays exactly where it is — no hash change, no navigation
     } finally {
       setSubmitting(false)
     }
