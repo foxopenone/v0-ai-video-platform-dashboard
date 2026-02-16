@@ -15,7 +15,7 @@ import { AudioDrawer } from "@/components/dashboard/audio-drawer"
 import { ReviewModal } from "@/components/dashboard/review-modal"
 import { cn } from "@/lib/utils"
 
-const JOB_INGESTION_URL = "https://n8n-production-8abb.up.railway.app/webhook/job-ingestion-v56"
+const JOB_DISPATCHER_URL = "https://n8n-production-8abb.up.railway.app/webhook/job-dispatcher-01a"
 
 const PARAMS = [
   {
@@ -190,8 +190,7 @@ export function ConfigForm({
       console.log("[v0] STEP 1: All R2 Uploads Completed. Video_Files:", r2Keys)
 
       const payload = {
-        user_id: userId,
-        job_id: jobId,
+        id: jobId,
         Video_Files: r2Keys,
         Platform: resolveParam("platform"),
         Language: resolveParam("language"),
@@ -205,10 +204,10 @@ export function ConfigForm({
         status: "READY_TO_PROCESS",
       }
 
-      console.log("[v0] STEP 2: Firing job-ingestion-v56 with X-API-KEY...", JSON.stringify(payload, null, 2))
+      console.log("[v0] STEP 2: Firing job-dispatcher-01a with X-API-KEY...", JSON.stringify(payload, null, 2))
 
       // ── Strict Fetch: standard cors, explicit Content-Type + API key ──
-      const res = await fetch(JOB_INGESTION_URL, {
+      const res = await fetch(JOB_DISPATCHER_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -392,7 +391,7 @@ export function ConfigForm({
         {submitting
           ? "Processing..."
           : submitted
-            ? "Dispatcher Triggered!"
+            ? "Mission Dispatched!"
             : hasFilesUploading
               ? "Waiting for uploads..."
               : totalFileCount === 0
@@ -403,7 +402,7 @@ export function ConfigForm({
       {/* Success message */}
       {submitted && (
         <p className="mt-1.5 text-center text-xs font-medium text-emerald-400">
-          Dispatcher Triggered!
+          Mission Dispatched!
         </p>
       )}
 
