@@ -200,7 +200,7 @@ export function ConfigForm({
         Voice_Select: selectedVoice || "default_voice",
         BGM_Select: selectedBgm || "default_bgm",
         Work_Mode: mode === "full_auto" ? "Full_Auto" : "Step_Review",
-        status: "READY_TO_PROCESS",
+        status: "UPLOADED_TO_R2",
       }
 
       // ── Strict Fetch: standard cors, explicit Content-Type + API key ──
@@ -384,7 +384,7 @@ export function ConfigForm({
         {submitting
           ? "Processing..."
           : submitted
-            ? "Mission Started"
+            ? "\uD83D\uDE80 Mission Started!"
             : hasFilesUploading
               ? "Waiting for uploads..."
               : totalFileCount === 0
