@@ -16,7 +16,7 @@ import { ReviewModal } from "@/components/dashboard/review-modal"
 import { cn } from "@/lib/utils"
 import type { R2FileEntry } from "@/components/dashboard/upload-zone"
 
-const DISPATCHER_URL = "https://n8n-production-8abb.up.railway.app/webhook/job-dispatcher-01a"
+const DISPATCHER_URL = "https://n8n-production-8abb.up.railway.app/webhook/job-ingestion-final"
 const API_KEY = "7043cdf229ea2c813b1ec646264cda891c047a69"
 const R2_BUCKET_URL = "https://video.aihers.live"
 
@@ -204,7 +204,6 @@ export function ConfigForm({
       Voice_Select: selectedVoice || "default_voice",
       BGM_Select: selectedBgm || "default_bgm",
       Work_Mode: mode === "full_auto" ? "Full_Auto" : "Step_Review",
-      status: "READY_TO_PROCESS",
     }
 
     try {
@@ -400,7 +399,7 @@ export function ConfigForm({
       {/* Success message */}
       {submitted && (
         <p className="mt-1.5 text-center text-xs font-medium text-emerald-400">
-          Mission Accepted & Queued
+          {"\uD83D\uDE80 Mission Accepted & Queued"}
         </p>
       )}
 
