@@ -14,9 +14,14 @@ import {
 import { AudioDrawer } from "@/components/dashboard/audio-drawer"
 import { ReviewModal } from "@/components/dashboard/review-modal"
 import { cn } from "@/lib/utils"
+import type { R2FileEntry } from "@/components/dashboard/upload-zone"
 
 // Proxied through /api/dispatch to avoid CORS preflight issues with X-API-KEY
 const JOB_DISPATCHER_URL = "/api/dispatch"
+
+// R2 public bucket base URL for constructing Airtable-compatible file URLs
+// Falls back to a placeholder -- set NEXT_PUBLIC_R2_BUCKET_URL in env vars
+const R2_BUCKET_URL = process.env.NEXT_PUBLIC_R2_BUCKET_URL || "https://pub-shorteetv.r2.dev"
 
 const PARAMS = [
   {
@@ -125,8 +130,8 @@ export interface InsertedProject {
 }
 
 interface ConfigFormProps {
-  /** All r2_keys collected from UploadZone pre-uploads */
-  r2Keys?: string[]
+  /** All r2 file entries collected from UploadZone pre-uploads */
+  r2Entries?: R2FileEntry[]
   /** Total file count in upload zone (includes still-uploading) */
   totalFileCount?: number
   /** Clear completed uploads after successful ignition */
@@ -136,7 +141,7 @@ interface ConfigFormProps {
 }
 
 export function ConfigForm({
-  r2Keys = [],
+  r2Entries = [],
   totalFileCount = 0,
   clearUploads,
   onProjectInsert,
@@ -162,8 +167,8 @@ export function ConfigForm({
   const [reviewOpen, setReviewOpen] = useState(false)
 
   // All files must have r2_key before ignition is allowed
-  const allUploaded = totalFileCount > 0 && r2Keys.length === totalFileCount
-  const hasFilesUploading = totalFileCount > 0 && r2Keys.length < totalFileCount
+  const allUploaded = totalFileCount > 0 && r2Entries.length === totalFileCount
+  const hasFilesUploading = totalFileCount > 0 && r2Entries.length < totalFileCount
 
   // Resolve param value: user selection or first option in list (default)
   const resolveParam = (key: ParamKey): string => {
@@ -175,7 +180,7 @@ export function ConfigForm({
   const handleSubmit = async () => {
     // ── Payload Integrity Check ──
     if (!allUploaded) return
-    if (r2Keys.length === 0) {
+    if (r2Entries.length === 0) {
       setErrorMsg("Video_Files is empty. Please upload at least one video.")
       return
     }
@@ -184,15 +189,20 @@ export function ConfigForm({
     setErrorMsg(null)
     setSubmitted(false)
 
-    const userId = "anonymous"
     const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
     try {
-      console.log("[v0] STEP 1: All R2 Uploads Completed. Video_Files:", r2Keys)
+      // Build Airtable-compatible Video_Files array
+      const videoFiles = r2Entries.map((entry) => ({
+        url: `${R2_BUCKET_URL}/${entry.r2Key}`,
+        filename: entry.filename,
+      }))
+
+      console.log("[v0] STEP 1: All R2 Uploads Completed. Video_Files:", videoFiles)
 
       const payload = {
         id: jobId,
-        Video_Files: r2Keys,
+        Video_Files: videoFiles,
         Platform: resolveParam("platform"),
         Language: resolveParam("language"),
         POV: resolveParam("pov"),
@@ -226,12 +236,12 @@ export function ConfigForm({
       clearUploads?.()
       onProjectInsert?.({
         id: jobId,
-        title: `New Project (${r2Keys.length} EP)`,
+        title: `New Project (${r2Entries.length} EP)`,
         status: "processing",
         progress: 0,
         date: new Date().toISOString().slice(0, 10),
         thumbnail: null,
-        episodes: r2Keys.length,
+        episodes: r2Entries.length,
       })
 
       // Auto-dismiss success after 4s
@@ -244,7 +254,7 @@ export function ConfigForm({
       // ── Failure: show RAW error below button. NO redirect. NO page change. ──
       const raw = err instanceof Error ? err.message : String(err)
       console.error("[v0] DISPATCH FAILED:", raw)
-      setErrorMsg(raw)
+      setErrorMsg(`Dispatch Error: ${raw}`)
       // Page stays exactly where it is — no hash change, no navigation
     } finally {
       setSubmitting(false)

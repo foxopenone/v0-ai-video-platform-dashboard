@@ -25,9 +25,14 @@ interface UploadFile {
   episodeLabel: string
 }
 
+export interface R2FileEntry {
+  r2Key: string
+  filename: string
+}
+
 interface UploadZoneProps {
-  /** Called whenever the set of successfully-uploaded r2 keys changes */
-  onR2KeysChange?: (keys: string[]) => void
+  /** Called whenever the set of successfully-uploaded r2 entries changes */
+  onR2KeysChange?: (entries: R2FileEntry[]) => void
   /** Called whenever total file count changes (including still-uploading) */
   onTotalCountChange?: (count: number) => void
   /** Expose a clear function so parent can reset after ignition */
@@ -205,9 +210,11 @@ export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, use
                 ? { ...f, status: "complete" as const, progress: 100, r2Key }
                 : f
             )
-            // Notify parent of all completed r2 keys
-            const keys = updated.filter((f) => f.r2Key).map((f) => f.r2Key!)
-            onR2KeysChange?.(keys)
+            // Notify parent of all completed r2 entries (key + filename)
+            const entries = updated
+              .filter((f) => f.r2Key)
+              .map((f) => ({ r2Key: f.r2Key!, filename: f.name }))
+            onR2KeysChange?.(entries)
             return updated
           })
         } catch (err) {
@@ -237,8 +244,10 @@ export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, use
   const removeFile = (id: string) => {
     setFiles((prev) => {
       const updated = prev.filter((f) => f.id !== id)
-      const keys = updated.filter((f) => f.r2Key).map((f) => f.r2Key!)
-      onR2KeysChange?.(keys)
+      const entries = updated
+        .filter((f) => f.r2Key)
+        .map((f) => ({ r2Key: f.r2Key!, filename: f.name }))
+      onR2KeysChange?.(entries)
       onTotalCountChange?.(updated.length)
       return updated
     })
