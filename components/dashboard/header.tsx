@@ -26,16 +26,14 @@ export function Header() {
       <div className="mx-auto flex h-12 w-full max-w-[1400px] items-center justify-between px-6">
       {/* Logo */}
       <div className="flex items-center gap-2.5">
-        <svg width="24" height="24" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Shortee.TV logo">
-          <rect width="32" height="32" rx="8" fill="url(#logo-grad)" />
-          <path d="M12 9.5V22.5L23 16L12 9.5Z" fill="white" />
-          <defs>
-            <linearGradient id="logo-grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-              <stop stopColor="#F43F7A" />
-              <stop offset="1" stopColor="#A855F7" />
-            </linearGradient>
-          </defs>
-        </svg>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/images/shortee-icon.png"
+          alt="Shortee.TV"
+          width={24}
+          height={24}
+          className="h-6 w-6 object-contain"
+        />
         <span className="brand-gradient-text text-base font-bold tracking-tight">
           Shortee.TV
         </span>
