@@ -16,10 +16,13 @@ import { ReviewModal } from "@/components/dashboard/review-modal"
 import { cn } from "@/lib/utils"
 import type { R2FileEntry } from "@/components/dashboard/upload-zone"
 
-// Phase 1 Ingestion webhook — creates Airtable record, per V56.8
-const JOB_INGESTION_URL = "https://n8n-production-8abb.up.railway.app/webhook/job-ingestion"
-
-// R2 public bucket base URL — hardcoded per V56.7
+// Phase 1: Creates Airtable record, returns Job_Record_ID (rec...)
+const PHASE1_INGESTION_URL = "https://n8n-production-8abb.up.railway.app/webhook/job-ingestion-v56"
+// Phase 2: Dispatches processing using Job_Record_ID from Phase 1
+const PHASE2_DISPATCHER_URL = "https://n8n-production-8abb.up.railway.app/webhook/job-dispatcher-01a"
+// Shared auth header
+const API_KEY = "7043cdf229ea2c813b1ec646264cda891c047a69"
+// R2 public bucket base URL
 const R2_BUCKET_URL = "https://video.aihers.live"
 
 const PARAMS = [
@@ -177,7 +180,6 @@ export function ConfigForm({
   }
 
   const handleSubmit = async () => {
-    // ── Payload Integrity Check ──
     if (!allUploaded) return
     if (r2Entries.length === 0) {
       setErrorMsg("Video_Files is empty. Please upload at least one video.")
@@ -190,14 +192,20 @@ export function ConfigForm({
 
     const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
-    try {
-      // Build Airtable-compatible Video_Files array
-      const videoFiles = r2Entries.map((entry) => ({
-        url: `${R2_BUCKET_URL}/${entry.r2Key}`,
-        filename: entry.filename,
-      }))
+    // Build Airtable-compatible Video_Files array: [{url, filename}]
+    const videoFiles = r2Entries.map((entry) => ({
+      url: `${R2_BUCKET_URL}/${entry.r2Key}`,
+      filename: entry.filename,
+    }))
 
-      const payload = {
+    const sharedHeaders = {
+      "Content-Type": "application/json",
+      "X-API-KEY": API_KEY,
+    }
+
+    try {
+      // ── PHASE 1: Ingestion — create Airtable record ──
+      const phase1Payload = {
         id: jobId,
         Video_Files: videoFiles,
         Platform: resolveParam("platform"),
@@ -212,25 +220,57 @@ export function ConfigForm({
         status: "READY_TO_PROCESS",
       }
 
-      const res = await fetch(JOB_INGESTION_URL, {
+      const res1 = await fetch(PHASE1_INGESTION_URL, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-API-KEY": "7043cdf229ea2c813b1ec646264cda891c047a69",
-        },
-        body: JSON.stringify(payload),
+        headers: sharedHeaders,
+        body: JSON.stringify(phase1Payload),
       })
 
-      if (!res.ok) {
-        const body = await res.text().catch(() => "")
-        throw new Error(`Backend Error: ${res.status} ${body || res.statusText}`)
+      if (!res1.ok) {
+        const body1 = await res1.text().catch(() => "")
+        throw new Error(`Phase1 Error: ${res1.status} ${body1 || res1.statusText}`)
       }
 
-      // ── Success: ONLY now clear uploads & insert card (after 200) ──
+      // Phase 1 must return Job_Record_ID (rec...)
+      const phase1Data = await res1.json()
+      const jobRecordId = phase1Data.Job_Record_ID || phase1Data.job_record_id || phase1Data.id
+
+      if (!jobRecordId) {
+        throw new Error("Phase1 did not return Job_Record_ID")
+      }
+
+      // ── PHASE 2: Dispatcher — trigger processing with Job_Record_ID ──
+      const phase2Payload = {
+        Job_Record_ID: jobRecordId,
+        Video_Files: videoFiles,
+        Platform: resolveParam("platform"),
+        Language: resolveParam("language"),
+        POV: resolveParam("pov"),
+        Tone: resolveParam("tone"),
+        Style_Variant: resolveParam("style"),
+        Hook_Pattern: resolveParam("hook"),
+        Voice_Select: selectedVoice || "default_voice",
+        BGM_Select: selectedBgm || "default_bgm",
+        Work_Mode: mode === "full_auto" ? "Full_Auto" : "Step_Review",
+        status: "READY_TO_PROCESS",
+      }
+
+      const res2 = await fetch(PHASE2_DISPATCHER_URL, {
+        method: "POST",
+        headers: sharedHeaders,
+        body: JSON.stringify(phase2Payload),
+      })
+
+      if (!res2.ok) {
+        const body2 = await res2.text().catch(() => "")
+        throw new Error(`Phase2 Error: ${res2.status} ${body2 || res2.statusText}`)
+      }
+
+      // ── Both phases succeeded ──
       setSubmitted(true)
       clearUploads?.()
       onProjectInsert?.({
-        id: jobId,
+        id: jobRecordId,
         title: `New Project (${r2Entries.length} EP)`,
         status: "processing",
         progress: 0,
@@ -239,7 +279,6 @@ export function ConfigForm({
         episodes: r2Entries.length,
       })
 
-      // Auto-dismiss success after 4s
       setTimeout(() => setSubmitted(false), 4000)
 
       if (mode === "step_review") {
