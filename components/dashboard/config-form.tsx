@@ -20,8 +20,7 @@ import type { R2FileEntry } from "@/components/dashboard/upload-zone"
 const JOB_DISPATCHER_URL = "/api/dispatch"
 
 // R2 public bucket base URL for constructing Airtable-compatible file URLs
-// Falls back to a placeholder -- set NEXT_PUBLIC_R2_BUCKET_URL in env vars
-const R2_BUCKET_URL = process.env.NEXT_PUBLIC_R2_BUCKET_URL || "https://pub-shorteetv.r2.dev"
+const R2_BUCKET_URL = process.env.NEXT_PUBLIC_R2_BUCKET_URL || "https://video.aihers.live"
 
 const PARAMS = [
   {
@@ -198,8 +197,6 @@ export function ConfigForm({
         filename: entry.filename,
       }))
 
-      console.log("[v0] STEP 1: All R2 Uploads Completed. Video_Files:", videoFiles)
-
       const payload = {
         id: jobId,
         Video_Files: videoFiles,
@@ -215,16 +212,12 @@ export function ConfigForm({
         status: "READY_TO_PROCESS",
       }
 
-      console.log("[v0] STEP 2: Firing /api/dispatch proxy...", JSON.stringify(payload, null, 2))
-
       // ── Same-origin fetch to our proxy — no CORS, no custom headers on client ──
       const res = await fetch(JOB_DISPATCHER_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
-
-      console.log("[v0] STEP 3: Response received from n8n. Status:", res.status)
 
       if (!res.ok) {
         const body = await res.text().catch(() => "")
@@ -251,11 +244,8 @@ export function ConfigForm({
         setReviewOpen(true)
       }
     } catch (err) {
-      // ── Failure: show RAW error below button. NO redirect. NO page change. ──
       const raw = err instanceof Error ? err.message : String(err)
-      console.error("[v0] DISPATCH FAILED:", raw)
       setErrorMsg(`Dispatch Error: ${raw}`)
-      // Page stays exactly where it is — no hash change, no navigation
     } finally {
       setSubmitting(false)
     }
@@ -398,9 +388,9 @@ export function ConfigForm({
           <Rocket className="h-4 w-4" />
         )}
         {submitting
-          ? "Processing..."
+          ? "Dispatching..."
           : submitted
-            ? "Mission Dispatched!"
+            ? "Mission Started Successfully!"
             : hasFilesUploading
               ? "Waiting for uploads..."
               : totalFileCount === 0
@@ -411,7 +401,7 @@ export function ConfigForm({
       {/* Success message */}
       {submitted && (
         <p className="mt-1.5 text-center text-xs font-medium text-emerald-400">
-          Mission Dispatched!
+          Mission Started Successfully!
         </p>
       )}
 
