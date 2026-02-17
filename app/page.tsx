@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { Header } from "@/components/dashboard/header"
 import { WorkspaceSection } from "@/components/dashboard/workspace-section"
 import { ProjectsSection } from "@/components/dashboard/projects-section"
@@ -14,6 +14,34 @@ export default function Page() {
 
   const handleProjectInsert = useCallback((project: InsertedProject) => {
     setInsertedProjects((prev) => [project, ...prev])
+  }, [])
+
+  // ── NUCLEAR ANTI-REDIRECT GUARD ──
+  // Physically blocks ANY hash change (e.g. /#pricing) from any source
+  useEffect(() => {
+    const blockHashChange = () => {
+      if (window.location.hash) {
+        window.history.replaceState(null, "", window.location.pathname)
+      }
+    }
+    // Block hash changes
+    window.addEventListener("hashchange", blockHashChange)
+    // Also block beforeunload to prevent full navigations
+    const blockNavigation = (e: BeforeUnloadEvent) => {
+      // Only block if triggered by our fetch logic (not user closing tab)
+      if (document.querySelector("[data-dispatching]")) {
+        e.preventDefault()
+      }
+    }
+    window.addEventListener("beforeunload", blockNavigation)
+    // Clear any existing hash on mount
+    if (window.location.hash) {
+      window.history.replaceState(null, "", window.location.pathname)
+    }
+    return () => {
+      window.removeEventListener("hashchange", blockHashChange)
+      window.removeEventListener("beforeunload", blockNavigation)
+    }
   }, [])
 
   if (reviewProjectId) {
@@ -46,18 +74,18 @@ export default function Page() {
             Shortee.TV &middot; AI Video Production Suite. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
-            <a href="#" className="text-xs text-muted-foreground transition-colors hover:text-foreground">
+            <span className="cursor-pointer text-xs text-muted-foreground transition-colors hover:text-foreground">
               Documentation
-            </a>
-            <a href="#" className="text-xs text-muted-foreground transition-colors hover:text-foreground">
+            </span>
+            <span className="cursor-pointer text-xs text-muted-foreground transition-colors hover:text-foreground">
               API Status
-            </a>
-            <a href="#" className="text-xs text-muted-foreground transition-colors hover:text-foreground">
+            </span>
+            <span className="cursor-pointer text-xs text-muted-foreground transition-colors hover:text-foreground">
               Terms
-            </a>
-            <a href="#" className="text-xs text-muted-foreground transition-colors hover:text-foreground">
+            </span>
+            <span className="cursor-pointer text-xs text-muted-foreground transition-colors hover:text-foreground">
               Privacy
-            </a>
+            </span>
           </div>
         </div>
       </footer>

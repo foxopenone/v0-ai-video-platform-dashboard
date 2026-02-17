@@ -381,6 +381,7 @@ export function ConfigForm({
       <button
         onClick={handleSubmit}
         disabled={submitting || submitted || !allUploaded}
+        data-dispatching={submitting || undefined}
         className={cn(
           "relative flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-50",
           submitted
