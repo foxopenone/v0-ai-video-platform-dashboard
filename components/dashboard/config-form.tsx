@@ -217,8 +217,21 @@ export function ConfigForm({
       })
 
       if (!res.ok) {
-        const body = await res.text().catch(() => "")
-        setErrorMsg(`Dispatch Error: ${res.status} - ${body || res.statusText}`)
+        if (res.status === 403) {
+          setErrorMsg("[Auth Error] X-API-KEY 校验失败，请联系管理员。")
+        } else if (res.status === 500) {
+          let detail = ""
+          try {
+            const json = await res.json()
+            detail = json.message || json.error || JSON.stringify(json)
+          } catch {
+            detail = await res.text().catch(() => res.statusText)
+          }
+          setErrorMsg(`[Backend Error] 后端逻辑执行失败：${detail}`)
+        } else {
+          const body = await res.text().catch(() => "")
+          setErrorMsg(`[Error ${res.status}] ${body || res.statusText}`)
+        }
         setSubmitting(false)
         return
       }
@@ -235,15 +248,16 @@ export function ConfigForm({
         episodes: r2Entries.length,
       })
 
-      setTimeout(() => setSubmitted(false), 4000)
+      setTimeout(() => {
+        setSubmitted(false)
+      }, 3000)
 
       if (mode === "step_review") {
         setReviewOpen(true)
       }
     } catch (error) {
-      console.error("DEBUG ERROR:", error)
       const msg = error instanceof Error ? error.message : String(error)
-      setErrorMsg("Backend Logic Error: " + msg)
+      setErrorMsg(`[Network Error] 请检查网络连接或后端 CORS 配置。(${msg})`)
       setSubmitting(false)
       return
     }
@@ -388,7 +402,7 @@ export function ConfigForm({
         {submitting
           ? "Dispatching..."
           : submitted
-            ? "Mission Accepted & Queued"
+            ? "Mission Accepted"
             : hasFilesUploading
               ? "Waiting for uploads..."
               : totalFileCount === 0
@@ -398,14 +412,14 @@ export function ConfigForm({
 
       {/* Success message */}
       {submitted && (
-        <p className="mt-1.5 text-center text-xs font-medium text-emerald-400">
-          {"\uD83D\uDE80 Mission Accepted & Queued"}
+        <p className="mt-1.5 text-center text-sm font-medium text-emerald-400">
+          {"\uD83D\uDE80 Mission Accepted"}
         </p>
       )}
 
-      {/* Error message -- allows retry */}
+      {/* Error message -- allows retry, no redirect, no page reset */}
       {errorMsg && !submitted && (
-        <p className="mt-1.5 text-center text-xs font-medium text-red-400">
+        <p className="mt-1.5 text-center text-sm text-red-500">
           {errorMsg}
         </p>
       )}
