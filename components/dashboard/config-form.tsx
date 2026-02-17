@@ -16,8 +16,8 @@ import { ReviewModal } from "@/components/dashboard/review-modal"
 import { cn } from "@/lib/utils"
 import type { R2FileEntry } from "@/components/dashboard/upload-zone"
 
-// Direct n8n webhook — no proxy, no env var, hardcoded per V56.7
-const JOB_DISPATCHER_URL = "https://n8n-production-8abb.up.railway.app/webhook/job-dispatcher-01a"
+// Phase 1 Ingestion webhook — creates Airtable record, per V56.8
+const JOB_INGESTION_URL = "https://n8n-production-8abb.up.railway.app/webhook/job-ingestion"
 
 // R2 public bucket base URL — hardcoded per V56.7
 const R2_BUCKET_URL = "https://video.aihers.live"
@@ -212,7 +212,7 @@ export function ConfigForm({
         status: "READY_TO_PROCESS",
       }
 
-      const res = await fetch(JOB_DISPATCHER_URL, {
+      const res = await fetch(JOB_INGESTION_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -223,7 +223,7 @@ export function ConfigForm({
 
       if (!res.ok) {
         const body = await res.text().catch(() => "")
-        throw new Error(`Error: ${res.status} — ${body || res.statusText}`)
+        throw new Error(`Backend Error: ${res.status} ${body || res.statusText}`)
       }
 
       // ── Success: ONLY now clear uploads & insert card (after 200) ──
@@ -246,7 +246,6 @@ export function ConfigForm({
         setReviewOpen(true)
       }
     } catch (error) {
-      console.error("DEBUG:", error)
       const msg = error instanceof Error ? error.message : String(error)
       setErrorMsg(msg)
       setSubmitting(false)
