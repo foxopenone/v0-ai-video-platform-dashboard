@@ -28,7 +28,7 @@ export function Header() {
       {/* Logo */}
       <div className="flex items-center gap-2.5">
         <Image
-          src="/images/shortee-icon.png"
+          src="/images/shortee-icon.jpg"
           alt="Shortee.TV"
           width={24}
           height={24}
