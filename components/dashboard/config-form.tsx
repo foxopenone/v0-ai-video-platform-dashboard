@@ -12,7 +12,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { AudioDrawer } from "@/components/dashboard/audio-drawer"
-import { ReviewModal } from "@/components/dashboard/review-modal"
 import { cn } from "@/lib/utils"
 import type { R2FileEntry } from "@/components/dashboard/upload-zone"
 
@@ -161,7 +160,6 @@ export function ConfigForm({
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const [reviewOpen, setReviewOpen] = useState(false)
 
   // All files must have r2_key before ignition is allowed
   const allUploaded = totalFileCount > 0 && r2Entries.length === totalFileCount
@@ -251,10 +249,6 @@ export function ConfigForm({
       setTimeout(() => {
         setSubmitted(false)
       }, 3000)
-
-      if (mode === "step_review") {
-        setReviewOpen(true)
-      }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
       setErrorMsg(`[Network Error] 请检查网络连接或后端 CORS 配置。(${msg})`)
@@ -448,12 +442,7 @@ export function ConfigForm({
         }}
       />
 
-      {/* Step Review Modal */}
-      <ReviewModal
-        open={reviewOpen}
-        onOpenChange={setReviewOpen}
-        projectTitle="New Project"
-      />
+
     </div>
   )
 }

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { ChevronDown, User, Settings, LogOut, Globe } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -20,6 +21,7 @@ const LANGUAGES = [
 
 export function Header() {
   const [lang, setLang] = useState("EN")
+  const router = useRouter()
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/40 bg-background/80 backdrop-blur-xl">
@@ -85,7 +87,7 @@ export function Header() {
               Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive">
+            <DropdownMenuItem className="text-destructive" onClick={() => router.push("/login")}>
               <LogOut className="mr-2 h-3.5 w-3.5" />
               Sign Out
             </DropdownMenuItem>

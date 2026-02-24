@@ -3,8 +3,8 @@
 import { useState, useEffect, useCallback } from "react"
 import {
   X, ChevronRight, Loader2, Play, Pause, RotateCcw,
-  CheckCircle2, Download, Lock, FileText, ScrollText,
-  Film, Copy, Check
+  CheckCircle2, Download, Lock, FileText, Mic, Film,
+  Copy, Check, Edit3
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -39,7 +39,6 @@ interface ProjectDetail {
 
 type Phase = 1 | 2 | 3
 
-// ---------- Gradient for 9:16 player area ----------
 const PLAYER_BG =
   "radial-gradient(ellipse at 40% 30%, rgba(244,63,122,0.18), rgba(168,85,247,0.12) 55%, rgba(10,10,20,0.97))"
 
@@ -56,20 +55,19 @@ export function ReviewRoom({ projectId, onClose }: ReviewRoomProps) {
   const [selectedEp, setSelectedEp] = useState(0)
   const [submitting, setSubmitting] = useState(false)
 
-  // Synopsis state
+  // Story Synopsis state
   const [synopsisText, setSynopsisText] = useState("")
-  const [synopsisFeedback, setSynopsisFeedback] = useState("")
-  const [synopsisApproved, setSynopsisApproved] = useState(false)
+  const [synopsisEditing, setSynopsisEditing] = useState(false)
+  const [synopsisConfirmed, setSynopsisConfirmed] = useState(false)
 
-  // Script state
-  const [scriptTexts, setScriptTexts] = useState<string[]>([])
-  const [editingScript, setEditingScript] = useState<number | null>(null)
-  const [scriptApproved, setScriptApproved] = useState(false)
+  // Voice Over state
+  const [voiceTexts, setVoiceTexts] = useState<string[]>([])
+  const [editingVoice, setEditingVoice] = useState<number | null>(null)
+  const [voiceConfirmed, setVoiceConfirmed] = useState(false)
 
   // Episode state
   const [episodes, setEpisodes] = useState<Episode[]>([])
   const [playingEp, setPlayingEp] = useState(false)
-  const [copiedScript, setCopiedScript] = useState(false)
 
   const isReadOnly = project?.status === "completed"
   const isProcessing = project?.status === "processing"
@@ -82,17 +80,15 @@ export function ReviewRoom({ projectId, onClose }: ReviewRoomProps) {
       if (data) {
         setProject(data as ProjectDetail)
         setSynopsisText(data.synopsis)
-        setScriptTexts(data.script.map((s) => s.text))
+        setVoiceTexts(data.script.map((s) => s.text))
         setEpisodes(data.episodes)
-        // Route to correct phase based on status
         if (data.status === "completed") {
           setPhase(3)
-          setSynopsisApproved(true)
-          setScriptApproved(true)
+          setSynopsisConfirmed(true)
+          setVoiceConfirmed(true)
         } else if (data.status === "processing") {
           setPhase(1)
         } else {
-          // pending_review: check what's already approved
           setPhase(1)
         }
       }
@@ -100,38 +96,41 @@ export function ReviewRoom({ projectId, onClose }: ReviewRoomProps) {
     })
   }, [projectId])
 
-  // ---------- Phase 1: Synopsis ----------
-  const handleSynopsisApprove = useCallback(async () => {
+  // Phase 1: Story Synopsis
+  const handleSynopsisConfirm = useCallback(async () => {
     setSubmitting(true)
     await reviewSynopsis(projectId, "approve")
-    setSynopsisApproved(true)
+    setSynopsisConfirmed(true)
+    setSynopsisEditing(false)
     setPhase(2)
     setSubmitting(false)
   }, [projectId])
 
   const handleSynopsisRetry = useCallback(async () => {
     setSubmitting(true)
-    await reviewSynopsis(projectId, "retry", synopsisFeedback)
-    setSynopsisFeedback("")
+    await reviewSynopsis(projectId, "retry")
+    setSynopsisConfirmed(false)
     setSubmitting(false)
-  }, [projectId, synopsisFeedback])
+  }, [projectId])
 
-  // ---------- Phase 2: Script ----------
-  const handleScriptApprove = useCallback(async () => {
+  // Phase 2: Voice Over
+  const handleVoiceConfirm = useCallback(async () => {
     setSubmitting(true)
     await reviewScript(projectId, "approve")
-    setScriptApproved(true)
+    setVoiceConfirmed(true)
+    setEditingVoice(null)
     setPhase(3)
     setSubmitting(false)
   }, [projectId])
 
-  const handleScriptRetry = useCallback(async () => {
+  const handleVoiceRetry = useCallback(async () => {
     setSubmitting(true)
-    await reviewScript(projectId, "retry", JSON.stringify(scriptTexts))
+    await reviewScript(projectId, "retry", JSON.stringify(voiceTexts))
+    setVoiceConfirmed(false)
     setSubmitting(false)
-  }, [projectId, scriptTexts])
+  }, [projectId, voiceTexts])
 
-  // ---------- Phase 3: Episodes ----------
+  // Phase 3: Final Preview
   const handleEpisodeApprove = useCallback(async (epIdx: number) => {
     setSubmitting(true)
     const ep = episodes[epIdx]
@@ -156,12 +155,6 @@ export function ReviewRoom({ projectId, onClose }: ReviewRoomProps) {
   const handleDownload = useCallback(async (epId: string) => {
     await downloadEpisode(epId)
   }, [])
-
-  const handleCopyScript = useCallback(() => {
-    navigator.clipboard.writeText(scriptTexts.join("\n\n---\n\n"))
-    setCopiedScript(true)
-    setTimeout(() => setCopiedScript(false), 2000)
-  }, [scriptTexts])
 
   // ---------- Loading ----------
   if (loading || !project) {
@@ -246,7 +239,6 @@ export function ReviewRoom({ projectId, onClose }: ReviewRoomProps) {
               </div>
             )}
 
-            {/* Episode label at bottom */}
             {phase === 3 && currentEp && (
               <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-background/90 to-transparent px-4 pb-4 pt-8">
                 <p className="text-center text-xs font-medium text-foreground">
@@ -262,31 +254,28 @@ export function ReviewRoom({ projectId, onClose }: ReviewRoomProps) {
 
         {/* RIGHT: Operation Area (60%) */}
         <div className="flex w-3/5 flex-col">
-          {/* Phase stepper */}
+          {/* Phase stepper: Story Synopsis / Voice Over / Final Preview */}
           <div className="flex shrink-0 items-center gap-1 border-b border-border/20 px-5 py-3">
             {[
-              { n: 1 as Phase, label: "Story Synopsis", icon: FileText },
-              { n: 2 as Phase, label: "Narration Script", icon: ScrollText },
-              { n: 3 as Phase, label: "Episode Videos", icon: Film },
+              { n: 1 as Phase, label: "Story Synopsis", icon: FileText, done: synopsisConfirmed },
+              { n: 2 as Phase, label: "Voice Over", icon: Mic, done: voiceConfirmed },
+              { n: 3 as Phase, label: "Final Preview", icon: Film, done: episodes.every((e) => e.status === "locked") },
             ].map((step, i) => {
               const StepIcon = step.icon
               const isActive = phase === step.n
-              const isDone = step.n < phase || (step.n === 1 && synopsisApproved) || (step.n === 2 && scriptApproved)
               return (
                 <div key={step.n} className="flex items-center">
-                  {i > 0 && <div className={cn("mx-2 h-px w-6", isDone ? "bg-[hsl(var(--success))]" : "bg-border/30")} />}
+                  {i > 0 && <div className={cn("mx-2 h-px w-6", step.done ? "bg-[hsl(var(--success))]" : "bg-border/30")} />}
                   <button
-                    onClick={() => {
-                      if (!isProcessing) setPhase(step.n)
-                    }}
+                    onClick={() => { if (!isProcessing) setPhase(step.n) }}
                     disabled={isProcessing}
                     className={cn(
                       "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all",
                       isActive ? "bg-secondary/60 text-foreground" : "text-muted-foreground hover:text-foreground/70",
-                      isDone && !isActive && "text-[hsl(var(--success))]"
+                      step.done && !isActive && "text-[hsl(var(--success))]"
                     )}
                   >
-                    {isDone && !isActive ? (
+                    {step.done && !isActive ? (
                       <CheckCircle2 className="h-3.5 w-3.5" />
                     ) : (
                       <StepIcon className="h-3.5 w-3.5" />
@@ -300,8 +289,8 @@ export function ReviewRoom({ projectId, onClose }: ReviewRoomProps) {
 
           {/* Phase progress bar */}
           <div className="flex shrink-0 gap-1 px-5 pt-2">
-            <div className={cn("h-1 flex-1 rounded-full", synopsisApproved ? "bg-[hsl(var(--success))]" : phase === 1 ? "brand-gradient" : "bg-secondary/30")} />
-            <div className={cn("h-1 flex-1 rounded-full", scriptApproved ? "bg-[hsl(var(--success))]" : phase === 2 ? "brand-gradient" : "bg-secondary/30")} />
+            <div className={cn("h-1 flex-1 rounded-full", synopsisConfirmed ? "bg-[hsl(var(--success))]" : phase === 1 ? "brand-gradient" : "bg-secondary/30")} />
+            <div className={cn("h-1 flex-1 rounded-full", voiceConfirmed ? "bg-[hsl(var(--success))]" : phase === 2 ? "brand-gradient" : "bg-secondary/30")} />
             <div className={cn("h-1 flex-1 rounded-full", episodes.every((e) => e.status === "locked") ? "bg-[hsl(var(--success))]" : phase === 3 ? "brand-gradient" : "bg-secondary/30")} />
           </div>
 
@@ -316,97 +305,110 @@ export function ReviewRoom({ projectId, onClose }: ReviewRoomProps) {
               </div>
             )}
 
-            {/* ===== PHASE 1: Synopsis ===== */}
+            {/* ===== PHASE 1: Story Synopsis ===== */}
             {!isProcessing && phase === 1 && (
               <div className="flex flex-col gap-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground">Story Synopsis</h3>
-                  <p className="text-xs text-muted-foreground">Review and edit the overall narrative direction</p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">Story Synopsis</h3>
+                    <p className="text-xs text-muted-foreground">Review the overall narrative direction. Click Edit to modify.</p>
+                  </div>
+                  {synopsisConfirmed && (
+                    <Badge variant="outline" className="border-[hsl(var(--success))]/30 bg-[hsl(var(--success))]/10 text-xs text-[hsl(var(--success))]">
+                      <CheckCircle2 className="mr-1 h-3 w-3" /> Confirmed
+                    </Badge>
+                  )}
                 </div>
-                <textarea
-                  value={synopsisText}
-                  onChange={(e) => setSynopsisText(e.target.value)}
-                  disabled={isReadOnly || synopsisApproved}
-                  className="min-h-[160px] resize-none rounded-lg border border-border/30 bg-secondary/15 px-4 py-3 text-sm leading-relaxed text-foreground/90 outline-none transition-colors focus:border-[var(--brand-pink)]/40 disabled:opacity-60"
-                  placeholder="Story synopsis..."
-                />
-                {!isReadOnly && !synopsisApproved && (
-                  <>
-                    <textarea
-                      value={synopsisFeedback}
-                      onChange={(e) => setSynopsisFeedback(e.target.value)}
-                      className="min-h-[60px] resize-none rounded-lg border border-border/30 bg-secondary/10 px-4 py-3 text-xs text-foreground/80 outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-[var(--brand-pink)]/30"
-                      placeholder="Optional: Add feedback or revision notes..."
-                    />
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={handleSynopsisRetry}
-                        disabled={submitting}
-                        className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40 disabled:opacity-50"
-                      >
-                        <RotateCcw className="h-3.5 w-3.5" />
-                        Retry
-                      </button>
-                      <button
-                        onClick={handleSynopsisApprove}
-                        disabled={submitting}
-                        className="brand-gradient flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-xs font-semibold text-[#fff] transition-opacity hover:opacity-90 disabled:opacity-50"
-                      >
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        Approve &amp; Generate Script
-                      </button>
-                    </div>
-                  </>
+
+                {synopsisEditing ? (
+                  <textarea
+                    value={synopsisText}
+                    onChange={(e) => setSynopsisText(e.target.value)}
+                    className="min-h-[200px] resize-none rounded-lg border border-[var(--brand-pink)]/30 bg-secondary/15 px-4 py-3 text-sm leading-relaxed text-foreground/90 outline-none transition-colors focus:border-[var(--brand-pink)]/50"
+                    placeholder="Story synopsis..."
+                  />
+                ) : (
+                  <div className="rounded-lg border border-border/20 bg-secondary/10 px-4 py-3">
+                    <p className="whitespace-pre-line text-sm leading-relaxed text-foreground/80">
+                      {synopsisText}
+                    </p>
+                  </div>
                 )}
-                {synopsisApproved && (
-                  <Badge variant="outline" className="w-fit border-[hsl(var(--success))]/30 bg-[hsl(var(--success))]/10 text-xs text-[hsl(var(--success))]">
-                    <CheckCircle2 className="mr-1 h-3 w-3" /> Synopsis Approved
-                  </Badge>
+
+                {!isReadOnly && !synopsisConfirmed && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setSynopsisEditing(!synopsisEditing)}
+                      className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40"
+                    >
+                      <Edit3 className="h-3.5 w-3.5" />
+                      {synopsisEditing ? "Done Editing" : "Edit"}
+                    </button>
+                    <button
+                      onClick={handleSynopsisConfirm}
+                      disabled={submitting}
+                      className="brand-gradient flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-xs font-semibold text-[#fff] transition-opacity hover:opacity-90 disabled:opacity-50"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Confirm Synopsis
+                    </button>
+                  </div>
+                )}
+                {synopsisConfirmed && !isReadOnly && (
+                  <button
+                    onClick={handleSynopsisRetry}
+                    disabled={submitting}
+                    className="flex w-fit items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40 disabled:opacity-50"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Retry
+                  </button>
                 )}
               </div>
             )}
 
-            {/* ===== PHASE 2: Script ===== */}
+            {/* ===== PHASE 2: Voice Over ===== */}
             {!isProcessing && phase === 2 && (
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-semibold text-foreground">Narration Script</h3>
-                    <p className="text-xs text-muted-foreground">Click any episode script to edit inline</p>
+                    <h3 className="text-sm font-semibold text-foreground">Voice Over</h3>
+                    <p className="text-xs text-muted-foreground">Review AI-generated voiceover scripts per episode. Edit inline and confirm.</p>
                   </div>
-                  {(isReadOnly || scriptApproved) && (
-                    <button
-                      onClick={handleCopyScript}
-                      className="flex items-center gap-1.5 rounded-md border border-border/30 bg-secondary/20 px-3 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      {copiedScript ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                      {copiedScript ? "Copied" : "Copy All"}
-                    </button>
+                  {voiceConfirmed && (
+                    <Badge variant="outline" className="border-[hsl(var(--success))]/30 bg-[hsl(var(--success))]/10 text-xs text-[hsl(var(--success))]">
+                      <CheckCircle2 className="mr-1 h-3 w-3" /> Confirmed
+                    </Badge>
                   )}
                 </div>
+
                 <div className="flex flex-col gap-2">
-                  {scriptTexts.map((text, i) => (
+                  {voiceTexts.map((text, i) => (
                     <div key={i} className="rounded-lg border border-border/20 bg-secondary/10 transition-all hover:border-border/40">
                       <div className="flex items-center justify-between px-3 py-2">
                         <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                           EP{String(i + 1).padStart(2, "0")}
                         </span>
-                        {!isReadOnly && !scriptApproved && (
+                        {!isReadOnly && !voiceConfirmed && (
                           <button
-                            onClick={() => setEditingScript(editingScript === i ? null : i)}
-                            className="text-[10px] text-[var(--brand-pink)] transition-colors hover:text-[var(--brand-pink)]/70"
+                            onClick={() => setEditingVoice(editingVoice === i ? null : i)}
+                            className="flex items-center gap-1 text-[10px] text-[var(--brand-pink)] transition-colors hover:text-[var(--brand-pink)]/70"
                           >
-                            {editingScript === i ? "Collapse" : "Edit"}
+                            {editingVoice === i ? (
+                              <><CheckCircle2 className="h-3 w-3" /> Done</>
+                            ) : (
+                              <><Edit3 className="h-3 w-3" /> Edit</>
+                            )}
                           </button>
                         )}
                       </div>
-                      {editingScript === i ? (
+                      {editingVoice === i ? (
                         <textarea
                           value={text}
                           onChange={(e) => {
-                            const next = [...scriptTexts]
+                            const next = [...voiceTexts]
                             next[i] = e.target.value
-                            setScriptTexts(next)
+                            setVoiceTexts(next)
                           }}
                           className="w-full resize-none border-t border-border/20 bg-transparent px-3 py-2 text-xs leading-relaxed text-foreground/80 outline-none"
                           rows={6}
@@ -419,10 +421,11 @@ export function ReviewRoom({ projectId, onClose }: ReviewRoomProps) {
                     </div>
                   ))}
                 </div>
-                {!isReadOnly && !scriptApproved && (
+
+                {!isReadOnly && !voiceConfirmed && (
                   <div className="flex items-center gap-2 pt-2">
                     <button
-                      onClick={handleScriptRetry}
+                      onClick={handleVoiceRetry}
                       disabled={submitting}
                       className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40 disabled:opacity-50"
                     >
@@ -430,29 +433,34 @@ export function ReviewRoom({ projectId, onClose }: ReviewRoomProps) {
                       Retry
                     </button>
                     <button
-                      onClick={handleScriptApprove}
+                      onClick={handleVoiceConfirm}
                       disabled={submitting}
                       className="brand-gradient flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-xs font-semibold text-[#fff] transition-opacity hover:opacity-90 disabled:opacity-50"
                     >
                       <CheckCircle2 className="h-3.5 w-3.5" />
-                      Confirm &amp; Start Synthesis
+                      Confirm Voice Over
                     </button>
                   </div>
                 )}
-                {scriptApproved && (
-                  <Badge variant="outline" className="w-fit border-[hsl(var(--success))]/30 bg-[hsl(var(--success))]/10 text-xs text-[hsl(var(--success))]">
-                    <CheckCircle2 className="mr-1 h-3 w-3" /> Script Confirmed
-                  </Badge>
+                {voiceConfirmed && !isReadOnly && (
+                  <button
+                    onClick={handleVoiceRetry}
+                    disabled={submitting}
+                    className="flex w-fit items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40 disabled:opacity-50"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Retry
+                  </button>
                 )}
               </div>
             )}
 
-            {/* ===== PHASE 3: Episodes ===== */}
+            {/* ===== PHASE 3: Final Preview ===== */}
             {!isProcessing && phase === 3 && (
               <div className="flex flex-col gap-4">
                 <div>
-                  <h3 className="text-sm font-semibold text-foreground">Episode Videos</h3>
-                  <p className="text-xs text-muted-foreground">Review each episode individually. Approved episodes are locked permanently.</p>
+                  <h3 className="text-sm font-semibold text-foreground">Final Preview</h3>
+                  <p className="text-xs text-muted-foreground">Review each episode. Use Retry to request a redo from backend.</p>
                 </div>
 
                 {/* Episode grid */}
@@ -505,13 +513,23 @@ export function ReviewRoom({ projectId, onClose }: ReviewRoomProps) {
 
                     {/* Episode actions */}
                     {currentEp.status === "locked" ? (
-                      <button
-                        onClick={() => handleDownload(currentEp.id)}
-                        className="flex items-center gap-1.5 rounded-lg border border-[var(--brand-purple)]/30 bg-[var(--brand-purple)]/10 px-4 py-2.5 text-xs font-medium text-[var(--brand-purple)] transition-colors hover:bg-[var(--brand-purple)]/20"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                        Download Episode
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleDownload(currentEp.id)}
+                          className="flex items-center gap-1.5 rounded-lg border border-[var(--brand-purple)]/30 bg-[var(--brand-purple)]/10 px-4 py-2.5 text-xs font-medium text-[var(--brand-purple)] transition-colors hover:bg-[var(--brand-purple)]/20"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          Download
+                        </button>
+                        <button
+                          onClick={() => handleEpisodeRetry(selectedEp)}
+                          disabled={submitting}
+                          className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40 disabled:opacity-50"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          Retry
+                        </button>
+                      </div>
                     ) : currentEp.status === "reviewing" && !isReadOnly ? (
                       <div className="flex items-center gap-2">
                         <button
@@ -520,7 +538,7 @@ export function ReviewRoom({ projectId, onClose }: ReviewRoomProps) {
                           className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40 disabled:opacity-50"
                         >
                           <RotateCcw className="h-3.5 w-3.5" />
-                          Redo
+                          Retry
                         </button>
                         <button
                           onClick={() => handleEpisodeApprove(selectedEp)}
@@ -528,7 +546,7 @@ export function ReviewRoom({ projectId, onClose }: ReviewRoomProps) {
                           className="brand-gradient flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-xs font-semibold text-[#fff] transition-opacity hover:opacity-90 disabled:opacity-50"
                         >
                           <CheckCircle2 className="h-3.5 w-3.5" />
-                          Approve &amp; Lock
+                          Approve & Lock
                         </button>
                       </div>
                     ) : (
