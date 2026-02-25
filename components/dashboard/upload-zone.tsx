@@ -150,17 +150,6 @@ export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, use
   const jobIdRef = useRef(generateJobId())
   const router = useRouter()
 
-  // Auth gate: check login before allowing upload
-  const requireAuth = useCallback(async (): Promise<boolean> => {
-    const supabase = createClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
-      router.push("/login")
-      return false
-    }
-    return true
-  }, [router])
-
   // Expose clear function to parent
   useEffect(() => {
     onClearRef?.(() => {
@@ -304,11 +293,7 @@ export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, use
         }}
         onDragLeave={() => setIsDragOver(false)}
         onDrop={handleDrop}
-        onClick={async () => {
-          const authed = await requireAuth()
-          if (!authed) return
-          inputRef.current?.click()
-        }}
+        onClick={() => inputRef.current?.click()}
         className={cn(
           "group relative flex cursor-pointer flex-col overflow-hidden rounded-lg border border-dashed transition-all",
           hasFiles ? "shrink-0" : "flex-1",
