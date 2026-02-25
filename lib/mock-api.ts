@@ -148,7 +148,102 @@ export async function fetchProjects() {
   ]
 }
 
-// Review Room API
+// ── Step Review API ──────────────────────────────────────────────
+const N8N_BASE = "https://n8n-production-8abb.up.railway.app/webhook"
+const R2_CDN = "https://video.aihers.live"
+
+/** Bible JSON shape from backend */
+export interface BibleCharacter {
+  name: string
+  role: string
+  description: string
+}
+
+export interface BibleEpisode {
+  episode_number: number
+  title: string
+  script: string
+  voiceover_text: string
+}
+
+export interface BibleJSON {
+  story_summary: string
+  characters: BibleCharacter[]
+  episodes: BibleEpisode[]
+  metadata: Record<string, unknown>
+  [key: string]: unknown
+}
+
+/** Fetch the Bible JSON from R2 CDN */
+export async function fetchBibleFromR2(bibleR2Key: string): Promise<BibleJSON> {
+  const url = `${R2_CDN}/${bibleR2Key}`
+  console.log("[v0] Fetching Bible JSON from:", url)
+  const res = await fetch(url)
+  if (!res.ok) {
+    const body = await res.text().catch(() => "")
+    console.error("[v0] Bible fetch failed:", res.status, body)
+    throw new Error(`Failed to fetch Bible: ${res.status}`)
+  }
+  const json = await res.json()
+  console.log("[v0] Bible JSON loaded, keys:", Object.keys(json))
+  return json as BibleJSON
+}
+
+/** Phase 1 Action: Approve Bible (continue pipeline) */
+export async function bibleApprove(jobRecordId: string, bibleR2Key: string) {
+  console.log("[v0] Bible Approve:", { jobRecordId, bibleR2Key })
+  const res = await fetch(`${N8N_BASE}/bible-review`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      Job_Record_ID: jobRecordId,
+      Bible_R2_Key: bibleR2Key,
+      action: "approve",
+    }),
+  })
+  if (!res.ok) throw new Error("Bible approve failed: " + res.status)
+  return res.json()
+}
+
+/** Phase 1 Action: Edit & Continue (writeback modified Bible, then continue) */
+export async function bibleEditContinue(
+  jobRecordId: string,
+  bibleR2Key: string,
+  editedBible: BibleJSON
+) {
+  console.log("[v0] Bible Edit & Continue:", { jobRecordId, bibleR2Key })
+  // POST the full edited JSON to backend writeback endpoint
+  const res = await fetch(`${N8N_BASE}/bible-writeback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      Job_Record_ID: jobRecordId,
+      Bible_R2_Key: bibleR2Key,
+      action: "edit_continue",
+      bible: editedBible,
+    }),
+  })
+  if (!res.ok) throw new Error("Bible writeback failed: " + res.status)
+  return res.json()
+}
+
+/** Phase 1 Action: Reject (redo from scratch) */
+export async function bibleReject(jobRecordId: string, bibleR2Key: string) {
+  console.log("[v0] Bible Reject:", { jobRecordId, bibleR2Key })
+  const res = await fetch(`${N8N_BASE}/bible-review`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      Job_Record_ID: jobRecordId,
+      Bible_R2_Key: bibleR2Key,
+      action: "reject",
+    }),
+  })
+  if (!res.ok) throw new Error("Bible reject failed: " + res.status)
+  return res.json()
+}
+
+// Review Room API (legacy mock for project list)
 export async function fetchProjectDetail(projectId: string) {
   await new Promise((resolve) => setTimeout(resolve, 400))
   const projects = await fetchProjects()
