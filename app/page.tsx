@@ -6,19 +6,40 @@ import { WorkspaceSection } from "@/components/dashboard/workspace-section"
 import { ProjectsSection } from "@/components/dashboard/projects-section"
 import { DiscoveryFeed } from "@/components/dashboard/discovery-feed"
 import { ReviewRoom } from "@/components/dashboard/review-room"
-import type { InsertedProject } from "@/components/dashboard/config-form"
+import type { InsertedProject, StepReviewData } from "@/components/dashboard/config-form"
 
 export default function Page() {
   const [reviewProjectId, setReviewProjectId] = useState<string | null>(null)
+  const [stepReviewData, setStepReviewData] = useState<StepReviewData | null>(null)
   const [insertedProjects, setInsertedProjects] = useState<InsertedProject[]>([])
 
   const handleProjectInsert = useCallback((project: InsertedProject) => {
     setInsertedProjects((prev) => [project, ...prev])
   }, [])
 
+  const handleStepReviewReady = useCallback((data: StepReviewData) => {
+    setStepReviewData(data)
+  }, [])
+
+  // Step Review mode
+  if (stepReviewData) {
+    return (
+      <ReviewRoom
+        mode="step_review"
+        jobRecordId={stepReviewData.jobRecordId}
+        lockToken={stepReviewData.lockToken}
+        bibleR2Key={stepReviewData.bibleR2Key}
+        projectTitle={stepReviewData.projectTitle}
+        onClose={() => setStepReviewData(null)}
+      />
+    )
+  }
+
+  // Legacy review mode
   if (reviewProjectId) {
     return (
       <ReviewRoom
+        mode="legacy"
         projectId={reviewProjectId}
         onClose={() => setReviewProjectId(null)}
       />
@@ -30,7 +51,7 @@ export default function Page() {
       <Header />
 
       <main className="mx-auto w-full max-w-[1400px] flex-1 px-6 py-5">
-        <WorkspaceSection onProjectInsert={handleProjectInsert} />
+        <WorkspaceSection onProjectInsert={handleProjectInsert} onStepReviewReady={handleStepReviewReady} />
         <div className="my-5 h-px bg-border/20" />
         <ProjectsSection
           onProjectClick={(id) => setReviewProjectId(id)}

@@ -151,12 +151,14 @@ export async function fetchProjects() {
 // ── Step Review API ──────────────────────────────────────────────
 const N8N_BASE = "https://n8n-production-8abb.up.railway.app/webhook"
 const R2_CDN = "https://video.aihers.live"
+const R2_WRITEBACK = "https://reel.digipalca.workers.dev/"
 
 /** Bible JSON shape from backend */
 export interface BibleCharacter {
   name: string
   role: string
   description: string
+  [key: string]: unknown
 }
 
 export interface BibleEpisode {
@@ -164,13 +166,14 @@ export interface BibleEpisode {
   title: string
   script: string
   voiceover_text: string
+  [key: string]: unknown
 }
 
 export interface BibleJSON {
   story_summary: string
   characters: BibleCharacter[]
-  episodes: BibleEpisode[]
-  metadata: Record<string, unknown>
+  episodes?: BibleEpisode[]
+  metadata?: Record<string, unknown>
   [key: string]: unknown
 }
 
@@ -189,15 +192,15 @@ export async function fetchBibleFromR2(bibleR2Key: string): Promise<BibleJSON> {
   return json as BibleJSON
 }
 
-/** Phase 1 Action: Approve Bible (continue pipeline) */
-export async function bibleApprove(jobRecordId: string, bibleR2Key: string) {
-  console.log("[v0] Bible Approve:", { jobRecordId, bibleR2Key })
-  const res = await fetch(`${N8N_BASE}/bible-review`, {
+/** Phase 1 Action: Approve Bible — call agentA-trigger to continue pipeline */
+export async function bibleApprove(jobRecordId: string, lockToken: string) {
+  console.log("[v0] Bible Approve:", { jobRecordId, lockToken })
+  const res = await fetch(`${N8N_BASE}/agentA-trigger`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       Job_Record_ID: jobRecordId,
-      Bible_R2_Key: bibleR2Key,
+      Lock_Token: lockToken,
       action: "approve",
     }),
   })
@@ -205,41 +208,63 @@ export async function bibleApprove(jobRecordId: string, bibleR2Key: string) {
   return res.json()
 }
 
-/** Phase 1 Action: Edit & Continue (writeback modified Bible, then continue) */
+/** Phase 1 Action: Edit & Continue
+ *  Step 1: Writeback full Bible JSON to R2 via Worker
+ *  Step 2: Call agentA-trigger to continue pipeline
+ */
 export async function bibleEditContinue(
   jobRecordId: string,
+  lockToken: string,
   bibleR2Key: string,
   editedBible: BibleJSON
 ) {
-  console.log("[v0] Bible Edit & Continue:", { jobRecordId, bibleR2Key })
-  // POST the full edited JSON to backend writeback endpoint
-  const res = await fetch(`${N8N_BASE}/bible-writeback`, {
+  console.log("[v0] Bible Edit & Continue — Step 1: Writeback to R2")
+  // Step 1: Write full Bible JSON back to R2
+  const writeRes = await fetch(R2_WRITEBACK, {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer upload number",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      key: bibleR2Key,
+      raw_content: editedBible,
+      content_type: "application/json",
+    }),
+  })
+  if (!writeRes.ok) {
+    const errBody = await writeRes.text().catch(() => "")
+    console.error("[v0] R2 writeback failed:", writeRes.status, errBody)
+    throw new Error("R2 writeback failed: " + writeRes.status)
+  }
+  console.log("[v0] Bible Edit & Continue — Step 2: Trigger agentA")
+  // Step 2: Continue pipeline
+  const triggerRes = await fetch(`${N8N_BASE}/agentA-trigger`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       Job_Record_ID: jobRecordId,
-      Bible_R2_Key: bibleR2Key,
-      action: "edit_continue",
-      bible: editedBible,
+      Lock_Token: lockToken,
+      action: "approve",
     }),
   })
-  if (!res.ok) throw new Error("Bible writeback failed: " + res.status)
-  return res.json()
+  if (!triggerRes.ok) throw new Error("agentA-trigger failed: " + triggerRes.status)
+  return triggerRes.json()
 }
 
-/** Phase 1 Action: Reject (redo from scratch) */
-export async function bibleReject(jobRecordId: string, bibleR2Key: string) {
-  console.log("[v0] Bible Reject:", { jobRecordId, bibleR2Key })
-  const res = await fetch(`${N8N_BASE}/bible-review`, {
+/** Phase 1 Action: Reject / Redo — call agent0-redo to start from scratch */
+export async function bibleReject(jobRecordId: string, lockToken: string) {
+  console.log("[v0] Bible Reject/Redo:", { jobRecordId, lockToken })
+  const res = await fetch(`${N8N_BASE}/agent0-redo`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       Job_Record_ID: jobRecordId,
-      Bible_R2_Key: bibleR2Key,
-      action: "reject",
+      Lock_Token: lockToken,
+      action: "redo",
     }),
   })
-  if (!res.ok) throw new Error("Bible reject failed: " + res.status)
+  if (!res.ok) throw new Error("Bible reject/redo failed: " + res.status)
   return res.json()
 }
 

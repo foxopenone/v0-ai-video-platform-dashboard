@@ -127,6 +127,13 @@ export interface InsertedProject {
   episodes: number
 }
 
+export interface StepReviewData {
+  jobRecordId: string
+  lockToken: string
+  bibleR2Key: string
+  projectTitle: string
+}
+
 interface ConfigFormProps {
   /** All r2 file entries collected from UploadZone pre-uploads */
   r2Entries?: R2FileEntry[]
@@ -136,6 +143,8 @@ interface ConfigFormProps {
   clearUploads?: () => void
   /** Insert a placeholder card in My Projects */
   onProjectInsert?: (project: InsertedProject) => void
+  /** Open Step Review when Bible is ready */
+  onStepReviewReady?: (data: StepReviewData) => void
 }
 
 export function ConfigForm({
@@ -143,6 +152,7 @@ export function ConfigForm({
   totalFileCount = 0,
   clearUploads,
   onProjectInsert,
+  onStepReviewReady,
 }: ConfigFormProps) {
   const router = useRouter()
   const [mode, setMode] = useState<"full_auto" | "step_review">("full_auto")
@@ -247,15 +257,38 @@ export function ConfigForm({
 
       setSubmitted(true)
       clearUploads?.()
+
+      const projectTitle = `New Project (${r2Entries.length} EP)`
+
       onProjectInsert?.({
         id: jobId,
-        title: `New Project (${r2Entries.length} EP)`,
+        title: projectTitle,
         status: "processing",
         progress: 0,
         date: new Date().toISOString().slice(0, 10),
         thumbnail: null,
         episodes: r2Entries.length,
       })
+
+      // If Step_Review mode, parse backend response for review data
+      if (mode === "step_review") {
+        try {
+          const resJson = await res.json()
+          console.log("[v0] Step Review dispatch response:", resJson)
+          // Backend returns Job_Record_ID, Lock_Token, Bible_R2_Key when Bible is ready
+          if (resJson.Job_Record_ID && resJson.Bible_R2_Key) {
+            onStepReviewReady?.({
+              jobRecordId: resJson.Job_Record_ID,
+              lockToken: resJson.Lock_Token || "",
+              bibleR2Key: resJson.Bible_R2_Key,
+              projectTitle,
+            })
+          }
+        } catch {
+          // Response may not be JSON or Bible not ready yet -- that's ok
+          console.log("[v0] Step Review: Bible not in dispatch response, will be available via polling later")
+        }
+      }
 
       setTimeout(() => {
         setSubmitted(false)
