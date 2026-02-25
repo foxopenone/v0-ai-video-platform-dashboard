@@ -153,8 +153,8 @@ export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, use
   // Auth gate: check login before allowing upload
   const requireAuth = useCallback(async (): Promise<boolean> => {
     const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) {
       router.push("/login")
       return false
     }
