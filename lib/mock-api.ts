@@ -43,44 +43,68 @@ export async function uploadVideoToR2(
   console.log(`[Phase 1] Target: ${targetUid}/${targetJid}. Fetching ticket...`)
   onProgress(5)
 
-  const ticketRes = await fetch(
-    "https://n8n-production-8abb.up.railway.app/webhook/get-upload-ticket",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: targetUid,
-        job_id: targetJid,
-        filename: file.name,
-      }),
-    }
-  )
-
-  if (!ticketRes.ok) {
-    throw new Error("Ticket request failed")
+  let ticketRes: Response
+  try {
+    ticketRes = await fetch(
+      "https://n8n-production-8abb.up.railway.app/webhook/get-upload-ticket",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: targetUid,
+          job_id: targetJid,
+          filename: file.name,
+        }),
+      }
+    )
+  } catch (err) {
+    console.error("[v0] Phase 1 NETWORK ERROR:", err)
+    throw new Error("Ticket fetch network error: " + (err instanceof Error ? err.message : String(err)))
   }
 
-  const { upload_url, r2_key } = await ticketRes.json()
+  console.log("[v0] Phase 1 response status:", ticketRes.status)
+
+  if (!ticketRes.ok) {
+    const body = await ticketRes.text().catch(() => "")
+    console.error("[v0] Phase 1 FAIL body:", body)
+    throw new Error("Ticket request failed: " + ticketRes.status + " " + body)
+  }
+
+  const ticketJson = await ticketRes.json()
+  console.log("[v0] Phase 1 ticket:", JSON.stringify(ticketJson))
+
+  const { upload_url, r2_key } = ticketJson
 
   if (!upload_url || !r2_key) {
+    console.error("[v0] Invalid ticket structure:", ticketJson)
     throw new Error("Invalid ticket structure from server")
   }
 
   // Phase 2 – PUT file directly to R2
-  console.log("[Phase 2] Pushing to R2...")
+  console.log("[v0] Phase 2 Pushing to R2...", upload_url)
   onProgress(15)
 
-  const uploadRes = await fetch(upload_url, {
-    method: "PUT",
-    body: file,
-  })
+  let uploadRes: Response
+  try {
+    uploadRes = await fetch(upload_url, {
+      method: "PUT",
+      body: file,
+    })
+  } catch (err) {
+    console.error("[v0] Phase 2 NETWORK ERROR (likely CORS):", err)
+    throw new Error("R2 upload network error: " + (err instanceof Error ? err.message : String(err)))
+  }
+
+  console.log("[v0] Phase 2 response status:", uploadRes.status)
 
   if (uploadRes.status === 200) {
     console.log("%c[SUCCESS] R2 Key: " + r2_key, "color: green")
     onProgress(100)
     return r2_key
   } else {
-    throw new Error("R2 Upload Error: " + uploadRes.status)
+    const errBody = await uploadRes.text().catch(() => "")
+    console.error("[v0] Phase 2 FAIL body:", errBody)
+    throw new Error("R2 Upload Error: " + uploadRes.status + " " + errBody)
   }
 }
 
