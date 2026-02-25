@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useCallback, useRef, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { createClient } from "@/lib/supabase/client"
 import {
   Upload,
   X,
@@ -146,6 +148,18 @@ export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, use
   const inputRef = useRef<HTMLInputElement>(null)
   const filmStripRef = useRef<HTMLDivElement>(null)
   const jobIdRef = useRef(generateJobId())
+  const router = useRouter()
+
+  // Auth gate: check login before allowing upload
+  const requireAuth = useCallback(async (): Promise<boolean> => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      router.push("/login")
+      return false
+    }
+    return true
+  }, [router])
 
   // Expose clear function to parent
   useEffect(() => {
@@ -233,12 +247,14 @@ export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, use
   )
 
   const handleDrop = useCallback(
-    (e: React.DragEvent) => {
+    async (e: React.DragEvent) => {
       e.preventDefault()
       setIsDragOver(false)
+      const authed = await requireAuth()
+      if (!authed) return
       processFiles(e.dataTransfer.files)
     },
-    [processFiles]
+    [processFiles, requireAuth]
   )
 
   const removeFile = (id: string) => {
@@ -282,7 +298,11 @@ export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, use
         }}
         onDragLeave={() => setIsDragOver(false)}
         onDrop={handleDrop}
-        onClick={() => inputRef.current?.click()}
+        onClick={async () => {
+          const authed = await requireAuth()
+          if (!authed) return
+          inputRef.current?.click()
+        }}
         className={cn(
           "group relative flex cursor-pointer flex-col overflow-hidden rounded-lg border border-dashed transition-all",
           hasFiles ? "shrink-0" : "flex-1",

@@ -58,6 +58,23 @@ export function Header() {
         </span>
       </div>
 
+      {/* Center Nav */}
+      <nav className="hidden items-center gap-1 md:flex">
+        {[
+          { label: "Workspace", href: "#workspace" },
+          { label: "Projects", href: "#projects" },
+          { label: "Discover", href: "#discover" },
+        ].map((item) => (
+          <a
+            key={item.href}
+            href={item.href}
+            className="rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
+          >
+            {item.label}
+          </a>
+        ))}
+      </nav>
+
       {/* Right Side */}
       <div className="flex items-center gap-3">
         {/* Language Switcher */}
