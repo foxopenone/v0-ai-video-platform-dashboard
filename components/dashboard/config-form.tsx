@@ -211,6 +211,9 @@ export function ConfigForm({
       filename: entry.filename,
     }))
 
+    // Build callback URL for n8n to POST when Bible is ready
+    const origin = typeof window !== "undefined" ? window.location.origin : ""
+
     const payload = {
       id: jobId,
       Video_Files: videoFiles,
@@ -223,6 +226,9 @@ export function ConfigForm({
       Voice_Select: selectedVoice || "default_voice",
       BGM_Select: selectedBgm || "default_bgm",
       Work_Mode: mode === "full_auto" ? "Full_Auto" : "Step_Review",
+      ...(mode === "step_review" && {
+        callback_url: `${origin}/api/bible-ready`,
+      }),
     }
 
     try {
@@ -270,24 +276,30 @@ export function ConfigForm({
         episodes: r2Entries.length,
       })
 
-      // If Step_Review mode, parse backend response for review data
+      // If Step_Review mode, start polling /api/bible-ready for n8n callback
       if (mode === "step_review") {
-        try {
-          const resJson = await res.json()
-          console.log("[v0] Step Review dispatch response:", resJson)
-          // Backend returns Job_Record_ID, Lock_Token, Bible_R2_Key when Bible is ready
-          if (resJson.Job_Record_ID && resJson.Bible_R2_Key) {
-            onStepReviewReady?.({
-              jobRecordId: resJson.Job_Record_ID,
-              lockToken: resJson.Lock_Token || "",
-              bibleR2Key: resJson.Bible_R2_Key,
-              projectTitle,
-            })
+        console.log("[v0] Step Review: Starting poll for job:", jobId)
+        const pollInterval = setInterval(async () => {
+          try {
+            const pollRes = await fetch(`/api/bible-ready?job_id=${encodeURIComponent(jobId)}`)
+            const pollData = await pollRes.json()
+            console.log("[v0] Poll result:", pollData)
+            if (pollData.ready) {
+              clearInterval(pollInterval)
+              onStepReviewReady?.({
+                jobRecordId: pollData.Job_Record_ID,
+                lockToken: pollData.Lock_Token || "",
+                bibleR2Key: pollData.Bible_R2_Key,
+                projectTitle,
+              })
+            }
+          } catch (err) {
+            console.warn("[v0] Poll error:", err)
           }
-        } catch {
-          // Response may not be JSON or Bible not ready yet -- that's ok
-          console.log("[v0] Step Review: Bible not in dispatch response, will be available via polling later")
-        }
+        }, 5000) // Poll every 5 seconds
+
+        // Stop polling after 10 minutes
+        setTimeout(() => clearInterval(pollInterval), 10 * 60 * 1000)
       }
 
       setTimeout(() => {

@@ -228,7 +228,7 @@ export async function bibleEditContinue(
     },
     body: JSON.stringify({
       key: bibleR2Key,
-      raw_content: editedBible,
+      raw_content: JSON.stringify(editedBible),
       content_type: "application/json",
     }),
   })
