@@ -171,6 +171,14 @@ export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, use
 
   const processFiles = useCallback(
     async (newFiles: FileList | File[]) => {
+      // Auth gate: check login before processing uploads
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        router.push("/login")
+        return
+      }
+
       const fileArray = Array.from(newFiles)
       const videoFiles = fileArray
         .filter(
@@ -247,14 +255,12 @@ export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, use
   )
 
   const handleDrop = useCallback(
-    async (e: React.DragEvent) => {
+    (e: React.DragEvent) => {
       e.preventDefault()
       setIsDragOver(false)
-      const authed = await requireAuth()
-      if (!authed) return
       processFiles(e.dataTransfer.files)
     },
-    [processFiles, requireAuth]
+    [processFiles]
   )
 
   const removeFile = (id: string) => {
