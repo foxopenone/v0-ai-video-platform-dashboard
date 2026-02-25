@@ -1,6 +1,8 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { createClient } from "@/lib/supabase/client"
 import {
   Mic, Music, Rocket, CheckCircle2,
   Monitor, Globe2, Eye, Palette, Sparkles, Anchor,
@@ -142,6 +144,7 @@ export function ConfigForm({
   clearUploads,
   onProjectInsert,
 }: ConfigFormProps) {
+  const router = useRouter()
   const [mode, setMode] = useState<"full_auto" | "step_review">("full_auto")
   const [params, setParams] = useState<Record<ParamKey, string>>({
     platform: "",
@@ -176,6 +179,14 @@ export function ConfigForm({
     if (!allUploaded) return
     if (r2Entries.length === 0) {
       setErrorMsg("Video_Files is empty. Please upload at least one video.")
+      return
+    }
+
+    // Auth gate: must be logged in to dispatch
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      router.push("/login")
       return
     }
 

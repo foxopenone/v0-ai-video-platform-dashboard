@@ -1,9 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
-import { ChevronDown, User, Settings, LogOut, Globe } from "lucide-react"
+import { ChevronDown, User, Settings, LogOut, Globe, LogIn } from "lucide-react"
+import type { User as SupabaseUser } from "@supabase/supabase-js"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -22,7 +24,21 @@ const LANGUAGES = [
 
 export function Header() {
   const [lang, setLang] = useState("EN")
+  const [user, setUser] = useState<SupabaseUser | null>(null)
+  const [loading, setLoading] = useState(true)
   const router = useRouter()
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user)
+      setLoading(false)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+    })
+    return () => subscription.unsubscribe()
+  }, [])
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/40 bg-background/80 backdrop-blur-xl">
@@ -66,41 +82,69 @@ export function Header() {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* User Avatar */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-1.5 rounded-full p-0.5 transition-colors hover:bg-secondary/50">
-              <Avatar className="h-7 w-7 border border-border/40">
-                <AvatarFallback className="brand-gradient text-[10px] font-bold text-[var(--brand-pink)]" style={{ background: 'linear-gradient(135deg, rgba(244,63,122,0.15), rgba(168,85,247,0.15))' }}>
-                  <span className="text-foreground">JD</span>
-                </AvatarFallback>
-              </Avatar>
-              <ChevronDown className="hidden h-3 w-3 text-muted-foreground md:block" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem>
-              <User className="mr-2 h-3.5 w-3.5" />
-              Profile
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              <Settings className="mr-2 h-3.5 w-3.5" />
-              Settings
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive"
-              onClick={async () => {
-                const supabase = createClient()
-                await supabase.auth.signOut()
-                router.push("/login")
-              }}
+        {/* Auth: Login buttons or User Avatar */}
+        {loading ? (
+          <div className="h-7 w-7 animate-pulse rounded-full bg-secondary/50" />
+        ) : user ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-1.5 rounded-full p-0.5 transition-colors hover:bg-secondary/50">
+                <Avatar className="h-7 w-7 border border-border/40">
+                  <AvatarFallback className="text-[10px] font-bold" style={{ background: 'linear-gradient(135deg, rgba(244,63,122,0.15), rgba(168,85,247,0.15))' }}>
+                    <span className="text-foreground">
+                      {user.email?.slice(0, 2).toUpperCase() || "U"}
+                    </span>
+                  </AvatarFallback>
+                </Avatar>
+                <ChevronDown className="hidden h-3 w-3 text-muted-foreground md:block" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <div className="px-2 py-1.5">
+                <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+              </div>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem>
+                <User className="mr-2 h-3.5 w-3.5" />
+                Profile
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Settings className="mr-2 h-3.5 w-3.5" />
+                Settings
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive"
+                onClick={async () => {
+                  const supabase = createClient()
+                  await supabase.auth.signOut()
+                  setUser(null)
+                  router.push("/login")
+                }}
+              >
+                <LogOut className="mr-2 h-3.5 w-3.5" />
+                Sign Out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Link
+              href="/login"
+              className="flex items-center gap-1.5 rounded-md border border-border/40 bg-secondary/30 px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
             >
-              <LogOut className="mr-2 h-3.5 w-3.5" />
-              Sign Out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+              <LogIn className="h-3 w-3" />
+              Login
+            </Link>
+            <Link
+              href="/signup"
+              className="rounded-md px-3 py-1 text-xs font-medium text-white transition-opacity hover:opacity-90"
+              style={{ background: 'linear-gradient(135deg, #F43F7A, #A855F7)' }}
+            >
+              Sign Up
+            </Link>
+          </div>
+        )}
       </div>
       </div>
     </header>

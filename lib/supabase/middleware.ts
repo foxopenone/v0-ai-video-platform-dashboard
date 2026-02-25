@@ -37,20 +37,7 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // If user is NOT logged in and trying to access protected routes (dashboard),
-  // redirect to login
-  if (
-    !user &&
-    !request.nextUrl.pathname.startsWith('/login') &&
-    !request.nextUrl.pathname.startsWith('/signup') &&
-    !request.nextUrl.pathname.startsWith('/auth')
-  ) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/login'
-    return NextResponse.redirect(url)
-  }
-
-  // If user IS logged in and trying to access login/signup, redirect to dashboard
+  // Only redirect: logged-in users visiting /login or /signup go to dashboard
   if (
     user &&
     (request.nextUrl.pathname.startsWith('/login') ||
@@ -60,6 +47,8 @@ export async function updateSession(request: NextRequest) {
     url.pathname = '/'
     return NextResponse.redirect(url)
   }
+
+  // All other pages (including /) are accessible without login
 
   return supabaseResponse
 }
