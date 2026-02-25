@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { createClient } from "@/lib/supabase/client"
 import { ChevronDown, User, Settings, LogOut, Globe } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -87,7 +88,14 @@ export function Header() {
               Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive" onClick={() => router.push("/login")}>
+            <DropdownMenuItem
+              className="text-destructive"
+              onClick={async () => {
+                const supabase = createClient()
+                await supabase.auth.signOut()
+                router.push("/login")
+              }}
+            >
               <LogOut className="mr-2 h-3.5 w-3.5" />
               Sign Out
             </DropdownMenuItem>

@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { createClient } from "@/lib/supabase/client"
 
 function GoogleIcon({ className }: { className?: string }) {
   return (
@@ -24,29 +25,63 @@ function AppleIcon({ className }: { className?: string }) {
 }
 
 export default function SignupPage() {
-  const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [repeatPassword, setRepeatPassword] = useState("")
+  const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const router = useRouter()
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    // Simulate signup -- replace with real auth
-    await new Promise((r) => setTimeout(r, 800))
-    setLoading(false)
-    router.push("/")
+    setError(null)
+
+    if (password !== repeatPassword) {
+      setError("Passwords do not match")
+      setLoading(false)
+      return
+    }
+
+    const supabase = createClient()
+
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
+      if (error) throw error
+      router.push("/auth/sign-up-success")
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Sign up failed")
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleGoogleLogin = () => {
-    // TODO: Connect to Google OAuth provider
-    router.push("/")
+  const handleGoogleLogin = async () => {
+    const supabase = createClient()
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+    if (error) setError(error.message)
   }
 
-  const handleAppleLogin = () => {
-    // TODO: Connect to Apple OAuth provider
-    router.push("/")
+  const handleAppleLogin = async () => {
+    const supabase = createClient()
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "apple",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+    if (error) setError(error.message)
   }
 
   return (
@@ -107,21 +142,6 @@ export default function SignupPage() {
           {/* Signup Form */}
           <form onSubmit={handleSignup} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="name" className="text-xs font-medium text-foreground/80">
-                Name
-              </label>
-              <input
-                id="name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Your name"
-                className="rounded-xl border border-border/40 bg-secondary/15 px-4 py-2.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-[var(--brand-pink)]/40"
-                required
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
               <label htmlFor="email" className="text-xs font-medium text-foreground/80">
                 Email
               </label>
@@ -148,10 +168,28 @@ export default function SignupPage() {
                 placeholder="Create a password"
                 className="rounded-xl border border-border/40 bg-secondary/15 px-4 py-2.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-[var(--brand-pink)]/40"
                 required
-                minLength={8}
+                minLength={6}
               />
-              <p className="text-[11px] text-muted-foreground/60">Must be at least 8 characters</p>
             </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="repeat-password" className="text-xs font-medium text-foreground/80">
+                Confirm Password
+              </label>
+              <input
+                id="repeat-password"
+                type="password"
+                value={repeatPassword}
+                onChange={(e) => setRepeatPassword(e.target.value)}
+                placeholder="Repeat your password"
+                className="rounded-xl border border-border/40 bg-secondary/15 px-4 py-2.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-[var(--brand-pink)]/40"
+                required
+                minLength={6}
+              />
+              <p className="text-[11px] text-muted-foreground/60">Must be at least 6 characters</p>
+            </div>
+
+            {error && <p className="text-sm text-red-500">{error}</p>}
 
             <button
               type="submit"

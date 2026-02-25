@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { createClient } from "@/lib/supabase/client"
 
 function GoogleIcon({ className }: { className?: string }) {
   return (
@@ -26,26 +27,50 @@ function AppleIcon({ className }: { className?: string }) {
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const router = useRouter()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    // Simulate login -- replace with real auth
-    await new Promise((r) => setTimeout(r, 800))
-    setLoading(false)
-    router.push("/")
+    setError(null)
+    const supabase = createClient()
+
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+      if (error) throw error
+      router.push("/")
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Login failed")
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleGoogleLogin = () => {
-    // TODO: Connect to Google OAuth provider
-    router.push("/")
+  const handleGoogleLogin = async () => {
+    const supabase = createClient()
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+    if (error) setError(error.message)
   }
 
-  const handleAppleLogin = () => {
-    // TODO: Connect to Apple OAuth provider
-    router.push("/")
+  const handleAppleLogin = async () => {
+    const supabase = createClient()
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "apple",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+    if (error) setError(error.message)
   }
 
   return (
@@ -139,6 +164,8 @@ export default function LoginPage() {
                 required
               />
             </div>
+
+            {error && <p className="text-sm text-red-500">{error}</p>}
 
             <button
               type="submit"
