@@ -266,6 +266,22 @@ export function ConfigForm({
 
       const projectTitle = `New Project (${r2Entries.length} EP)`
 
+      // Parse dispatch response to get backend Job_ID (Airtable ID)
+      let backendJobId = jobId
+      try {
+        const resJson = await res.json()
+        console.log("[v0] Dispatch response:", resJson)
+        // n8n may return Job_ID or id or the Airtable record ID
+        if (resJson.Job_ID !== undefined) {
+          backendJobId = String(resJson.Job_ID)
+        } else if (resJson.id !== undefined) {
+          backendJobId = String(resJson.id)
+        }
+      } catch {
+        console.log("[v0] Dispatch response not JSON, using frontend jobId for polling")
+      }
+      console.log("[v0] Using poll key:", backendJobId)
+
       onProjectInsert?.({
         id: jobId,
         title: projectTitle,
@@ -278,10 +294,10 @@ export function ConfigForm({
 
       // If Step_Review mode, start polling /api/bible-ready for n8n callback
       if (mode === "step_review") {
-        console.log("[v0] Step Review: Starting poll for job:", jobId)
+        console.log("[v0] Step Review: Starting poll for job:", backendJobId)
         const pollInterval = setInterval(async () => {
           try {
-            const pollRes = await fetch(`/api/bible-ready?job_id=${encodeURIComponent(jobId)}`)
+            const pollRes = await fetch(`/api/bible-ready?job_id=${encodeURIComponent(backendJobId)}`)
             const pollData = await pollRes.json()
             console.log("[v0] Poll result:", pollData)
             if (pollData.ready) {
