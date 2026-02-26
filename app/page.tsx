@@ -66,23 +66,26 @@ export default function Page() {
         <div className="my-5 h-px bg-border/20" />
         <ProjectsSection
           onProjectClick={async (id) => {
-            // First check if there's real bible data available
+            // Check if there's real bible data available in Supabase
             try {
+              console.log("[v0] Card click: checking /api/bible-ready?latest=true")
               const res = await fetch(`/api/bible-ready?latest=true`)
+              console.log("[v0] Card click: response status", res.status)
               const data = await res.json()
+              console.log("[v0] Card click: response data", data)
               if (data.ready && data.Bible_R2_Key) {
-                console.log("[v0] Found real bible data for card click:", data)
                 setStepReviewData({
                   jobRecordId: data.Job_Record_ID,
                   lockToken: data.Lock_Token || "",
                   bibleR2Key: data.Bible_R2_Key,
-                  projectTitle: undefined as unknown as string,
+                  projectTitle: `Project ${data.Job_ID || id}`,
                 })
                 return
               }
-            } catch {
-              // API not available, fall through to legacy
+            } catch (err) {
+              console.log("[v0] Card click: bible-ready check failed", err)
             }
+            // Fallback to legacy mock review
             setReviewProjectId(id)
           }}
           insertedProjects={insertedProjects}
