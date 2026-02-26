@@ -316,59 +316,59 @@ export function ReviewRoom(props: ReviewRoomProps) {
     setLoading(true)
 
     // First check if real Bible data exists in Supabase
+    const loadLegacyFallback = () => {
+      fetchProjectDetail(projectId).then((data) => {
+        if (data) {
+          setProject(data as ProjectDetail)
+          setSynopsisText(data.synopsis)
+          setVoiceTexts(data.script.map((s) => s.text))
+          setEpisodes(data.episodes)
+          if (data.status === "completed") {
+            setPhase(3)
+            setSynopsisConfirmed(true)
+            setVoiceConfirmed(true)
+          }
+        }
+        setLoading(false)
+      })
+    }
+
     fetch(`/api/bible-ready?latest=true`)
-      .then((res) => res.json())
+      .then((res) => {
+        console.log("[v0] bible-ready response status:", res.status)
+        return res.json()
+      })
       .then(async (cbData) => {
+        console.log("[v0] bible-ready response data:", JSON.stringify(cbData))
         if (cbData.ready && cbData.Bible_R2_Key) {
-          console.log("[v0] Legacy ReviewRoom: found real bible data, loading from R2:", cbData.Bible_R2_Key)
-          // Load real Bible from R2 instead of mock data
+          console.log("[v0] Found real bible! R2 key:", cbData.Bible_R2_Key)
           try {
             setBibleLoading(true)
             const bibleData = await fetchBibleFromR2(cbData.Bible_R2_Key)
+            console.log("[v0] Bible loaded OK, keys:", Object.keys(bibleData))
             setBible(bibleData)
             setOriginalBible(structuredClone(bibleData))
-            // Store callback info for approve/edit/reject actions
             setRealCallbackData({
               jobRecordId: cbData.Job_Record_ID,
               lockToken: cbData.Lock_Token || "",
               bibleR2Key: cbData.Bible_R2_Key,
             })
             setBibleLoading(false)
+            setLoading(false)
           } catch (err) {
-            console.error("[v0] Bible load error:", err)
-            setBibleError(err instanceof Error ? err.message : "Failed to load bible")
+            console.error("[v0] Bible R2 load FAILED:", err)
+            // R2 file not found or CORS error -- fall back to mock
             setBibleLoading(false)
+            loadLegacyFallback()
           }
-          setLoading(false)
           return
         }
-        // No real data, fall back to mock
-        return fetchProjectDetail(projectId).then((data) => {
-          if (data) {
-            setProject(data as ProjectDetail)
-            setSynopsisText(data.synopsis)
-            setVoiceTexts(data.script.map((s) => s.text))
-            setEpisodes(data.episodes)
-            if (data.status === "completed") {
-              setPhase(3)
-              setSynopsisConfirmed(true)
-              setVoiceConfirmed(true)
-            }
-          }
-          setLoading(false)
-        })
+        console.log("[v0] No real bible data in Supabase, using mock")
+        loadLegacyFallback()
       })
-      .catch(() => {
-        // API unavailable, fall back to mock
-        fetchProjectDetail(projectId).then((data) => {
-          if (data) {
-            setProject(data as ProjectDetail)
-            setSynopsisText(data.synopsis)
-            setVoiceTexts(data.script.map((s) => s.text))
-            setEpisodes(data.episodes)
-          }
-          setLoading(false)
-        })
+      .catch((err) => {
+        console.error("[v0] bible-ready API call FAILED:", err)
+        loadLegacyFallback()
       })
   }, [isStepReview, isStepReview ? null : (props as LegacyProps).projectId])
 
