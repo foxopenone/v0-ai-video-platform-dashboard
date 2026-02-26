@@ -172,6 +172,12 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const [editMode, setEditMode] = useState(false)
   const [actionStatus, setActionStatus] = useState<"idle" | "submitting" | "success" | "error">("idle")
   const [actionMessage, setActionMessage] = useState("")
+  // When legacy mode detects real Supabase data, store callback info here
+  const [realCallbackData, setRealCallbackData] = useState<{
+    jobRecordId: string
+    lockToken: string
+    bibleR2Key: string
+  } | null>(null)
 
   // Legacy review state
   const [project, setProject] = useState<ProjectDetail | null>(null)
@@ -246,24 +252,34 @@ export function ReviewRoom(props: ReviewRoomProps) {
   }, [originalBible])
 
   // ── Step Review: Action Handlers ──
+  const getCallbackInfo = useCallback(() => {
+    if (isStepReview) {
+      const p = props as StepReviewProps
+      return { jobRecordId: p.jobRecordId, lockToken: p.lockToken, bibleR2Key: p.bibleR2Key }
+    }
+    if (realCallbackData) return realCallbackData
+    return null
+  }, [isStepReview, props, realCallbackData])
+
   const handleApprove = useCallback(async () => {
-    if (!isStepReview) return
-    const { jobRecordId, lockToken } = props as StepReviewProps
+    const info = getCallbackInfo()
+    if (!info) return
     setActionStatus("submitting")
     setActionMessage("Approving and continuing pipeline...")
     try {
-      await bibleApprove(jobRecordId, lockToken)
+      await bibleApprove(info.jobRecordId, info.lockToken)
       setActionStatus("success")
       setActionMessage("Approved! Pipeline is continuing...")
     } catch (err) {
       setActionStatus("error")
       setActionMessage(err instanceof Error ? err.message : "Approve failed")
     }
-  }, [isStepReview, props])
+  }, [getCallbackInfo])
 
   const handleEditContinue = useCallback(async () => {
-    if (!isStepReview || !bible) return
-    const { jobRecordId, lockToken, bibleR2Key } = props as StepReviewProps
+    const info = getCallbackInfo()
+    if (!info || !bible) return
+    const { jobRecordId, lockToken, bibleR2Key } = info
     setActionStatus("submitting")
     setActionMessage("Writing changes to R2 and continuing...")
     try {
@@ -276,42 +292,84 @@ export function ReviewRoom(props: ReviewRoomProps) {
       setActionStatus("error")
       setActionMessage(err instanceof Error ? err.message : "Edit & Continue failed")
     }
-  }, [isStepReview, bible, props])
+  }, [getCallbackInfo, bible])
 
   const handleReject = useCallback(async () => {
-    if (!isStepReview) return
-    const { jobRecordId, lockToken } = props as StepReviewProps
+    const info = getCallbackInfo()
+    if (!info) return
     setActionStatus("submitting")
     setActionMessage("Rejecting and restarting pipeline...")
     try {
-      await bibleReject(jobRecordId, lockToken)
+      await bibleReject(info.jobRecordId, info.lockToken)
       setActionStatus("success")
       setActionMessage("Rejected! Pipeline will redo from scratch.")
     } catch (err) {
       setActionStatus("error")
       setActionMessage(err instanceof Error ? err.message : "Reject failed")
     }
-  }, [isStepReview, props])
+  }, [getCallbackInfo])
 
-  // ── Legacy: Load project data ──
+  // ── Legacy: Load project data (check Supabase for real data first) ──
   useEffect(() => {
     if (isStepReview) return
     const { projectId } = props as LegacyProps
     setLoading(true)
-    fetchProjectDetail(projectId).then((data) => {
-      if (data) {
-        setProject(data as ProjectDetail)
-        setSynopsisText(data.synopsis)
-        setVoiceTexts(data.script.map((s) => s.text))
-        setEpisodes(data.episodes)
-        if (data.status === "completed") {
-          setPhase(3)
-          setSynopsisConfirmed(true)
-          setVoiceConfirmed(true)
+
+    // First check if real Bible data exists in Supabase
+    fetch(`/api/bible-ready?latest=true`)
+      .then((res) => res.json())
+      .then(async (cbData) => {
+        if (cbData.ready && cbData.Bible_R2_Key) {
+          console.log("[v0] Legacy ReviewRoom: found real bible data, loading from R2:", cbData.Bible_R2_Key)
+          // Load real Bible from R2 instead of mock data
+          try {
+            setBibleLoading(true)
+            const bibleData = await fetchBibleFromR2(cbData.Bible_R2_Key)
+            setBible(bibleData)
+            setOriginalBible(structuredClone(bibleData))
+            // Store callback info for approve/edit/reject actions
+            setRealCallbackData({
+              jobRecordId: cbData.Job_Record_ID,
+              lockToken: cbData.Lock_Token || "",
+              bibleR2Key: cbData.Bible_R2_Key,
+            })
+            setBibleLoading(false)
+          } catch (err) {
+            console.error("[v0] Bible load error:", err)
+            setBibleError(err instanceof Error ? err.message : "Failed to load bible")
+            setBibleLoading(false)
+          }
+          setLoading(false)
+          return
         }
-      }
-      setLoading(false)
-    })
+        // No real data, fall back to mock
+        return fetchProjectDetail(projectId).then((data) => {
+          if (data) {
+            setProject(data as ProjectDetail)
+            setSynopsisText(data.synopsis)
+            setVoiceTexts(data.script.map((s) => s.text))
+            setEpisodes(data.episodes)
+            if (data.status === "completed") {
+              setPhase(3)
+              setSynopsisConfirmed(true)
+              setVoiceConfirmed(true)
+            }
+          }
+          setLoading(false)
+        })
+      })
+      .catch(() => {
+        // API unavailable, fall back to mock
+        fetchProjectDetail(projectId).then((data) => {
+          if (data) {
+            setProject(data as ProjectDetail)
+            setSynopsisText(data.synopsis)
+            setVoiceTexts(data.script.map((s) => s.text))
+            setEpisodes(data.episodes)
+          }
+          setLoading(false)
+        })
+      })
   }, [isStepReview, isStepReview ? null : (props as LegacyProps).projectId])
 
   // Legacy handlers
@@ -379,10 +437,15 @@ export function ReviewRoom(props: ReviewRoomProps) {
   }, [])
 
   // ===================================================================
-  // ===== STEP REVIEW RENDER ==========================================
+  // ===== STEP REVIEW / REAL BIBLE RENDER =============================
   // ===================================================================
-  if (isStepReview) {
-    const { projectTitle } = props as StepReviewProps
+  // Show Bible Review UI if we're in step_review mode OR if legacy mode found real data
+  const hasRealBible = isStepReview || (bible !== null && realCallbackData !== null)
+
+  if (hasRealBible || bibleLoading) {
+    const projectTitle = isStepReview
+      ? (props as StepReviewProps).projectTitle
+      : realCallbackData ? `Project ${realCallbackData.jobRecordId?.slice(0, 8) || ""}` : "Review"
 
     // Loading
     if (bibleLoading) {
