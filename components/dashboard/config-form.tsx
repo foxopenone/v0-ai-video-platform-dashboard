@@ -132,6 +132,7 @@ export interface StepReviewData {
   lockToken: string
   bibleR2Key: string
   projectTitle: string
+  frontendJobId?: string
 }
 
 interface ConfigFormProps {
@@ -307,6 +308,7 @@ export function ConfigForm({
                 lockToken: pollData.Lock_Token || "",
                 bibleR2Key: pollData.Bible_R2_Key,
                 projectTitle,
+                frontendJobId: jobId,
               })
             }
           } catch (err) {
