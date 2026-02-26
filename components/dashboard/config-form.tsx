@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import {
@@ -156,21 +156,34 @@ export function ConfigForm({
   onStepReviewReady,
 }: ConfigFormProps) {
   const router = useRouter()
-  const [mode, setMode] = useState<"full_auto" | "step_review">("full_auto")
-  const [params, setParams] = useState<Record<ParamKey, string>>({
-    platform: "",
-    language: "",
-    pov: "",
-    tone: "",
-    style: "",
-    hook: "",
-  })
+
+  // Load saved preferences from localStorage
+  const loadSaved = <T,>(key: string, fallback: T): T => {
+    if (typeof window === "undefined") return fallback
+    try {
+      const v = localStorage.getItem(key)
+      return v ? JSON.parse(v) : fallback
+    } catch { return fallback }
+  }
+
+  const [mode, setMode] = useState<"full_auto" | "step_review">(() => loadSaved("cfg_mode", "full_auto"))
+  const [params, setParams] = useState<Record<ParamKey, string>>(() =>
+    loadSaved("cfg_params", { platform: "", language: "", pov: "", tone: "", style: "", hook: "" })
+  )
   const [voiceDrawerOpen, setVoiceDrawerOpen] = useState(false)
   const [bgmDrawerOpen, setBgmDrawerOpen] = useState(false)
-  const [selectedVoice, setSelectedVoice] = useState<string | null>(null)
-  const [selectedVoiceName, setSelectedVoiceName] = useState<string | null>(null)
-  const [selectedBgm, setSelectedBgm] = useState<string | null>(null)
-  const [selectedBgmName, setSelectedBgmName] = useState<string | null>(null)
+  const [selectedVoice, setSelectedVoice] = useState<string | null>(() => loadSaved("cfg_voice", null))
+  const [selectedVoiceName, setSelectedVoiceName] = useState<string | null>(() => loadSaved("cfg_voiceName", null))
+  const [selectedBgm, setSelectedBgm] = useState<string | null>(() => loadSaved("cfg_bgm", null))
+  const [selectedBgmName, setSelectedBgmName] = useState<string | null>(() => loadSaved("cfg_bgmName", null))
+
+  // Persist preferences on change
+  useEffect(() => { localStorage.setItem("cfg_mode", JSON.stringify(mode)) }, [mode])
+  useEffect(() => { localStorage.setItem("cfg_params", JSON.stringify(params)) }, [params])
+  useEffect(() => { localStorage.setItem("cfg_voice", JSON.stringify(selectedVoice)) }, [selectedVoice])
+  useEffect(() => { localStorage.setItem("cfg_voiceName", JSON.stringify(selectedVoiceName)) }, [selectedVoiceName])
+  useEffect(() => { localStorage.setItem("cfg_bgm", JSON.stringify(selectedBgm)) }, [selectedBgm])
+  useEffect(() => { localStorage.setItem("cfg_bgmName", JSON.stringify(selectedBgmName)) }, [selectedBgmName])
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
