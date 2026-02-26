@@ -10,33 +10,19 @@
  *     Status: "S3_Bible_Check"
  *   }
  *
- * GET  — Frontend polls with ?job_id=xxx to check if Bible is ready.
+ * GET  — Frontend polls with ?job_id=xxx or ?latest=true
  *   Returns: { ready: true/false, ...data }
+ *
+ * Persisted in Supabase table: bible_callbacks
  */
 
 import { NextRequest, NextResponse } from "next/server"
+import { createClient } from "@supabase/supabase-js"
 
-// In-memory store for pending Bible callbacks
-// Key: Job_ID (string), Value: callback data + timestamp
-const pendingBibles = new Map<
-  string,
-  {
-    Job_Record_ID: string
-    Job_ID: string
-    Lock_Token: string
-    Bible_R2_Key: string
-    Status: string
-    timestamp: number
-  }
->()
-
-// Clean up entries older than 2 hours
-function cleanup() {
-  const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000
-  for (const [key, val] of pendingBibles.entries()) {
-    if (val.timestamp < twoHoursAgo) pendingBibles.delete(key)
-  }
-}
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+)
 
 /** n8n POSTs here when Bible generation is complete (S3_Bible_Check) */
 export async function POST(req: NextRequest) {
@@ -45,7 +31,6 @@ export async function POST(req: NextRequest) {
     const { Job_Record_ID, Job_ID, Lock_Token, Bible_R2_Key, Status } = body
 
     if (!Job_Record_ID || Job_ID === undefined || !Bible_R2_Key) {
-      console.error("[bible-ready] Missing fields. Got:", JSON.stringify(body))
       return NextResponse.json(
         { error: "Missing required fields: Job_Record_ID, Job_ID, Bible_R2_Key" },
         { status: 400 }
@@ -53,18 +38,19 @@ export async function POST(req: NextRequest) {
     }
 
     const jobIdStr = String(Job_ID)
-    console.log("[bible-ready] Received callback:", { Job_Record_ID, Job_ID: jobIdStr, Lock_Token, Bible_R2_Key, Status })
 
-    pendingBibles.set(jobIdStr, {
-      Job_Record_ID,
-      Job_ID: jobIdStr,
-      Lock_Token: Lock_Token || "",
-      Bible_R2_Key,
-      Status: Status || "S3_Bible_Check",
-      timestamp: Date.now(),
+    const { error } = await supabase.from("bible_callbacks").insert({
+      job_id: jobIdStr,
+      job_record_id: Job_Record_ID,
+      lock_token: Lock_Token || "",
+      bible_r2_key: Bible_R2_Key,
+      status: Status || "S3_Bible_Check",
     })
 
-    cleanup()
+    if (error) {
+      console.error("[bible-ready] Supabase insert error:", error)
+      return NextResponse.json({ error: "DB insert failed" }, { status: 500 })
+    }
 
     return NextResponse.json({ ok: true, Job_ID: jobIdStr })
   } catch (err) {
@@ -78,41 +64,49 @@ export async function GET(req: NextRequest) {
   const jobId = req.nextUrl.searchParams.get("job_id")
   const latest = req.nextUrl.searchParams.get("latest")
 
-  console.log("[v0] bible-ready GET:", { jobId, latest, storeSize: pendingBibles.size, keys: [...pendingBibles.keys()] })
-
-  // If ?latest=true, return the most recent entry (fallback when Job_ID mismatch)
+  // ?latest=true — return the most recent callback (fallback when Job_ID unknown)
   if (latest === "true") {
-    let newest: (typeof pendingBibles extends Map<string, infer V> ? V : never) | null = null
-    for (const val of pendingBibles.values()) {
-      if (!newest || val.timestamp > newest.timestamp) newest = val
-    }
-    if (newest) {
+    const { data } = await supabase
+      .from("bible_callbacks")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single()
+
+    if (data) {
       return NextResponse.json({
         ready: true,
-        Job_Record_ID: newest.Job_Record_ID,
-        Job_ID: newest.Job_ID,
-        Lock_Token: newest.Lock_Token,
-        Bible_R2_Key: newest.Bible_R2_Key,
-        Status: newest.Status,
+        Job_Record_ID: data.job_record_id,
+        Job_ID: data.job_id,
+        Lock_Token: data.lock_token,
+        Bible_R2_Key: data.bible_r2_key,
+        Status: data.status,
       })
     }
     return NextResponse.json({ ready: false })
   }
 
+  // ?job_id=xxx — exact match
   if (!jobId) {
-    return NextResponse.json({ error: "Missing job_id param" }, { status: 400 })
+    return NextResponse.json({ error: "Missing job_id or latest param" }, { status: 400 })
   }
 
-  const data = pendingBibles.get(jobId)
+  const { data } = await supabase
+    .from("bible_callbacks")
+    .select("*")
+    .eq("job_id", jobId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single()
 
   if (data) {
     return NextResponse.json({
       ready: true,
-      Job_Record_ID: data.Job_Record_ID,
-      Job_ID: data.Job_ID,
-      Lock_Token: data.Lock_Token,
-      Bible_R2_Key: data.Bible_R2_Key,
-      Status: data.Status,
+      Job_Record_ID: data.job_record_id,
+      Job_ID: data.job_id,
+      Lock_Token: data.lock_token,
+      Bible_R2_Key: data.bible_r2_key,
+      Status: data.status,
     })
   }
 
