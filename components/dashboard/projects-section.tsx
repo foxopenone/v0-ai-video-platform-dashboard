@@ -189,13 +189,8 @@ export function ProjectsSection({ onProjectClick, insertedProjects = [] }: Proje
                           {config.label}
                         </Badge>
                         {project.status === "processing" && (
-                          <span className="font-mono text-[9px] text-muted-foreground animate-pulse">
-                            Working...
-                          </span>
-                        )}
-                        {project.status === "pending_review" && (
-                          <span className="font-mono text-[9px] text-[hsl(38,92%,50%)]">
-                            Review
+                          <span className="font-mono text-[9px] text-muted-foreground">
+                            {project.progress}%
                           </span>
                         )}
                       </div>

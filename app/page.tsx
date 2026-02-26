@@ -9,43 +9,20 @@ import { ReviewRoom } from "@/components/dashboard/review-room"
 import type { InsertedProject, StepReviewData } from "@/components/dashboard/config-form"
 
 export default function Page() {
+  const [reviewProjectId, setReviewProjectId] = useState<string | null>(null)
   const [stepReviewData, setStepReviewData] = useState<StepReviewData | null>(null)
   const [insertedProjects, setInsertedProjects] = useState<InsertedProject[]>([])
-  // Map of frontendJobId -> StepReviewData for projects that received bible-ready callback
-  const [readyMap, setReadyMap] = useState<Record<string, StepReviewData>>({})
 
   const handleProjectInsert = useCallback((project: InsertedProject) => {
     setInsertedProjects((prev) => [project, ...prev])
   }, [])
 
-  const handleStepReviewReady = useCallback((data: StepReviewData & { frontendJobId?: string }) => {
-    // Auto-open ReviewRoom immediately
+  const handleStepReviewReady = useCallback((data: StepReviewData) => {
+    // Auto-open ReviewRoom in step_review mode immediately
     setStepReviewData(data)
-    // Update matching inserted project to "pending_review"
-    setInsertedProjects((prev) =>
-      prev.map((p) => {
-        // Match by frontendJobId if available, otherwise match first processing project
-        const isMatch = data.frontendJobId ? p.id === data.frontendJobId : p.status === "processing"
-        if (isMatch) {
-          // Store review data in readyMap keyed by project id
-          setReadyMap((rm) => ({ ...rm, [p.id]: data }))
-          return { ...p, status: "pending_review" as const, progress: 100 }
-        }
-        return p
-      })
-    )
   }, [])
 
-  const handleProjectClick = useCallback((projectId: string) => {
-    // Check if this project has step_review data ready
-    const reviewData = readyMap[projectId]
-    if (reviewData) {
-      setStepReviewData(reviewData)
-    }
-    // If no step review data, do nothing (project is still processing)
-  }, [readyMap])
-
-  // Step Review mode
+  // Step Review mode (real Bible data from n8n callback)
   if (stepReviewData) {
     return (
       <ReviewRoom
@@ -59,6 +36,17 @@ export default function Page() {
     )
   }
 
+  // Legacy review mode (clicking existing project cards)
+  if (reviewProjectId) {
+    return (
+      <ReviewRoom
+        mode="legacy"
+        projectId={reviewProjectId}
+        onClose={() => setReviewProjectId(null)}
+      />
+    )
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <Header />
@@ -67,7 +55,7 @@ export default function Page() {
         <WorkspaceSection onProjectInsert={handleProjectInsert} onStepReviewReady={handleStepReviewReady} />
         <div className="my-5 h-px bg-border/20" />
         <ProjectsSection
-          onProjectClick={handleProjectClick}
+          onProjectClick={(id) => setReviewProjectId(id)}
           insertedProjects={insertedProjects}
         />
         <div className="my-5 h-px bg-border/20" />
