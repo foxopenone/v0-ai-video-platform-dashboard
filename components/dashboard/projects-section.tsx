@@ -60,7 +60,7 @@ const GRADIENTS = [
 ]
 
 interface ProjectsSectionProps {
-  onProjectClick?: (projectId: string) => void
+  onProjectClick?: (projectId: string) => void | Promise<void>
   insertedProjects?: Project[]
 }
 

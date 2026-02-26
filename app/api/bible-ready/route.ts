@@ -76,6 +76,28 @@ export async function POST(req: NextRequest) {
 /** Frontend polls here to check if Bible is ready */
 export async function GET(req: NextRequest) {
   const jobId = req.nextUrl.searchParams.get("job_id")
+  const latest = req.nextUrl.searchParams.get("latest")
+
+  console.log("[v0] bible-ready GET:", { jobId, latest, storeSize: pendingBibles.size, keys: [...pendingBibles.keys()] })
+
+  // If ?latest=true, return the most recent entry (fallback when Job_ID mismatch)
+  if (latest === "true") {
+    let newest: (typeof pendingBibles extends Map<string, infer V> ? V : never) | null = null
+    for (const val of pendingBibles.values()) {
+      if (!newest || val.timestamp > newest.timestamp) newest = val
+    }
+    if (newest) {
+      return NextResponse.json({
+        ready: true,
+        Job_Record_ID: newest.Job_Record_ID,
+        Job_ID: newest.Job_ID,
+        Lock_Token: newest.Lock_Token,
+        Bible_R2_Key: newest.Bible_R2_Key,
+        Status: newest.Status,
+      })
+    }
+    return NextResponse.json({ ready: false })
+  }
 
   if (!jobId) {
     return NextResponse.json({ error: "Missing job_id param" }, { status: 400 })

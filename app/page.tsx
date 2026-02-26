@@ -65,7 +65,24 @@ export default function Page() {
         <WorkspaceSection onProjectInsert={handleProjectInsert} onStepReviewReady={handleStepReviewReady} />
         <div className="my-5 h-px bg-border/20" />
         <ProjectsSection
-          onProjectClick={(id) => {
+          onProjectClick={async (id) => {
+            // First check if there's real bible data available
+            try {
+              const res = await fetch(`/api/bible-ready?latest=true`)
+              const data = await res.json()
+              if (data.ready && data.Bible_R2_Key) {
+                console.log("[v0] Found real bible data for card click:", data)
+                setStepReviewData({
+                  jobRecordId: data.Job_Record_ID,
+                  lockToken: data.Lock_Token || "",
+                  bibleR2Key: data.Bible_R2_Key,
+                  projectTitle: undefined as unknown as string,
+                })
+                return
+              }
+            } catch {
+              // API not available, fall through to legacy
+            }
             setReviewProjectId(id)
           }}
           insertedProjects={insertedProjects}

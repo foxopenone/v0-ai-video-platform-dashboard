@@ -304,16 +304,21 @@ export function ConfigForm({
       // Parse dispatch response to get backend Job_ID (Airtable ID)
       let backendJobId = jobId
       try {
-        const resJson = await res.json()
-        // Extract backend Job_ID from n8n response
-        // n8n may return Job_ID or id or the Airtable record ID
-        if (resJson.Job_ID !== undefined) {
-          backendJobId = String(resJson.Job_ID)
-        } else if (resJson.id !== undefined) {
-          backendJobId = String(resJson.id)
+        const resText = await res.text()
+        console.log("[v0] Dispatch raw response:", resText)
+        try {
+          const resJson = JSON.parse(resText)
+          console.log("[v0] Dispatch parsed:", resJson)
+          if (resJson.Job_ID !== undefined) {
+            backendJobId = String(resJson.Job_ID)
+          } else if (resJson.id !== undefined) {
+            backendJobId = String(resJson.id)
+          }
+        } catch {
+          console.log("[v0] Dispatch response not JSON")
         }
       } catch {
-        // Response may not be JSON, use frontend jobId as fallback
+        console.log("[v0] Could not read dispatch response body")
       }
 
       onProjectInsert?.({
@@ -328,23 +333,32 @@ export function ConfigForm({
 
       // If Step_Review mode, start polling /api/bible-ready for n8n callback
       if (mode === "step_review") {
+        console.log("[v0] Polling: backendJobId =", backendJobId, "frontendJobId =", jobId)
         let failCount = 0
         const MAX_FAILS = 5
-        const MAX_POLLS = 120 // 10 minutes at 5s intervals
+        const MAX_POLLS = 120
         let pollCount = 0
 
         const pollInterval = setInterval(async () => {
           pollCount++
           if (pollCount > MAX_POLLS) {
             clearInterval(pollInterval)
-            // Timed out after max polls
             return
           }
           try {
-            const pollRes = await fetch(`/api/bible-ready?job_id=${encodeURIComponent(backendJobId)}`)
+            // Try exact match first, then fallback to latest
+            let pollRes = await fetch(`/api/bible-ready?job_id=${encodeURIComponent(backendJobId)}`)
             if (!pollRes.ok) throw new Error(`HTTP ${pollRes.status}`)
-            const pollData = await pollRes.json()
-            failCount = 0 // reset on success
+            let pollData = await pollRes.json()
+
+            // If exact match fails, try latest entry (handles Job_ID mismatch)
+            if (!pollData.ready && pollCount % 3 === 0) {
+              pollRes = await fetch(`/api/bible-ready?latest=true`)
+              if (pollRes.ok) pollData = await pollRes.json()
+            }
+
+            console.log("[v0] Poll #" + pollCount, "ready:", pollData.ready, pollData.Job_ID || "")
+            failCount = 0
             if (pollData.ready) {
               clearInterval(pollInterval)
               onStepReviewReady?.({
@@ -357,6 +371,7 @@ export function ConfigForm({
             }
           } catch (err) {
             failCount++
+            console.log("[v0] Poll error #" + failCount, err)
             if (failCount >= MAX_FAILS) {
               clearInterval(pollInterval)
             }
