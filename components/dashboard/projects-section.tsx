@@ -60,7 +60,7 @@ const GRADIENTS = [
 ]
 
 interface ProjectsSectionProps {
-  onProjectClick?: (projectId: string, status: Project["status"]) => void
+  onProjectClick?: (projectId: string) => void
   insertedProjects?: Project[]
 }
 
@@ -133,13 +133,13 @@ export function ProjectsSection({ onProjectClick, insertedProjects = [] }: Proje
                 <div
                   key={project.id}
                   className="group relative cursor-pointer"
-                  onClick={() => onProjectClick?.(project.id, project.status)}
+                  onClick={() => onProjectClick?.(project.id)}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault()
-                      onProjectClick?.(project.id, project.status)
+                      onProjectClick?.(project.id)
                     }
                   }}
                 >

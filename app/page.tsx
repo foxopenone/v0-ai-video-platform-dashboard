@@ -65,18 +65,7 @@ export default function Page() {
         <WorkspaceSection onProjectInsert={handleProjectInsert} onStepReviewReady={handleStepReviewReady} />
         <div className="my-5 h-px bg-border/20" />
         <ProjectsSection
-          onProjectClick={(id, status) => {
-            if (status === "processing") {
-              // Still processing -- do nothing, no click action
-              return
-            }
-            if (status === "pending_review") {
-              // Open legacy ReviewRoom for mock pending_review cards
-              // Real step_review cards auto-open via polling callback
-              setReviewProjectId(id)
-              return
-            }
-            // completed -- open for viewing (legacy ReviewRoom)
+          onProjectClick={(id) => {
             setReviewProjectId(id)
           }}
           insertedProjects={insertedProjects}

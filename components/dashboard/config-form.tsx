@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import {
@@ -186,15 +186,19 @@ export function ConfigForm({
     } catch {}
   }, [])
 
-  // Persist preferences on change (skip initial render)
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => { setMounted(true) }, [])
-  useEffect(() => { if (mounted) localStorage.setItem("cfg_mode", JSON.stringify(mode)) }, [mode, mounted])
-  useEffect(() => { if (mounted) localStorage.setItem("cfg_params", JSON.stringify(params)) }, [params, mounted])
-  useEffect(() => { if (mounted) localStorage.setItem("cfg_voice", JSON.stringify(selectedVoice)) }, [selectedVoice, mounted])
-  useEffect(() => { if (mounted) localStorage.setItem("cfg_voiceName", JSON.stringify(selectedVoiceName)) }, [selectedVoiceName, mounted])
-  useEffect(() => { if (mounted) localStorage.setItem("cfg_bgm", JSON.stringify(selectedBgm)) }, [selectedBgm, mounted])
-  useEffect(() => { if (mounted) localStorage.setItem("cfg_bgmName", JSON.stringify(selectedBgmName)) }, [selectedBgmName, mounted])
+  // Persist preferences on change (skip first render via ref)
+  const hasMounted = useRef(false)
+  useEffect(() => {
+    if (!hasMounted.current) { hasMounted.current = true; return }
+    try {
+      localStorage.setItem("cfg_mode", JSON.stringify(mode))
+      localStorage.setItem("cfg_params", JSON.stringify(params))
+      localStorage.setItem("cfg_voice", JSON.stringify(selectedVoice))
+      localStorage.setItem("cfg_voiceName", JSON.stringify(selectedVoiceName))
+      localStorage.setItem("cfg_bgm", JSON.stringify(selectedBgm))
+      localStorage.setItem("cfg_bgmName", JSON.stringify(selectedBgmName))
+    } catch {}
+  }, [mode, params, selectedVoice, selectedVoiceName, selectedBgm, selectedBgmName])
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)

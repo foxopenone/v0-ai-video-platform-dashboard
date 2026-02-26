@@ -686,7 +686,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
               <div className="relative z-10 flex flex-col items-center gap-3 rounded-xl bg-background/40 px-6 py-5 backdrop-blur-md">
                 <Loader2 className="h-6 w-6 animate-spin text-[var(--brand-pink)]" />
                 <p className="text-xs font-medium text-foreground/80">AI Processing...</p>
-                <p className="text-[10px] text-muted-foreground">{project.progress}% complete</p>
+                <div className="relative h-1 w-24 overflow-hidden rounded-full bg-[var(--brand-pink)]/20">
+                  <div className="absolute inset-y-0 left-0 w-1/3 animate-[progress-slide_1.8s_ease-in-out_infinite] rounded-full bg-[var(--brand-pink)]" />
+                </div>
               </div>
             ) : phase === 3 && currentEp ? (
               <button onClick={() => setPlayingEp(!playingEp)} className="relative z-10 flex h-14 w-14 items-center justify-center rounded-full bg-background/30 backdrop-blur-sm transition-transform hover:scale-110">
@@ -743,10 +745,13 @@ export function ReviewRoom(props: ReviewRoomProps) {
           </div>
           <ScrollArea className="flex-1 px-5 py-4">
             {isProcessing && (
-              <div className="flex h-64 flex-col items-center justify-center gap-3 rounded-xl border border-border/20 bg-secondary/10 backdrop-blur-sm">
+              <div className="flex h-64 flex-col items-center justify-center gap-4 rounded-xl border border-border/20 bg-secondary/10 backdrop-blur-sm">
                 <Loader2 className="h-8 w-8 animate-spin text-[var(--brand-pink)]" />
                 <p className="text-sm font-medium text-foreground/80">AI is processing your project...</p>
-                <p className="text-xs text-muted-foreground">Progress: {project.progress}%</p>
+                <div className="relative h-1.5 w-48 overflow-hidden rounded-full bg-[var(--brand-pink)]/20">
+                  <div className="absolute inset-y-0 left-0 w-1/3 animate-[progress-slide_1.8s_ease-in-out_infinite] rounded-full bg-[var(--brand-pink)]" />
+                </div>
+                <p className="text-[10px] text-muted-foreground">This may take a few minutes</p>
               </div>
             )}
             {!isProcessing && phase === 1 && (
