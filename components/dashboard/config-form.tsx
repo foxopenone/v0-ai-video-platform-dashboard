@@ -120,7 +120,7 @@ function ParamTile({ label, value, icon: Icon, options, onChange }: TileProps) {
 export interface InsertedProject {
   id: string
   title: string
-  status: "processing"
+  status: "processing" | "pending_review" | "completed"
   progress: number
   date: string
   thumbnail: null
@@ -278,13 +278,19 @@ export function ConfigForm({
       setSubmitted(true)
       clearUploads?.()
 
-      const projectTitle = `New Project (${r2Entries.length} EP)`
+      // Build real title from first file name or EP count
+      const firstFile = r2Entries[0]?.filename || ""
+      const baseName = firstFile.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ").trim()
+      const epCount = r2Entries.length
+      const projectTitle = baseName
+        ? `${baseName}${epCount > 1 ? ` +${epCount - 1} EP` : ""}`
+        : `Project (${epCount} EP)`
 
       // Parse dispatch response to get backend Job_ID (Airtable ID)
       let backendJobId = jobId
       try {
         const resJson = await res.json()
-        console.log("[v0] Dispatch response:", resJson)
+        // Extract backend Job_ID from n8n response
         // n8n may return Job_ID or id or the Airtable record ID
         if (resJson.Job_ID !== undefined) {
           backendJobId = String(resJson.Job_ID)
@@ -292,9 +298,8 @@ export function ConfigForm({
           backendJobId = String(resJson.id)
         }
       } catch {
-        console.log("[v0] Dispatch response not JSON, using frontend jobId for polling")
+        // Response may not be JSON, use frontend jobId as fallback
       }
-      console.log("[v0] Using poll key:", backendJobId)
 
       onProjectInsert?.({
         id: jobId,
@@ -308,12 +313,23 @@ export function ConfigForm({
 
       // If Step_Review mode, start polling /api/bible-ready for n8n callback
       if (mode === "step_review") {
-        console.log("[v0] Step Review: Starting poll for job:", backendJobId)
+        let failCount = 0
+        const MAX_FAILS = 5
+        const MAX_POLLS = 120 // 10 minutes at 5s intervals
+        let pollCount = 0
+
         const pollInterval = setInterval(async () => {
+          pollCount++
+          if (pollCount > MAX_POLLS) {
+            clearInterval(pollInterval)
+            // Timed out after max polls
+            return
+          }
           try {
             const pollRes = await fetch(`/api/bible-ready?job_id=${encodeURIComponent(backendJobId)}`)
+            if (!pollRes.ok) throw new Error(`HTTP ${pollRes.status}`)
             const pollData = await pollRes.json()
-            console.log("[v0] Poll result:", pollData)
+            failCount = 0 // reset on success
             if (pollData.ready) {
               clearInterval(pollInterval)
               onStepReviewReady?.({
@@ -325,12 +341,12 @@ export function ConfigForm({
               })
             }
           } catch (err) {
-            console.warn("[v0] Poll error:", err)
+            failCount++
+            if (failCount >= MAX_FAILS) {
+              clearInterval(pollInterval)
+            }
           }
-        }, 5000) // Poll every 5 seconds
-
-        // Stop polling after 10 minutes
-        setTimeout(() => clearInterval(pollInterval), 10 * 60 * 1000)
+        }, 5000)
       }
 
       setTimeout(() => {

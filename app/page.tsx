@@ -18,6 +18,16 @@ export default function Page() {
   }, [])
 
   const handleStepReviewReady = useCallback((data: StepReviewData) => {
+    // Update the inserted project card status to pending_review
+    if (data.frontendJobId) {
+      setInsertedProjects((prev) =>
+        prev.map((p) =>
+          p.id === data.frontendJobId
+            ? { ...p, status: "pending_review" as const, progress: 100 }
+            : p
+        )
+      )
+    }
     // Auto-open ReviewRoom in step_review mode immediately
     setStepReviewData(data)
   }, [])

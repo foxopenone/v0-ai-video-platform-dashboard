@@ -189,10 +189,8 @@ export function ProjectsSection({ onProjectClick, insertedProjects = [] }: Proje
                           {config.label}
                         </Badge>
                         {project.status === "processing" && (
-                          <div className="flex items-center gap-1.5">
-                            <div className="h-1 w-12 overflow-hidden rounded-full bg-[var(--brand-pink)]/20">
-                              <div className="h-full w-1/2 animate-[shimmer_1.5s_ease-in-out_infinite] rounded-full bg-[var(--brand-pink)]/60" />
-                            </div>
+                          <div className="relative h-1 w-14 overflow-hidden rounded-full bg-[var(--brand-pink)]/20">
+                            <div className="absolute inset-y-0 left-0 w-1/3 animate-[progress-slide_1.8s_ease-in-out_infinite] rounded-full bg-[var(--brand-pink)]" />
                           </div>
                         )}
                       </div>
