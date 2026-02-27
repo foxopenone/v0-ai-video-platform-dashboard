@@ -145,8 +145,8 @@ export default function Page() {
               return
             }
 
-            // No airtableRecordId -> placeholder card, do nothing (no legacy mock data)
-            return
+            // Placeholder card -> open legacy ReviewRoom with placeholder UI
+            setReviewProjectId(id)
           }}
           insertedProjects={insertedProjects}
         />
