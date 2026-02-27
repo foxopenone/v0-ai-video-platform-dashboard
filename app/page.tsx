@@ -9,13 +9,13 @@ import { ReviewRoom } from "@/components/dashboard/review-room"
 import type { InsertedProject, StepReviewData } from "@/components/dashboard/config-form"
 
 export default function Page() {
-  const [reviewProjectId, setReviewProjectId] = useState<string | null>(null)
   const [stepReviewData, setStepReviewData] = useState<StepReviewData | null>(null)
   const [progressData, setProgressData] = useState<{ jobRecordId: string; projectTitle: string } | null>(null)
   const [insertedProjects, setInsertedProjects] = useState<InsertedProject[]>([])
 
   // Restore insertedProjects from localStorage on mount.
-  // Never wipe -- only deduplicate. Preserve existing dispatched projects.
+  // 1) Remove entries without airtableRecordId (useless - can't track)
+  // 2) Deduplicate by id and airtableRecordId
   useEffect(() => {
     try {
       const saved = localStorage.getItem("insertedProjects")
@@ -23,18 +23,61 @@ export default function Page() {
         const parsed: InsertedProject[] = JSON.parse(saved)
         const seenIds = new Set<string>()
         const seenRecords = new Set<string>()
-        const deduped = parsed.filter((p) => {
+        const cleaned = parsed.filter((p) => {
+          // Remove entries that have no airtableRecordId -- they can't be tracked
+          if (!p.airtableRecordId) return false
           if (seenIds.has(p.id)) return false
-          if (p.airtableRecordId && seenRecords.has(p.airtableRecordId)) return false
+          if (seenRecords.has(p.airtableRecordId)) return false
           seenIds.add(p.id)
-          if (p.airtableRecordId) seenRecords.add(p.airtableRecordId)
+          seenRecords.add(p.airtableRecordId)
           return true
         })
-        localStorage.setItem("insertedProjects", JSON.stringify(deduped))
-        setInsertedProjects(deduped)
+        localStorage.setItem("insertedProjects", JSON.stringify(cleaned))
+        setInsertedProjects(cleaned)
+        console.log("[v0] Restored insertedProjects:", cleaned.length, "entries. Removed", parsed.length - cleaned.length, "stale/dupe entries.")
       }
     } catch {}
   }, [])
+
+  // On mount: refresh status of all "processing" cards from Airtable
+  // Uses a ref to only run once, after localStorage restore has populated state
+  const hasRefreshed = useRef(false)
+  useEffect(() => {
+    if (hasRefreshed.current) return
+    if (insertedProjects.length === 0) return
+    hasRefreshed.current = true
+
+    const processingCards = insertedProjects.filter((p) => p.status === "processing" && p.airtableRecordId)
+    if (processingCards.length === 0) return
+
+    console.log(`[v0] Refreshing ${processingCards.length} processing cards from Airtable...`)
+    processingCards.forEach(async (card) => {
+      try {
+        const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(card.airtableRecordId!)}`)
+        if (!res.ok) return
+        const job = await res.json()
+        console.log(`[v0] Refresh card ${card.id}: Airtable Status=${job.Status}, Bible_R2_Key=${job.Bible_R2_Key || "null"}`)
+
+        if (["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)) {
+          setInsertedProjects((prev) =>
+            prev.map((p) => p.id === card.id ? { ...p, status: "pending_review" as const, progress: 100 } : p)
+          )
+        } else if (job.Status === "S9_Done") {
+          setInsertedProjects((prev) =>
+            prev.map((p) => p.id === card.id ? { ...p, status: "completed" as const, progress: 100 } : p)
+          )
+        } else if (["Error", "Failed"].includes(job.Status)) {
+          // Show error state
+          setInsertedProjects((prev) =>
+            prev.map((p) => p.id === card.id ? { ...p, status: "completed" as const, progress: 0 } : p)
+          )
+        }
+        // else: still genuinely processing, leave as-is
+      } catch {
+        // Network error -- leave as-is
+      }
+    })
+  }, [insertedProjects])
 
   // Persist insertedProjects to localStorage on every change (skip first render)
   const hasMounted = useRef(false)
@@ -117,25 +160,7 @@ export default function Page() {
     )
   }
 
-  // Legacy review mode blocked -- show error if somehow reached without a real record
-  if (reviewProjectId) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background">
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-8 py-6 text-center">
-          <p className="text-lg font-bold text-red-400">Error: Missing Record ID</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            This project has no Airtable Record ID. Only dispatched projects with real backend data can be opened.
-          </p>
-          <button
-            onClick={() => setReviewProjectId(null)}
-            className="mt-4 rounded-lg border border-border/40 px-6 py-2 text-sm text-muted-foreground hover:bg-secondary/30"
-          >
-            Back to Home
-          </button>
-        </div>
-      </div>
-    )
-  }
+
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -184,8 +209,8 @@ export default function Page() {
               return
             }
 
-            // Placeholder card -> open legacy ReviewRoom with placeholder UI
-            setReviewProjectId(id)
+            // Placeholder/demo card with no airtableRecordId -- do nothing (not a real project)
+            console.log("[v0] Clicked demo/placeholder card:", id, "- no airtableRecordId, ignoring")
           }}
           insertedProjects={insertedProjects}
         />

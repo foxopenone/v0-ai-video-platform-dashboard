@@ -303,22 +303,74 @@ export function ConfigForm({
         ? `${baseName}${epCount > 1 ? ` +${epCount - 1} EP` : ""}`
         : `New Project (${epCount} EP)`
 
-      // Parse dispatch response — only use Job_Record_ID (recXXXX) and Job_ID (numeric)
+      // Parse dispatch response -- try ALL possible field names for record ID
       let airtableRecordId = ""
       let numericJobId: number | undefined
       try {
-        const resJson = await res.json()
-        if (resJson.Job_Record_ID && String(resJson.Job_Record_ID).startsWith("rec")) {
-          airtableRecordId = String(resJson.Job_Record_ID)
+        const resText = await res.text()
+        console.log("[v0] Dispatch webhook raw response:", resText)
+        const resJson = JSON.parse(resText)
+        console.log("[v0] Dispatch webhook parsed JSON:", resJson)
+
+        // Try every possible field name the webhook might use
+        const possibleRecordFields = [
+          "Job_Record_ID", "job_record_id", "Record_ID", "record_id",
+          "recordId", "airtable_record_id", "id",
+        ]
+        for (const key of possibleRecordFields) {
+          const val = resJson[key]
+          if (val && typeof val === "string" && val.startsWith("rec")) {
+            airtableRecordId = val
+            console.log(`[v0] Found airtableRecordId in field "${key}": ${val}`)
+            break
+          }
         }
-        if (resJson.Job_ID && !isNaN(Number(resJson.Job_ID))) {
-          numericJobId = Number(resJson.Job_ID)
+
+        // If top-level doesn't have it, check nested objects
+        if (!airtableRecordId) {
+          for (const val of Object.values(resJson)) {
+            if (val && typeof val === "string" && (val as string).startsWith("rec")) {
+              airtableRecordId = val as string
+              console.log(`[v0] Found airtableRecordId in value scan: ${val}`)
+              break
+            }
+            if (val && typeof val === "object" && !Array.isArray(val)) {
+              for (const innerVal of Object.values(val as Record<string, unknown>)) {
+                if (innerVal && typeof innerVal === "string" && (innerVal as string).startsWith("rec")) {
+                  airtableRecordId = innerVal as string
+                  console.log(`[v0] Found airtableRecordId in nested value: ${innerVal}`)
+                  break
+                }
+              }
+              if (airtableRecordId) break
+            }
+          }
         }
-      } catch {
-        // Response not JSON
+
+        // Try to find numeric Job_ID
+        const possibleJobIdFields = ["Job_ID", "job_id", "jobId", "JobID"]
+        for (const key of possibleJobIdFields) {
+          if (resJson[key] && !isNaN(Number(resJson[key]))) {
+            numericJobId = Number(resJson[key])
+            console.log(`[v0] Found numericJobId in field "${key}": ${numericJobId}`)
+            break
+          }
+        }
+
+        if (!airtableRecordId) {
+          console.error("[v0] FAILED to extract airtableRecordId from webhook response. Keys:", Object.keys(resJson))
+        }
+      } catch (err) {
+        console.error("[v0] Failed to parse dispatch response:", err)
       }
 
       const supabaseUserId = session.user.id
+
+      if (!airtableRecordId) {
+        setErrorMsg("[Error] Backend did not return a Job_Record_ID (recXXXX). Cannot track this job. Check console for the raw response.")
+        setSubmitting(false)
+        return
+      }
 
       const newProject: InsertedProject = {
         id: jobId,
@@ -328,12 +380,11 @@ export function ConfigForm({
         date: new Date().toISOString().slice(0, 10),
         thumbnail: null,
         episodes: r2Entries.length,
-        airtableRecordId: airtableRecordId || undefined,
+        airtableRecordId,
         supabaseUserId,
         numericJobId,
       }
       onProjectInsert?.(newProject)
-      // localStorage persistence handled by page.tsx useEffect -- no double-write
 
       // Poll Airtable Jobs table via /api/job-status for status changes
       if (airtableRecordId) {
