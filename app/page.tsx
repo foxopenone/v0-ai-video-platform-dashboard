@@ -67,23 +67,23 @@ export default function Page() {
         <div className="my-5 h-px bg-border/20" />
         <ProjectsSection
           onProjectClick={async (id) => {
-            // Check if this is an inserted project with an Airtable record
-            const inserted = insertedProjects.find((p) => p.id === id)
-            if (inserted?.airtableRecordId) {
+            // id is the Airtable record ID (recXXXX) for real projects
+            const recordId = id.startsWith("rec") ? id : insertedProjects.find((p) => p.id === id)?.airtableRecordId
+            if (recordId) {
               try {
-                const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(inserted.airtableRecordId)}`)
+                const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(recordId)}`)
                 if (res.ok) {
                   const job = await res.json()
-                  // Open step review for any review-check status
                   const isReviewStatus = ["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)
                   const r2Key = job.Bible_R2_Key || job.Script_R2_Key
                   if (isReviewStatus && r2Key) {
+                    const inserted = insertedProjects.find((p) => p.id === id)
                     setStepReviewData({
-                      jobRecordId: inserted.airtableRecordId,
+                      jobRecordId: recordId,
                       lockToken: job.Lock_Token || "",
                       bibleR2Key: r2Key,
                       currentStatus: job.Status,
-                      projectTitle: inserted.title,
+                      projectTitle: inserted?.title || `Job ${job.Job_ID || recordId.slice(-6)}`,
                     })
                     return
                   }

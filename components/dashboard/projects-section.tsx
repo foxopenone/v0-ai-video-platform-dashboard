@@ -23,6 +23,7 @@ interface Project {
   date: string
   thumbnail: string | null
   episodes: number
+  airtableRecordId?: string
 }
 
 const STATUS_CONFIG = {
