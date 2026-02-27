@@ -165,6 +165,16 @@ function CharacterCard({
         </div>
       </div>
       <p className="text-xs leading-relaxed text-foreground/60">{char.description}</p>
+      {char.relation_map && (
+        <p className="mt-1.5 text-[10px] text-muted-foreground">
+          <span className="font-medium text-foreground/40">Relation:</span> {char.relation_map}
+        </p>
+      )}
+      {char.intent_tag && (
+        <p className="mt-0.5 text-[10px] text-muted-foreground">
+          <span className="font-medium text-foreground/40">Intent:</span> {char.intent_tag}
+        </p>
+      )}
     </div>
   )
 }
@@ -709,21 +719,34 @@ export function ReviewRoom(props: ReviewRoomProps) {
                   )}
                 </div>
 
-                {/* Episodes preview (read-only summary) */}
+                {/* Episodes preview */}
                 {bible.episodes && bible.episodes.length > 0 && (
                   <div>
                     <h3 className="mb-2 text-sm font-semibold text-foreground">
                       Episodes ({bible.episodes.length})
                     </h3>
-                    <div className="flex flex-col gap-1.5">
+                    <div className="flex flex-col gap-2">
                       {bible.episodes.map((ep, i) => (
-                        <div key={i} className="rounded-lg border border-border/20 bg-secondary/10 px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                              EP{String(ep.episode_number ?? i + 1).padStart(2, "0")}
+                        <div key={i} className="rounded-lg border border-border/20 bg-secondary/10 px-4 py-3">
+                          <div className="mb-1.5 flex items-center gap-2">
+                            <span className="rounded-md bg-secondary/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-foreground/70">
+                              {ep.key}
                             </span>
-                            <span className="text-xs text-foreground/70">{ep.title}</span>
+                            {ep.setting && (
+                              <span className="text-[10px] text-muted-foreground">{ep.setting}</span>
+                            )}
                           </div>
+                          <p className="text-xs leading-relaxed text-foreground/70">{ep.summary}</p>
+                          {ep.visual_anchors && ep.visual_anchors.length > 0 && (
+                            <div className="mt-2 border-t border-border/10 pt-2">
+                              <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">Visual Anchors</span>
+                              <ul className="mt-1 flex flex-col gap-0.5">
+                                {ep.visual_anchors.map((anchor, j) => (
+                                  <li key={j} className="text-[10px] leading-relaxed text-foreground/50">{anchor}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

@@ -153,27 +153,36 @@ const N8N_BASE = "https://n8n-production-8abb.up.railway.app/webhook"
 const R2_CDN = "https://video.aihers.live"
 const R2_WRITEBACK = "https://reel.digipalca.workers.dev/"
 
-/** Bible JSON shape from backend */
+/** Bible JSON shape -- normalized from R2 real data.
+ *  R2 actual structure: { meta, character_graph, episode_index }
+ *  We normalize to this interface for the review UI.
+ */
 export interface BibleCharacter {
   name: string
   role: string
-  description: string
+  description: string          // mapped from visual_feature
+  relation_map?: string
+  intent_tag?: string
+  visual_feature?: string
   [key: string]: unknown
 }
 
 export interface BibleEpisode {
-  episode_number: number
-  title: string
-  script: string
-  voiceover_text: string
+  key: string                  // "Ep01", "Ep02", etc.
+  setting: string
+  summary: string
+  special_alerts: string[]
+  visual_anchors: string[]
   [key: string]: unknown
 }
 
 export interface BibleJSON {
-  story_summary: string
-  characters: BibleCharacter[]
-  episodes?: BibleEpisode[]
-  metadata?: Record<string, unknown>
+  story_summary: string        // combined from all episode summaries
+  characters: BibleCharacter[] // normalized from character_graph
+  episodes: BibleEpisode[]     // normalized from episode_index
+  meta?: { language?: string; total_episodes?: number; [key: string]: unknown }
+  // Keep raw data for approve/redo payloads
+  _raw?: Record<string, unknown>
   [key: string]: unknown
 }
 
@@ -200,53 +209,69 @@ export async function fetchBibleFromR2(r2Key: string): Promise<BibleJSON> {
     throw new Error(`JSON parse failed for ${r2Key}`)
   }
 
-  console.log("[v0] R2 raw JSON top-level keys:", Object.keys(raw as Record<string, unknown>))
-  console.log("[v0] R2 raw JSON (first 500 chars):", JSON.stringify(raw).slice(0, 500))
+  const rawObj = raw as Record<string, unknown>
+  console.log("[v0] R2 raw JSON top-level keys:", Object.keys(rawObj))
 
-  // Unwrap nested wrappers -- backend may wrap Bible in a top-level key
-  let bible = raw as Record<string, unknown>
+  // ── Normalize R2 Bible structure to BibleJSON ──
+  // R2 real format: { meta, character_graph, episode_index }
+  // We need:        { story_summary, characters, episodes }
 
-  // Try common wrapper keys
-  const wrapperKeys = ["series_bible", "Series_Bible_Data", "bible", "data", "result"]
-  for (const key of wrapperKeys) {
-    if (bible[key] && typeof bible[key] === "object" && !Array.isArray(bible[key])) {
-      console.log(`[v0] Unwrapping nested key: "${key}"`)
-      bible = bible[key] as Record<string, unknown>
-      break
+  // 1) Characters: from character_graph array
+  const charGraph = rawObj.character_graph as Array<Record<string, unknown>> | undefined
+  const characters: BibleCharacter[] = Array.isArray(charGraph)
+    ? charGraph.map((c) => ({
+        name: String(c.name ?? "Unknown"),
+        role: String(c.role ?? "Supporting"),
+        description: String(c.visual_feature ?? c.description ?? ""),
+        relation_map: c.relation_map ? String(c.relation_map) : undefined,
+        intent_tag: c.intent_tag ? String(c.intent_tag) : undefined,
+        visual_feature: c.visual_feature ? String(c.visual_feature) : undefined,
+      }))
+    : []
+
+  // 2) Episodes: from episode_index object { Ep01: {...}, Ep02: {...} }
+  const epIndex = rawObj.episode_index as Record<string, Record<string, unknown>> | undefined
+  const episodes: BibleEpisode[] = epIndex
+    ? Object.entries(epIndex)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, ep]) => ({
+          key,
+          setting: String(ep.setting ?? ""),
+          summary: String(ep.summary ?? ""),
+          special_alerts: Array.isArray(ep.special_alerts) ? ep.special_alerts.map(String) : [],
+          visual_anchors: Array.isArray(ep.visual_anchors) ? ep.visual_anchors.map(String) : [],
+        }))
+    : []
+
+  // 3) Story summary: combine all episode summaries
+  const storySummary = episodes.map((ep) => `[${ep.key}] ${ep.summary}`).join("\n\n")
+
+  // 4) Meta
+  const meta = rawObj.meta as BibleJSON["meta"] | undefined
+
+  // Validate we got something useful
+  if (characters.length === 0 && episodes.length === 0) {
+    // Fallback: maybe it's already in the old format (story_summary + characters)
+    if (rawObj.story_summary || rawObj.characters) {
+      console.log("[v0] Bible already in normalized format, using as-is")
+      if (!Array.isArray(rawObj.characters)) rawObj.characters = []
+      return rawObj as unknown as BibleJSON
     }
-  }
-
-  // Validate required fields exist
-  if (!bible.story_summary && !bible.characters) {
-    // Last resort: check if any value in the object is itself a valid bible
-    const values = Object.values(bible)
-    for (const val of values) {
-      if (val && typeof val === "object" && !Array.isArray(val)) {
-        const candidate = val as Record<string, unknown>
-        if (candidate.story_summary || candidate.characters) {
-          console.log("[v0] Found bible inside nested value, unwrapping")
-          bible = candidate
-          break
-        }
-      }
-    }
-  }
-
-  // Final validation
-  if (!bible.story_summary && !bible.characters) {
     throw new Error(
-      `Bible JSON missing required fields (story_summary, characters). ` +
-      `Top-level keys: [${Object.keys(raw as Record<string, unknown>).join(", ")}]. ` +
-      `After unwrap keys: [${Object.keys(bible).join(", ")}]`
+      `Bible JSON has no character_graph and no episode_index. ` +
+      `Top-level keys: [${Object.keys(rawObj).join(", ")}]`
     )
   }
 
-  // Normalize: ensure characters is always an array
-  if (!Array.isArray(bible.characters)) {
-    bible.characters = []
-  }
+  console.log(`[v0] Bible normalized: ${characters.length} characters, ${episodes.length} episodes`)
 
-  return bible as unknown as BibleJSON
+  return {
+    story_summary: storySummary,
+    characters,
+    episodes,
+    meta,
+    _raw: rawObj,
+  }
 }
 
 // ── Approve / Redo — per V56 spec ──────────────────────────────
