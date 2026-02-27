@@ -16,7 +16,7 @@ export default function Page() {
 
   // Restore insertedProjects from localStorage on mount.
   // Version key: bump to force-clear stale data from previous buggy builds.
-  const STORAGE_VERSION = "v3"
+  const STORAGE_VERSION = "v4"
   useEffect(() => {
     try {
       const ver = localStorage.getItem("insertedProjects_version")
@@ -126,14 +126,23 @@ export default function Page() {
     )
   }
 
-  // Legacy review mode (placeholder/demo cards only)
+  // Legacy review mode blocked -- show error if somehow reached without a real record
   if (reviewProjectId) {
     return (
-      <ReviewRoom
-        mode="legacy"
-        projectId={reviewProjectId}
-        onClose={() => setReviewProjectId(null)}
-      />
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background">
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-8 py-6 text-center">
+          <p className="text-lg font-bold text-red-400">Error: Missing Record ID</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            This project has no Airtable Record ID. Only dispatched projects with real backend data can be opened.
+          </p>
+          <button
+            onClick={() => setReviewProjectId(null)}
+            className="mt-4 rounded-lg border border-border/40 px-6 py-2 text-sm text-muted-foreground hover:bg-secondary/30"
+          >
+            Back to Home
+          </button>
+        </div>
+      </div>
     )
   }
 
@@ -168,6 +177,9 @@ export default function Page() {
                         : `users/${inserted.supabaseUserId}/jobs/${jobNum}/04_script/script.json`
                       console.log(`[v0] Constructed R2 key: ${r2Key}`)
                     }
+                  }
+                  if (isReviewStatus && !r2Key) {
+                    console.error(`[FATAL] Status=${job.Status} but Bible_R2_Key is null. Airtable: ${job.Bible_R2_Key}, userId: ${inserted.supabaseUserId}, Job_ID: ${job.Job_ID}`)
                   }
                   if (isReviewStatus && r2Key) {
                     // Already in review state -> go directly to step_review

@@ -361,8 +361,9 @@ export function ConfigForm({
             const job = await pollRes.json()
             failCount = 0
 
-            // Debug: print every poll result
+            // Debug: print every poll result + raw Airtable fields
             console.log(`[v0] Poll #${pollCount} | Status: ${job.Status} | Bible_R2_Key: ${job.Bible_R2_Key || "null"} | Lock_Token: ${job.Lock_Token || "null"}`)
+            if (job._raw_fields) console.log(`[v0] Raw Airtable fields:`, job._raw_fields)
 
             // Update card progress
             const progress = stageProgress[job.Status] ?? 50
@@ -380,6 +381,9 @@ export function ConfigForm({
                 r2Key = `users/${supabaseUserId}/jobs/${jobNum}/04_script/script.json`
               }
               console.log(`[v0] Constructed R2 key from convention: ${r2Key}`)
+            }
+            if (isReviewCheck && !r2Key) {
+              console.error(`[FATAL] Status is ${job.Status} but cannot determine Bible_R2_Key. Airtable field: ${job.Bible_R2_Key}, userId: ${supabaseUserId}, jobNum: ${jobNum}`)
             }
             if (isReviewCheck && r2Key) {
               consecutiveHits++

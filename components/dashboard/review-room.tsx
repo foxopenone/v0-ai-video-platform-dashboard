@@ -9,15 +9,14 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
-  fetchProjectDetail,
-  reviewSynopsis,
-  reviewScript,
-  reviewEpisode,
-  downloadEpisode,
   fetchBibleFromR2,
   reviewApprove,
   reviewEditContinue,
   reviewRedo,
+  reviewSynopsis,
+  reviewScript,
+  reviewEpisode,
+  downloadEpisode,
 } from "@/lib/mock-api"
 import type { BibleJSON, BibleCharacter } from "@/lib/mock-api"
 import { cn } from "@/lib/utils"
@@ -325,28 +324,13 @@ export function ReviewRoom(props: ReviewRoomProps) {
     }
   }, [getCallbackInfo, isStepReview, props])
 
-  // ── Legacy: Load project data ──
+  // ── Legacy mode: no more mock data. Show loading=false immediately. ──
   useEffect(() => {
-    if (isStepReview || isProgress) return
-    const { projectId } = props as LegacyProps
-    setLoading(true)
-
-    // Load mock data for legacy project cards (demo / completed projects)
-    fetchProjectDetail(projectId).then((data) => {
-      if (data) {
-        setProject(data as ProjectDetail)
-        setSynopsisText(data.synopsis)
-        setVoiceTexts(data.script.map((s) => s.text))
-        setEpisodes(data.episodes)
-        if (data.status === "completed") {
-          setPhase(3)
-          setSynopsisConfirmed(true)
-          setVoiceConfirmed(true)
-        }
-      }
-      setLoading(false)
-    })
-  }, [isStepReview, isStepReview ? null : (props as LegacyProps).projectId])
+  if (isStepReview || isProgress) return
+  // Legacy mode no longer loads mock data.
+  // page.tsx already blocks this path with an error screen.
+  setLoading(false)
+  }, [isStepReview, isProgress])
 
   // Legacy handlers
   const handleSynopsisConfirm = useCallback(async () => {
