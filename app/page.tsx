@@ -67,8 +67,10 @@ export default function Page() {
         <div className="my-5 h-px bg-border/20" />
         <ProjectsSection
           onProjectClick={async (id) => {
-            // Check if this card has an Airtable record (real project from dispatch)
-            const recordId = id.startsWith("rec") ? id : insertedProjects.find((p) => p.id === id)?.airtableRecordId
+            // Check if this is a real project (dispatched, has airtableRecordId)
+            const inserted = insertedProjects.find((p) => p.id === id)
+            const recordId = inserted?.airtableRecordId
+
             if (recordId) {
               // Real project: query Airtable for current status
               try {
@@ -78,22 +80,25 @@ export default function Page() {
                   const isReviewStatus = ["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)
                   const r2Key = job.Bible_R2_Key || job.Script_R2_Key
                   if (isReviewStatus && r2Key) {
-                    const inserted = insertedProjects.find((p) => p.id === id)
+                    // Ready for review -> open step_review ReviewRoom
                     setStepReviewData({
                       jobRecordId: recordId,
                       lockToken: job.Lock_Token || "",
                       bibleR2Key: r2Key,
                       currentStatus: job.Status,
-                      projectTitle: inserted?.title || `Job ${job.Job_ID || recordId.slice(-6)}`,
+                      projectTitle: inserted.title,
                     })
                     return
                   }
                 }
               } catch {
-                // Network error -- fall through to legacy
+                // Network error
               }
+              // Real project but not in review status (still processing) -> do nothing
+              return
             }
-            // Placeholder cards or non-review-status real projects: open legacy ReviewRoom
+
+            // Placeholder/demo card -> open legacy ReviewRoom with mock data
             setReviewProjectId(id)
           }}
           insertedProjects={insertedProjects}

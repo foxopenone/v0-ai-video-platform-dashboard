@@ -146,6 +146,8 @@ interface ConfigFormProps {
   clearUploads?: () => void
   /** Insert a placeholder card in My Projects */
   onProjectInsert?: (project: InsertedProject) => void
+  /** Update an existing project card's status/progress */
+  onProjectUpdate?: (id: string, updates: Partial<InsertedProject>) => void
   /** Open Step Review when Bible is ready */
   onStepReviewReady?: (data: StepReviewData) => void
 }
@@ -155,6 +157,7 @@ export function ConfigForm({
   totalFileCount = 0,
   clearUploads,
   onProjectInsert,
+  onProjectUpdate,
   onStepReviewReady,
 }: ConfigFormProps) {
   const router = useRouter()
@@ -323,8 +326,15 @@ export function ConfigForm({
       if (airtableRecordId) {
         let failCount = 0
         const MAX_FAILS = 5
-        const MAX_POLLS = 60 // 10 min at 10s intervals
+        const MAX_POLLS = 120 // 20 min at 10s intervals
         let pollCount = 0
+
+        // Map pipeline stages to rough progress %
+        const stageProgress: Record<string, number> = {
+          S1_Ingestion: 10, S2_Brain: 30, S3_Bible_Check: 100,
+          S4_Script: 50, S5_Script_Check: 100,
+          S6_VO: 60, S7_Render: 80, S8_Render: 90, S9_Done: 100,
+        }
 
         const pollInterval = setInterval(async () => {
           pollCount++
@@ -336,8 +346,11 @@ export function ConfigForm({
             const pollRes = await fetch(`/api/job-status?record_id=${encodeURIComponent(airtableRecordId)}`)
             if (!pollRes.ok) throw new Error(`HTTP ${pollRes.status}`)
             const job = await pollRes.json()
-            console.log("[v0] Poll #" + pollCount, "Status:", job.Status)
             failCount = 0
+
+            // Update card progress based on pipeline stage
+            const progress = stageProgress[job.Status] ?? 50
+            onProjectUpdate?.(jobId, { progress })
 
             // Check for any review-check status
             const isReviewCheck = ["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)
@@ -353,13 +366,18 @@ export function ConfigForm({
                 frontendJobId: jobId,
               })
             }
+
+            // Done or failed -> stop polling
+            if (["S9_Done", "Error", "Failed"].includes(job.Status)) {
+              clearInterval(pollInterval)
+            }
           } catch {
             failCount++
             if (failCount >= MAX_FAILS) {
               clearInterval(pollInterval)
             }
           }
-        }, 10000) // Poll every 10 seconds per backend spec
+        }, 10000)
       }
 
       setTimeout(() => {
