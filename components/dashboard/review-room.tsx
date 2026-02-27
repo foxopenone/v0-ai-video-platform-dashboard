@@ -304,7 +304,35 @@ export function ReviewRoom(props: ReviewRoomProps) {
     setActionStatus("submitting")
     setActionMessage("Writing changes to R2 and continuing...")
     try {
-      await reviewEditContinue(jobRecordId, lockToken, bibleR2Key, bible)
+      // Per backend spec: writeback MUST patch the original raw, not the display view.
+      // bible._raw holds the original R2 JSON; we patch character_graph and episode_index.
+      const patchedRaw = structuredClone(bible._raw ?? {}) as Record<string, unknown>
+
+      // Patch character_graph: map display characters back to raw format
+      patchedRaw.character_graph = bible.characters.map((c) => ({
+        name: c.name,
+        role: c.role,
+        visual_feature: c.description,  // description is mapped from visual_feature
+        relation_map: c.relation_map ?? "",
+        intent_tag: c.intent_tag ?? "",
+      }))
+
+      // Patch episode_index: convert episodes array back to object
+      if (bible.episodes && bible.episodes.length > 0) {
+        const epIndex: Record<string, unknown> = {}
+        for (const ep of bible.episodes) {
+          epIndex[ep.key] = {
+            setting: ep.setting,
+            summary: ep.summary,
+            special_alerts: ep.special_alerts,
+            visual_anchors: ep.visual_anchors,
+          }
+        }
+        patchedRaw.episode_index = epIndex
+      }
+
+      console.log("[v0] Writeback patchedRaw keys:", Object.keys(patchedRaw))
+      await reviewEditContinue(jobRecordId, lockToken, bibleR2Key, patchedRaw)
       setOriginalBible(structuredClone(bible))
       setEditMode(false)
       setActionStatus("success")
