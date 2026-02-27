@@ -177,25 +177,34 @@ export interface BibleJSON {
   [key: string]: unknown
 }
 
-/** Fetch the Bible JSON from R2 CDN */
-export async function fetchBibleFromR2(bibleR2Key: string): Promise<BibleJSON> {
-  const url = `${R2_CDN}/${bibleR2Key}`
-  console.log("[v0] Fetching Bible JSON from:", url)
+/** Fetch JSON asset from R2 CDN (Bible, Script, VO). Never returns mock data. */
+export async function fetchBibleFromR2(r2Key: string): Promise<BibleJSON> {
+  if (!r2Key) throw new Error("R2 Key is empty — asset not generated yet")
+  const url = `${R2_CDN}/${r2Key}`
   const res = await fetch(url)
-  if (!res.ok) {
-    const body = await res.text().catch(() => "")
-    console.error("[v0] Bible fetch failed:", res.status, body)
-    throw new Error(`Failed to fetch Bible: ${res.status}`)
+  if (res.status === 404) {
+    throw new Error(`R2 404: File not found at ${r2Key}`)
   }
-  const json = await res.json()
-  console.log("[v0] Bible JSON loaded, keys:", Object.keys(json))
-  return json as BibleJSON
+  if (!res.ok) {
+    throw new Error(`R2 ${res.status}: Failed to fetch ${r2Key}`)
+  }
+  let json: BibleJSON
+  try {
+    json = await res.json()
+  } catch {
+    throw new Error(`JSON parse failed for ${r2Key}`)
+  }
+  return json
 }
 
-/** Phase 1 Action: Approve Bible — call agentA-trigger to continue pipeline */
-export async function bibleApprove(jobRecordId: string, lockToken: string) {
-  console.log("[v0] Bible Approve:", { jobRecordId, lockToken })
-  const res = await fetch(`${N8N_BASE}/agentA-trigger`, {
+// ── Approve / Redo — per V56 spec ──────────────────────────────
+
+/**
+ * Unified Approve (all review stages).
+ * POST /webhook/04-review-action  { action: "approve" }
+ */
+export async function reviewApprove(jobRecordId: string, lockToken: string) {
+  const res = await fetch(`${N8N_BASE}/04-review-action`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -204,68 +213,79 @@ export async function bibleApprove(jobRecordId: string, lockToken: string) {
       action: "approve",
     }),
   })
-  if (!res.ok) throw new Error("Bible approve failed: " + res.status)
+  if (!res.ok) throw new Error("Approve failed: " + res.status)
   return res.json()
 }
 
-/** Phase 1 Action: Edit & Continue
- *  Step 1: Writeback full Bible JSON to R2 via Worker
- *  Step 2: Call agentA-trigger to continue pipeline
+/**
+ * Redo routing — different endpoint per status.
+ *   S3_Bible_Check  -> POST /webhook/agent0-redo
+ *   S5_Script_Check -> POST /webhook/04-review-action
+ *   S8_Render       -> POST /webhook/05-redo (with Part_Index)
  */
-export async function bibleEditContinue(
+export async function reviewRedo(
   jobRecordId: string,
   lockToken: string,
-  bibleR2Key: string,
-  editedBible: BibleJSON
+  currentStatus: string,
+  partIndex?: number,
 ) {
-  console.log("[v0] Bible Edit & Continue — Step 1: Writeback to R2")
-  // Step 1: Write full Bible JSON back to R2
+  let endpoint: string
+  const body: Record<string, unknown> = {
+    Job_Record_ID: jobRecordId,
+    Lock_Token: lockToken,
+    action: "redo",
+  }
+
+  if (currentStatus === "S3_Bible_Check") {
+    endpoint = "agent0-redo"
+  } else if (currentStatus === "S5_Script_Check") {
+    endpoint = "04-review-action"
+  } else if (currentStatus === "S8_Render") {
+    endpoint = "05-redo"
+    if (partIndex !== undefined) body.Part_Index = partIndex
+  } else {
+    throw new Error(`Redo not allowed for status: ${currentStatus}`)
+  }
+
+  const res = await fetch(`${N8N_BASE}/${endpoint}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(`Redo failed (${endpoint}): ` + res.status)
+  return res.json()
+}
+
+/**
+ * Edit & Continue (writeback to R2, then approve).
+ * Works for both Bible (S3) and Script/VO (S5).
+ */
+export async function reviewEditContinue(
+  jobRecordId: string,
+  lockToken: string,
+  r2Key: string,
+  editedJson: Record<string, unknown>,
+) {
+  // Step 1: Writeback original-structure JSON to R2
   const writeRes = await fetch(R2_WRITEBACK, {
     method: "POST",
     headers: {
-      "Authorization": "Bearer upload number",
+      Authorization: "Bearer upload number",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      key: bibleR2Key,
-      raw_content: JSON.stringify(editedBible),
+      key: r2Key,
+      raw_content: JSON.stringify(editedJson),
       content_type: "application/json",
     }),
   })
   if (!writeRes.ok) {
     const errBody = await writeRes.text().catch(() => "")
-    console.error("[v0] R2 writeback failed:", writeRes.status, errBody)
-    throw new Error("R2 writeback failed: " + writeRes.status)
+    throw new Error("R2 writeback failed: " + writeRes.status + " " + errBody)
   }
-  console.log("[v0] Bible Edit & Continue — Step 2: Trigger agentA")
-  // Step 2: Continue pipeline
-  const triggerRes = await fetch(`${N8N_BASE}/agentA-trigger`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      Job_Record_ID: jobRecordId,
-      Lock_Token: lockToken,
-      action: "approve",
-    }),
-  })
-  if (!triggerRes.ok) throw new Error("agentA-trigger failed: " + triggerRes.status)
-  return triggerRes.json()
-}
 
-/** Phase 1 Action: Reject / Redo — call agent0-redo to start from scratch */
-export async function bibleReject(jobRecordId: string, lockToken: string) {
-  console.log("[v0] Bible Reject/Redo:", { jobRecordId, lockToken })
-  const res = await fetch(`${N8N_BASE}/agent0-redo`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      Job_Record_ID: jobRecordId,
-      Lock_Token: lockToken,
-      action: "redo",
-    }),
-  })
-  if (!res.ok) throw new Error("Bible reject/redo failed: " + res.status)
-  return res.json()
+  // Step 2: Approve to continue pipeline
+  return reviewApprove(jobRecordId, lockToken)
 }
 
 // Review Room API

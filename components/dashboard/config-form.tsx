@@ -132,6 +132,7 @@ export interface StepReviewData {
   jobRecordId: string
   lockToken: string
   bibleR2Key: string
+  currentStatus?: string
   projectTitle: string
   frontendJobId?: string
 }
@@ -345,12 +346,16 @@ export function ConfigForm({
             console.log("[v0] Poll #" + pollCount, "Status:", job.Status)
             failCount = 0
 
-            if (job.Status === "S3_Bible_Check" && job.Bible_R2_Key) {
+            // Check for any review-check status
+            const isReviewCheck = ["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)
+            const r2Key = job.Bible_R2_Key || job.Script_R2_Key || job.VO_R2_Key
+            if (isReviewCheck && r2Key) {
               clearInterval(pollInterval)
               onStepReviewReady?.({
                 jobRecordId: airtableRecordId,
                 lockToken: job.Lock_Token || "",
-                bibleR2Key: job.Bible_R2_Key,
+                bibleR2Key: r2Key,
+                currentStatus: job.Status,
                 projectTitle,
                 frontendJobId: jobId,
               })

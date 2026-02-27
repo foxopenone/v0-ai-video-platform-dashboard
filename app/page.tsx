@@ -40,6 +40,7 @@ export default function Page() {
         jobRecordId={stepReviewData.jobRecordId}
         lockToken={stepReviewData.lockToken}
         bibleR2Key={stepReviewData.bibleR2Key}
+        currentStatus={stepReviewData.currentStatus || "S3_Bible_Check"}
         projectTitle={stepReviewData.projectTitle}
         onClose={() => setStepReviewData(null)}
       />
@@ -73,11 +74,15 @@ export default function Page() {
                 const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(inserted.airtableRecordId)}`)
                 if (res.ok) {
                   const job = await res.json()
-                  if (job.Status === "S3_Bible_Check" && job.Bible_R2_Key) {
+                  // Open step review for any review-check status
+                  const isReviewStatus = ["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)
+                  const r2Key = job.Bible_R2_Key || job.Script_R2_Key
+                  if (isReviewStatus && r2Key) {
                     setStepReviewData({
                       jobRecordId: inserted.airtableRecordId,
                       lockToken: job.Lock_Token || "",
-                      bibleR2Key: job.Bible_R2_Key,
+                      bibleR2Key: r2Key,
+                      currentStatus: job.Status,
                       projectTitle: inserted.title,
                     })
                     return

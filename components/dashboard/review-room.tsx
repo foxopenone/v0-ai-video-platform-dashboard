@@ -15,9 +15,9 @@ import {
   reviewEpisode,
   downloadEpisode,
   fetchBibleFromR2,
-  bibleApprove,
-  bibleEditContinue,
-  bibleReject,
+  reviewApprove,
+  reviewEditContinue,
+  reviewRedo,
 } from "@/lib/mock-api"
 import type { BibleJSON, BibleCharacter } from "@/lib/mock-api"
 import { cn } from "@/lib/utils"
@@ -53,6 +53,7 @@ interface StepReviewProps {
   jobRecordId: string
   lockToken: string
   bibleR2Key: string
+  currentStatus: string // e.g. "S3_Bible_Check" | "S5_Script_Check"
   projectTitle?: string
   onClose: () => void
 }
@@ -259,7 +260,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
     setActionStatus("submitting")
     setActionMessage("Approving and continuing pipeline...")
     try {
-      await bibleApprove(info.jobRecordId, info.lockToken)
+      await reviewApprove(info.jobRecordId, info.lockToken)
       setActionStatus("success")
       setActionMessage("Approved! Pipeline is continuing...")
     } catch (err) {
@@ -268,38 +269,40 @@ export function ReviewRoom(props: ReviewRoomProps) {
     }
   }, [getCallbackInfo])
 
-  const handleEditContinue = useCallback(async () => {
+  const handleSaveAndContinue = useCallback(async () => {
     const info = getCallbackInfo()
     if (!info || !bible) return
     const { jobRecordId, lockToken, bibleR2Key } = info
     setActionStatus("submitting")
     setActionMessage("Writing changes to R2 and continuing...")
     try {
-      await bibleEditContinue(jobRecordId, lockToken, bibleR2Key, bible)
+      await reviewEditContinue(jobRecordId, lockToken, bibleR2Key, bible)
       setOriginalBible(structuredClone(bible))
       setEditMode(false)
       setActionStatus("success")
       setActionMessage("Changes saved! Pipeline is continuing...")
     } catch (err) {
       setActionStatus("error")
-      setActionMessage(err instanceof Error ? err.message : "Edit & Continue failed")
+      setActionMessage(err instanceof Error ? err.message : "Save & Continue failed")
     }
   }, [getCallbackInfo, bible])
 
-  const handleReject = useCallback(async () => {
+  const handleRedo = useCallback(async () => {
     const info = getCallbackInfo()
     if (!info) return
+    // Determine current status for redo routing
+    const status = isStepReview ? (props as StepReviewProps).currentStatus || "S3_Bible_Check" : "S3_Bible_Check"
     setActionStatus("submitting")
-    setActionMessage("Rejecting and restarting pipeline...")
+    setActionMessage("Requesting redo...")
     try {
-      await bibleReject(info.jobRecordId, info.lockToken)
+      await reviewRedo(info.jobRecordId, info.lockToken, status)
       setActionStatus("success")
-      setActionMessage("Rejected! Pipeline will redo from scratch.")
+      setActionMessage("Redo triggered! Pipeline will restart this phase.")
     } catch (err) {
       setActionStatus("error")
-      setActionMessage(err instanceof Error ? err.message : "Reject failed")
+      setActionMessage(err instanceof Error ? err.message : "Redo failed")
     }
-  }, [getCallbackInfo])
+  }, [getCallbackInfo, isStepReview, props])
 
   // ── Legacy: Load project data (check Supabase for real data first) ──
   useEffect(() => {
@@ -406,14 +409,20 @@ export function ReviewRoom(props: ReviewRoomProps) {
       )
     }
 
-    // Error
+    // Error -- show real error per spec, never fallback to mock
     if (bibleError) {
+      const is404 = bibleError.includes("404") || bibleError.toLowerCase().includes("not found")
       return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background">
-          <div className="flex flex-col items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-8">
+          <div className="flex max-w-sm flex-col items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-8">
             <AlertCircle className="h-8 w-8 text-red-400" />
-            <p className="text-sm font-medium text-red-400">Failed to load Bible</p>
-            <p className="max-w-md text-center text-xs text-muted-foreground">{bibleError}</p>
+            <p className="text-sm font-medium text-red-400">
+              {is404 ? "File Not Ready / Missing R2 Asset" : "Failed to Load Asset"}
+            </p>
+            <p className="text-center text-xs text-muted-foreground">{bibleError}</p>
+            <p className="text-center text-[10px] text-muted-foreground/60">
+              R2 Key: {(props as StepReviewProps).bibleR2Key}
+            </p>
             <button
               onClick={onClose}
               className="mt-2 rounded-lg border border-border/30 px-4 py-2 text-xs text-foreground transition-colors hover:bg-secondary/30"
@@ -585,7 +594,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                     Cancel
                   </button>
                   <button
-                    onClick={handleEditContinue}
+                    onClick={handleSaveAndContinue}
                     disabled={actionStatus === "submitting"}
                     className="brand-gradient flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-xs font-semibold text-[#fff] transition-opacity hover:opacity-90 disabled:opacity-50"
                   >
@@ -601,12 +610,12 @@ export function ReviewRoom(props: ReviewRoomProps) {
                 <div className="flex items-center gap-2">
                   {/* Reject */}
                   <button
-                    onClick={handleReject}
+                    onClick={handleRedo}
                     disabled={actionStatus === "submitting" || actionStatus === "success"}
                     className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
                   >
                     <RotateCcw className="h-3.5 w-3.5" />
-                    Reject / Redo
+                    Redo
                   </button>
                   {/* Edit */}
                   <button
