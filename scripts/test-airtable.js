@@ -1,79 +1,99 @@
-// Test Airtable connectivity with current env vars
-const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY
-const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID
+// Thorough Airtable connectivity test
+const RAW_KEY = process.env.AIRTABLE_API_KEY || ""
+const RAW_BASE = process.env.AIRTABLE_BASE_ID || ""
 
-console.log("=== Airtable Connectivity Test ===")
-console.log("AIRTABLE_API_KEY exists:", !!AIRTABLE_API_KEY)
-console.log("AIRTABLE_API_KEY prefix:", AIRTABLE_API_KEY ? AIRTABLE_API_KEY.substring(0, 6) + "..." : "MISSING")
-console.log("AIRTABLE_BASE_ID:", AIRTABLE_BASE_ID || "MISSING")
+// Trim whitespace/newlines that might have snuck in
+const KEY = RAW_KEY.trim()
+const BASE = RAW_BASE.trim()
 
-if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID) {
-  console.error("FATAL: Missing env vars. Cannot test.")
+console.log("=== Airtable Thorough Connectivity Test ===")
+console.log("AIRTABLE_API_KEY length:", KEY.length)
+console.log("AIRTABLE_API_KEY first 10 chars:", JSON.stringify(KEY.substring(0, 10)))
+console.log("AIRTABLE_API_KEY last 5 chars:", JSON.stringify(KEY.substring(KEY.length - 5)))
+console.log("AIRTABLE_API_KEY has whitespace:", KEY !== RAW_KEY ? "YES (TRIMMED)" : "No")
+console.log("AIRTABLE_BASE_ID raw:", JSON.stringify(RAW_BASE))
+console.log("AIRTABLE_BASE_ID trimmed:", JSON.stringify(BASE))
+console.log("AIRTABLE_BASE_ID length:", BASE.length)
+console.log("AIRTABLE_BASE_ID has whitespace:", BASE !== RAW_BASE ? "YES (TRIMMED)" : "No")
+
+// Print each character of BASE_ID with char code to catch I/l confusion
+console.log("\nBase ID character analysis:")
+for (let i = 0; i < BASE.length; i++) {
+  console.log(`  [${i}] '${BASE[i]}' charCode=${BASE.charCodeAt(i)}`)
+}
+
+if (!KEY || !BASE) {
+  console.error("FATAL: Missing env vars.")
   process.exit(1)
 }
 
-// Test 1: List records from Jobs table (limit 1)
-const listUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Jobs?maxRecords=1`
-console.log("\n--- Test 1: List Jobs (limit 1) ---")
-console.log("URL:", listUrl)
+// Try multiple combinations
+const TABLE_NAME = "Jobs"
+const TABLE_ID = "tblD7QCg8U3hzNKZN"  // From Airtable URL bar screenshot
 
-try {
-  const res = await fetch(listUrl, {
-    headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
-  })
-  console.log("HTTP Status:", res.status)
-  const body = await res.text()
-  if (res.ok) {
-    const data = JSON.parse(body)
-    if (data.records && data.records.length > 0) {
-      const rec = data.records[0]
-      console.log("SUCCESS - Record ID:", rec.id)
-      console.log("Fields:", JSON.stringify(rec.fields, null, 2))
+// Also try the Base ID with I (uppercase) instead of l (lowercase) in case of confusion
+const BASE_ALT = BASE.replace(/l/g, 'I')  // Replace all lowercase L with uppercase I
+const BASE_ALT2 = BASE.replace(/I/g, 'l')  // Replace all uppercase I with lowercase L
 
-      // Test 2: Fetch that specific record by ID
-      console.log("\n--- Test 2: Fetch record by ID ---")
-      const getUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Jobs/${rec.id}`
-      const res2 = await fetch(getUrl, {
-        headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
-      })
-      console.log("HTTP Status:", res2.status)
-      if (res2.ok) {
-        const rec2 = await res2.json()
-        console.log("SUCCESS - Record fetched:", rec2.id)
-        console.log("Status field:", rec2.fields?.Status)
-        console.log("Job_ID field:", rec2.fields?.Job_ID)
-        console.log("Folder_A0_ID:", rec2.fields?.Folder_A0_ID || "NOT SET")
-        console.log("Folder_AA_ID:", rec2.fields?.Folder_AA_ID || "NOT SET")
-        console.log("Lock_Token:", rec2.fields?.Lock_Token || "NOT SET")
-      } else {
-        console.error("FAILED:", await res2.text())
+const combos = [
+  { label: "Original BASE + table name", base: BASE, table: TABLE_NAME },
+  { label: "Original BASE + table ID", base: BASE, table: TABLE_ID },
+]
+
+// Only add alternates if they differ from original
+if (BASE_ALT !== BASE) {
+  combos.push({ label: "BASE (l->I) + table name", base: BASE_ALT, table: TABLE_NAME })
+  combos.push({ label: "BASE (l->I) + table ID", base: BASE_ALT, table: TABLE_ID })
+}
+if (BASE_ALT2 !== BASE && BASE_ALT2 !== BASE_ALT) {
+  combos.push({ label: "BASE (I->l) + table name", base: BASE_ALT2, table: TABLE_NAME })
+  combos.push({ label: "BASE (I->l) + table ID", base: BASE_ALT2, table: TABLE_ID })
+}
+
+for (const combo of combos) {
+  const url = `https://api.airtable.com/v0/${combo.base}/${combo.table}?maxRecords=1`
+  console.log(`\n--- ${combo.label} ---`)
+  console.log(`URL: ${url}`)
+  try {
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${KEY}` },
+    })
+    console.log(`HTTP ${res.status}`)
+    if (res.ok) {
+      const data = await res.json()
+      console.log(`SUCCESS! Records: ${data.records?.length}`)
+      if (data.records?.[0]) {
+        const f = data.records[0].fields
+        console.log(`  Record ID: ${data.records[0].id}`)
+        console.log(`  Job_ID: ${f.Job_ID}`)
+        console.log(`  Status: ${f.Status}`)
       }
+      console.log(`\n*** WORKING COMBO: base=${combo.base}, table=${combo.table} ***`)
+      
+      // If this works, also test the specific record
+      console.log(`\n--- Bonus: Fetch recjWDwY4XlxwJAUY with working combo ---`)
+      const res2 = await fetch(`https://api.airtable.com/v0/${combo.base}/${combo.table}/recjWDwY4XlxwJAUY`, {
+        headers: { Authorization: `Bearer ${KEY}` },
+      })
+      console.log(`HTTP ${res2.status}`)
+      if (res2.ok) {
+        const rec = await res2.json()
+        console.log(`Record: ${rec.id}`)
+        console.log(`All fields:`, JSON.stringify(rec.fields, null, 2))
+      } else {
+        const errBody = await res2.text()
+        console.log(`Failed: ${errBody}`)
+      }
+      
+      // Stop after first success
+      break
     } else {
-      console.log("No records found in Jobs table")
+      const errBody = await res.text()
+      console.log(`Failed: ${errBody.substring(0, 200)}`)
     }
-  } else {
-    console.error("FAILED:", body)
+  } catch (err) {
+    console.log(`Exception: ${err.message}`)
   }
-} catch (err) {
-  console.error("EXCEPTION:", err.message)
 }
 
-// Test 3: Try to fetch the specific record from user's screenshot
-console.log("\n--- Test 3: Fetch recjWDwY4XlxwJAUY (Job 257) ---")
-try {
-  const getUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Jobs/recjWDwY4XlxwJAUY`
-  const res3 = await fetch(getUrl, {
-    headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
-  })
-  console.log("HTTP Status:", res3.status)
-  const body3 = await res3.text()
-  if (res3.ok) {
-    const rec3 = JSON.parse(body3)
-    console.log("SUCCESS - Full record fields:")
-    console.log(JSON.stringify(rec3.fields, null, 2))
-  } else {
-    console.error("FAILED:", body3)
-  }
-} catch (err) {
-  console.error("EXCEPTION:", err.message)
-}
+console.log("\n=== Test Complete ===")
