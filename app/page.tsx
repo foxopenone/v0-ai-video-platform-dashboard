@@ -14,22 +14,24 @@ export default function Page() {
   const [progressData, setProgressData] = useState<{ jobRecordId: string; projectTitle: string } | null>(null)
   const [insertedProjects, setInsertedProjects] = useState<InsertedProject[]>([])
 
-  // Restore insertedProjects from localStorage on mount (deduplicate by id)
+  // Restore insertedProjects from localStorage on mount
+  // Deduplicate by BOTH id AND airtableRecordId (earlier double-write bug created dupes)
   useEffect(() => {
     try {
       const saved = localStorage.getItem("insertedProjects")
       if (saved) {
         const parsed: InsertedProject[] = JSON.parse(saved)
-        const seen = new Set<string>()
+        const seenIds = new Set<string>()
+        const seenRecords = new Set<string>()
         const deduped = parsed.filter((p) => {
-          if (seen.has(p.id)) return false
-          seen.add(p.id)
+          if (seenIds.has(p.id)) return false
+          if (p.airtableRecordId && seenRecords.has(p.airtableRecordId)) return false
+          seenIds.add(p.id)
+          if (p.airtableRecordId) seenRecords.add(p.airtableRecordId)
           return true
         })
-        // Clean up localStorage if duplicates were found
-        if (deduped.length !== parsed.length) {
-          localStorage.setItem("insertedProjects", JSON.stringify(deduped))
-        }
+        // Always rewrite to clean up any stale data
+        localStorage.setItem("insertedProjects", JSON.stringify(deduped))
         setInsertedProjects(deduped)
       }
     } catch {}
@@ -45,7 +47,12 @@ export default function Page() {
   }, [insertedProjects])
 
   const handleProjectInsert = useCallback((project: InsertedProject) => {
-    setInsertedProjects((prev) => [project, ...prev])
+    setInsertedProjects((prev) => {
+      // Prevent duplicate: skip if same id or same airtableRecordId already exists
+      if (prev.some((p) => p.id === project.id)) return prev
+      if (project.airtableRecordId && prev.some((p) => p.airtableRecordId === project.airtableRecordId)) return prev
+      return [project, ...prev]
+    })
   }, [])
 
   const handleProjectUpdate = useCallback((id: string, updates: Partial<InsertedProject>) => {

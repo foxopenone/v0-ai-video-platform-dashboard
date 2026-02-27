@@ -415,24 +415,43 @@ export function ReviewRoom(props: ReviewRoomProps) {
   // ===================================================================
   const [progressStatus, setProgressStatus] = useState("Loading...")
   const [progressPolling, setProgressPolling] = useState(true)
+  const [progressError, setProgressError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isProgress) return
     const { jobRecordId, onReviewReady } = props as ProgressProps
     let consecutiveHits = 0
     let stopped = false
+    let failCount = 0
 
     const poll = async () => {
       if (stopped) return
       try {
         const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}`)
-        if (!res.ok) return
-  const job = await res.json()
-  console.log(`[v0] Progress poll | Status: ${job.Status} | Bible_R2_Key: ${job.Bible_R2_Key || "null"} | Script_R2_Key: ${job.Script_R2_Key || "null"}`)
-  setProgressStatus(job.Status || "Unknown")
-  
-  const isCheck = ["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)
-  const r2Key = job.Bible_R2_Key || job.Script_R2_Key
+        if (!res.ok) {
+          failCount++
+          console.log(`[v0] Progress poll FAILED: HTTP ${res.status} (fail #${failCount})`)
+          if (failCount >= 3) {
+            stopped = true
+            setProgressPolling(false)
+            setProgressError(`API returned ${res.status} after ${failCount} retries`)
+          }
+          return
+        }
+        failCount = 0
+        const job = await res.json()
+        console.log(`[v0] Progress poll | Status: ${job.Status} | Bible_R2_Key: ${job.Bible_R2_Key || "null"} | Script_R2_Key: ${job.Script_R2_Key || "null"}`)
+        setProgressStatus(job.Status || "Unknown")
+
+        // If done, stop polling
+        if (["S9_Done", "Error", "Failed"].includes(job.Status)) {
+          stopped = true
+          setProgressPolling(false)
+          return
+        }
+
+        const isCheck = ["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)
+        const r2Key = job.Bible_R2_Key || job.Script_R2_Key
         if (isCheck && r2Key) {
           consecutiveHits++
           if (consecutiveHits >= 2) {
@@ -444,10 +463,18 @@ export function ReviewRoom(props: ReviewRoomProps) {
         } else {
           consecutiveHits = 0
         }
-      } catch { /* ignore */ }
+      } catch (err) {
+        failCount++
+        console.log(`[v0] Progress poll exception (fail #${failCount}):`, err)
+        if (failCount >= 3) {
+          stopped = true
+          setProgressPolling(false)
+          setProgressError("Network error - could not reach backend")
+        }
+      }
     }
 
-    poll() // immediate first check
+    poll()
     const interval = setInterval(poll, 10000)
     return () => { stopped = true; clearInterval(interval) }
   }, [isProgress, isProgress ? (props as ProgressProps).jobRecordId : null])
@@ -484,6 +511,16 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
         <div className="flex flex-1 items-center justify-center">
           <div className="flex w-full max-w-md flex-col items-center gap-6 px-6">
+            {progressError ? (
+              <div className="flex flex-col items-center gap-3 text-center">
+                <X className="h-10 w-10 text-red-400" />
+                <p className="text-sm font-medium text-red-400">{progressError}</p>
+                <button onClick={onClose} className="mt-2 rounded-lg border border-border/40 px-4 py-2 text-xs text-muted-foreground hover:bg-secondary/30">
+                  Back to Home
+                </button>
+              </div>
+            ) : (
+              <>
             {progressPolling && <Loader2 className="h-10 w-10 animate-spin text-[var(--brand-pink)]" />}
             {!progressPolling && <CheckCircle2 className="h-10 w-10 text-emerald-400" />}
 
@@ -523,6 +560,8 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
             {progressPolling && (
               <p className="text-[10px] text-muted-foreground/50">Auto-refreshing every 10 seconds...</p>
+            )}
+              </>
             )}
           </div>
         </div>
