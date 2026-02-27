@@ -14,10 +14,18 @@ export default function Page() {
   const [progressData, setProgressData] = useState<{ jobRecordId: string; projectTitle: string } | null>(null)
   const [insertedProjects, setInsertedProjects] = useState<InsertedProject[]>([])
 
-  // Restore insertedProjects from localStorage on mount
-  // Deduplicate by BOTH id AND airtableRecordId (earlier double-write bug created dupes)
+  // Restore insertedProjects from localStorage on mount.
+  // Version key: bump to force-clear stale data from previous buggy builds.
+  const STORAGE_VERSION = "v2"
   useEffect(() => {
     try {
+      const ver = localStorage.getItem("insertedProjects_version")
+      if (ver !== STORAGE_VERSION) {
+        // Clear stale data from previous builds
+        localStorage.removeItem("insertedProjects")
+        localStorage.setItem("insertedProjects_version", STORAGE_VERSION)
+        return
+      }
       const saved = localStorage.getItem("insertedProjects")
       if (saved) {
         const parsed: InsertedProject[] = JSON.parse(saved)
@@ -30,7 +38,6 @@ export default function Page() {
           if (p.airtableRecordId) seenRecords.add(p.airtableRecordId)
           return true
         })
-        // Always rewrite to clean up any stale data
         localStorage.setItem("insertedProjects", JSON.stringify(deduped))
         setInsertedProjects(deduped)
       }
@@ -53,6 +60,10 @@ export default function Page() {
       if (project.airtableRecordId && prev.some((p) => p.airtableRecordId === project.airtableRecordId)) return prev
       return [project, ...prev]
     })
+  }, [])
+
+  const handleProjectDelete = useCallback((id: string) => {
+    setInsertedProjects((prev) => prev.filter((p) => p.id !== id))
   }, [])
 
   const handleProjectUpdate = useCallback((id: string, updates: Partial<InsertedProject>) => {
@@ -132,6 +143,7 @@ export default function Page() {
         <WorkspaceSection onProjectInsert={handleProjectInsert} onProjectUpdate={handleProjectUpdate} onStepReviewReady={handleStepReviewReady} />
         <div className="my-5 h-px bg-border/20" />
         <ProjectsSection
+          onProjectDelete={handleProjectDelete}
           onProjectClick={async (id) => {
             // Check if this is a real project (dispatched, has airtableRecordId)
             const inserted = insertedProjects.find((p) => p.id === id)

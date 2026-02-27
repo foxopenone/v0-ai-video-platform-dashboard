@@ -62,10 +62,11 @@ const GRADIENTS = [
 
 interface ProjectsSectionProps {
   onProjectClick?: (projectId: string) => void | Promise<void>
+  onProjectDelete?: (projectId: string) => void
   insertedProjects?: Project[]
 }
 
-export function ProjectsSection({ onProjectClick, insertedProjects = [] }: ProjectsSectionProps) {
+export function ProjectsSection({ onProjectClick, onProjectDelete, insertedProjects = [] }: ProjectsSectionProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -164,6 +165,17 @@ export function ProjectsSection({ onProjectClick, insertedProjects = [] }: Proje
                         {project.episodes} EP
                       </span>
                     </div>
+
+                    {/* Delete button for dispatched (inserted) projects */}
+                    {project.airtableRecordId !== undefined && onProjectDelete && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onProjectDelete(project.id) }}
+                        className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-background/60 text-muted-foreground/60 opacity-0 backdrop-blur-sm transition-opacity hover:bg-red-500/20 hover:text-red-400 group-hover:opacity-100"
+                        aria-label="Remove project"
+                      >
+                        <span className="text-[10px] leading-none">&times;</span>
+                      </button>
+                    )}
 
                     {/* Bottom info */}
                     <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1.5 bg-gradient-to-t from-background/95 via-background/70 to-transparent px-2.5 pb-2.5 pt-10">
