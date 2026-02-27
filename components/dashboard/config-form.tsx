@@ -292,13 +292,14 @@ export function ConfigForm({
       setSubmitted(true)
       clearUploads?.()
 
-      // Build real title from first file name or EP count
+      // Build title from first file name. Fallback to "New Project" if name is empty/numeric.
       const firstFile = r2Entries[0]?.filename || ""
       const baseName = firstFile.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ").trim()
       const epCount = r2Entries.length
-      const projectTitle = baseName
+      const isValidName = baseName.length > 0 && !/^\d+$/.test(baseName)
+      const projectTitle = isValidName
         ? `${baseName}${epCount > 1 ? ` +${epCount - 1} EP` : ""}`
-        : `Project (${epCount} EP)`
+        : `New Project (${epCount} EP)`
 
       // Parse dispatch response — only use Job_Record_ID (recXXXX)
       let airtableRecordId = ""
@@ -322,12 +323,7 @@ export function ConfigForm({
         airtableRecordId: airtableRecordId || undefined,
       }
       onProjectInsert?.(newProject)
-
-      // Persist to localStorage so page refresh doesn't lose recXXXX projects
-      try {
-        const existing = JSON.parse(localStorage.getItem("insertedProjects") || "[]")
-        localStorage.setItem("insertedProjects", JSON.stringify([newProject, ...existing]))
-      } catch {}
+      // localStorage persistence handled by page.tsx useEffect -- no double-write
 
       // Poll Airtable Jobs table via /api/job-status for status changes
       if (airtableRecordId) {

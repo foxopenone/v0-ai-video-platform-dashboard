@@ -14,11 +14,24 @@ export default function Page() {
   const [progressData, setProgressData] = useState<{ jobRecordId: string; projectTitle: string } | null>(null)
   const [insertedProjects, setInsertedProjects] = useState<InsertedProject[]>([])
 
-  // Restore insertedProjects from localStorage on mount
+  // Restore insertedProjects from localStorage on mount (deduplicate by id)
   useEffect(() => {
     try {
       const saved = localStorage.getItem("insertedProjects")
-      if (saved) setInsertedProjects(JSON.parse(saved))
+      if (saved) {
+        const parsed: InsertedProject[] = JSON.parse(saved)
+        const seen = new Set<string>()
+        const deduped = parsed.filter((p) => {
+          if (seen.has(p.id)) return false
+          seen.add(p.id)
+          return true
+        })
+        // Clean up localStorage if duplicates were found
+        if (deduped.length !== parsed.length) {
+          localStorage.setItem("insertedProjects", JSON.stringify(deduped))
+        }
+        setInsertedProjects(deduped)
+      }
     } catch {}
   }, [])
 
