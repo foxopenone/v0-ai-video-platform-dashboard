@@ -297,22 +297,15 @@ export function ConfigForm({
         ? `${baseName}${epCount > 1 ? ` +${epCount - 1} EP` : ""}`
         : `Project (${epCount} EP)`
 
-      // Parse dispatch response to get Airtable Record ID
+      // Parse dispatch response — only use Job_Record_ID (recXXXX)
       let airtableRecordId = ""
       try {
         const resJson = await res.json()
-        // n8n should return the Airtable Record ID (e.g. "recXXXX")
-        if (resJson.Job_Record_ID) {
+        if (resJson.Job_Record_ID && String(resJson.Job_Record_ID).startsWith("rec")) {
           airtableRecordId = String(resJson.Job_Record_ID)
-        } else if (resJson.record_id) {
-          airtableRecordId = String(resJson.record_id)
-        } else if (resJson.id) {
-          airtableRecordId = String(resJson.id)
         }
-        console.log("[v0] Dispatch response:", resJson, "recordId:", airtableRecordId)
       } catch {
-        // Response may not be JSON
-        console.log("[v0] Dispatch response not JSON, no record_id available")
+        // Response not JSON
       }
 
       onProjectInsert?.({
