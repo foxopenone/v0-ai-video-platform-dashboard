@@ -66,26 +66,27 @@ export default function Page() {
         <div className="my-5 h-px bg-border/20" />
         <ProjectsSection
           onProjectClick={async (id) => {
-            // Check if there's real bible data available in Supabase
-            try {
-              console.log("[v0] Card click: checking /api/bible-ready?latest=true")
-              const res = await fetch(`/api/bible-ready?latest=true`)
-              console.log("[v0] Card click: response status", res.status)
-              const data = await res.json()
-              console.log("[v0] Card click: response data", data)
-              if (data.ready && data.Bible_R2_Key) {
-                setStepReviewData({
-                  jobRecordId: data.Job_Record_ID,
-                  lockToken: data.Lock_Token || "",
-                  bibleR2Key: data.Bible_R2_Key,
-                  projectTitle: `Project ${data.Job_ID || id}`,
-                })
-                return
+            // Check if this is an inserted project with an Airtable record
+            const inserted = insertedProjects.find((p) => p.id === id)
+            if (inserted?.airtableRecordId) {
+              try {
+                const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(inserted.airtableRecordId)}`)
+                if (res.ok) {
+                  const job = await res.json()
+                  if (job.Status === "S3_Bible_Check" && job.Bible_R2_Key) {
+                    setStepReviewData({
+                      jobRecordId: inserted.airtableRecordId,
+                      lockToken: job.Lock_Token || "",
+                      bibleR2Key: job.Bible_R2_Key,
+                      projectTitle: inserted.title,
+                    })
+                    return
+                  }
+                }
+              } catch {
+                // Fall through to legacy
               }
-            } catch (err) {
-              console.log("[v0] Card click: bible-ready check failed", err)
             }
-            // Fallback to legacy mock review
             setReviewProjectId(id)
           }}
           insertedProjects={insertedProjects}

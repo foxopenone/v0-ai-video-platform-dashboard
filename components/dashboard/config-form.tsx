@@ -125,6 +125,7 @@ export interface InsertedProject {
   date: string
   thumbnail: null
   episodes: number
+  airtableRecordId?: string
 }
 
 export interface StepReviewData {
@@ -240,9 +241,6 @@ export function ConfigForm({
       filename: entry.filename,
     }))
 
-    // Build callback URL for n8n to POST when Bible is ready
-    const origin = typeof window !== "undefined" ? window.location.origin : ""
-
     const payload = {
       id: jobId,
       Video_Files: videoFiles,
@@ -255,9 +253,6 @@ export function ConfigForm({
       Voice_Select: selectedVoice || "default_voice",
       BGM_Select: selectedBgm || "default_bgm",
       Work_Mode: mode === "full_auto" ? "Full_Auto" : "Step_Review",
-      ...(mode === "step_review" && {
-        callback_url: `${origin}/api/bible-ready`,
-      }),
     }
 
     try {
@@ -301,24 +296,22 @@ export function ConfigForm({
         ? `${baseName}${epCount > 1 ? ` +${epCount - 1} EP` : ""}`
         : `Project (${epCount} EP)`
 
-      // Parse dispatch response to get backend Job_ID (Airtable ID)
-      let backendJobId = jobId
+      // Parse dispatch response to get Airtable Record ID
+      let airtableRecordId = ""
       try {
-        const resText = await res.text()
-        console.log("[v0] Dispatch raw response:", resText)
-        try {
-          const resJson = JSON.parse(resText)
-          console.log("[v0] Dispatch parsed:", resJson)
-          if (resJson.Job_ID !== undefined) {
-            backendJobId = String(resJson.Job_ID)
-          } else if (resJson.id !== undefined) {
-            backendJobId = String(resJson.id)
-          }
-        } catch {
-          console.log("[v0] Dispatch response not JSON")
+        const resJson = await res.json()
+        // n8n should return the Airtable Record ID (e.g. "recXXXX")
+        if (resJson.Job_Record_ID) {
+          airtableRecordId = String(resJson.Job_Record_ID)
+        } else if (resJson.record_id) {
+          airtableRecordId = String(resJson.record_id)
+        } else if (resJson.id) {
+          airtableRecordId = String(resJson.id)
         }
+        console.log("[v0] Dispatch response:", resJson, "recordId:", airtableRecordId)
       } catch {
-        console.log("[v0] Could not read dispatch response body")
+        // Response may not be JSON
+        console.log("[v0] Dispatch response not JSON, no record_id available")
       }
 
       onProjectInsert?.({
@@ -329,14 +322,14 @@ export function ConfigForm({
         date: new Date().toISOString().slice(0, 10),
         thumbnail: null,
         episodes: r2Entries.length,
+        airtableRecordId: airtableRecordId || undefined,
       })
 
-      // If Step_Review mode, start polling /api/bible-ready for n8n callback
-      if (mode === "step_review") {
-        console.log("[v0] Polling: backendJobId =", backendJobId, "frontendJobId =", jobId)
+      // Poll Airtable Jobs table via /api/job-status for status changes
+      if (airtableRecordId) {
         let failCount = 0
         const MAX_FAILS = 5
-        const MAX_POLLS = 120
+        const MAX_POLLS = 60 // 10 min at 10s intervals
         let pollCount = 0
 
         const pollInterval = setInterval(async () => {
@@ -346,37 +339,29 @@ export function ConfigForm({
             return
           }
           try {
-            // Try exact match first, then fallback to latest
-            let pollRes = await fetch(`/api/bible-ready?job_id=${encodeURIComponent(backendJobId)}`)
+            const pollRes = await fetch(`/api/job-status?record_id=${encodeURIComponent(airtableRecordId)}`)
             if (!pollRes.ok) throw new Error(`HTTP ${pollRes.status}`)
-            let pollData = await pollRes.json()
-
-            // If exact match fails, try latest entry (handles Job_ID mismatch)
-            if (!pollData.ready && pollCount % 3 === 0) {
-              pollRes = await fetch(`/api/bible-ready?latest=true`)
-              if (pollRes.ok) pollData = await pollRes.json()
-            }
-
-            console.log("[v0] Poll #" + pollCount, "ready:", pollData.ready, pollData.Job_ID || "")
+            const job = await pollRes.json()
+            console.log("[v0] Poll #" + pollCount, "Status:", job.Status)
             failCount = 0
-            if (pollData.ready) {
+
+            if (job.Status === "S3_Bible_Check" && job.Bible_R2_Key) {
               clearInterval(pollInterval)
               onStepReviewReady?.({
-                jobRecordId: pollData.Job_Record_ID,
-                lockToken: pollData.Lock_Token || "",
-                bibleR2Key: pollData.Bible_R2_Key,
+                jobRecordId: airtableRecordId,
+                lockToken: job.Lock_Token || "",
+                bibleR2Key: job.Bible_R2_Key,
                 projectTitle,
                 frontendJobId: jobId,
               })
             }
-          } catch (err) {
+          } catch {
             failCount++
-            console.log("[v0] Poll error #" + failCount, err)
             if (failCount >= MAX_FAILS) {
               clearInterval(pollInterval)
             }
           }
-        }, 5000)
+        }, 10000) // Poll every 10 seconds per backend spec
       }
 
       setTimeout(() => {
