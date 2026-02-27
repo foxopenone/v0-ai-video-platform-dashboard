@@ -782,7 +782,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
   // ===== LEGACY RENDER (unchanged) ===================================
   // ===================================================================
   const isReadOnly = project?.status === "completed"
-  const isProcessing = project?.status === "processing"
+  // For legacy/placeholder cards, never block UI with processing spinner.
+  // isProcessing only applies to real projects in progress mode (handled above).
+  const isProcessing = false
   const finalized = episodes.filter((e) => e.status === "locked").length
   const currentEp = episodes[selectedEp] || null
 
