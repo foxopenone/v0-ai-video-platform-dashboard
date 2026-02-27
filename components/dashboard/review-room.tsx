@@ -62,8 +62,6 @@ interface ProgressProps {
   mode: "progress"
   jobRecordId: string
   projectTitle: string
-  supabaseUserId?: string
-  numericJobId?: number
   onClose: () => void
   /** Called when status reaches a Check state -- parent should switch to step_review */
   onReviewReady?: (data: { lockToken: string; bibleR2Key: string; currentStatus: string }) => void
@@ -405,7 +403,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
   useEffect(() => {
     if (!isProgress) return
-    const { jobRecordId, onReviewReady, supabaseUserId, numericJobId } = props as ProgressProps
+    const { jobRecordId, onReviewReady } = props as ProgressProps
     let consecutiveHits = 0
     let stopped = false
     let failCount = 0
@@ -437,16 +435,10 @@ export function ReviewRoom(props: ReviewRoomProps) {
         }
 
         const isCheck = ["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)
-        let r2Key = job.Bible_R2_Key || job.Script_R2_Key
-        // Construct R2 key from convention if Airtable field is empty
-        if (!r2Key && isCheck && supabaseUserId) {
-          const jobNum = job.Job_ID || numericJobId
-          if (jobNum) {
-            r2Key = job.Status === "S3_Bible_Check"
-              ? `users/${supabaseUserId}/jobs/${jobNum}/03_brain/series_bible.json`
-              : `users/${supabaseUserId}/jobs/${jobNum}/04_script/script.json`
-            console.log(`[v0] Progress: constructed R2 key: ${r2Key}`)
-          }
+        // R2 key is now constructed server-side in job-status API from Folder_A0_ID
+        const r2Key = job.Bible_R2_Key || job.Script_R2_Key
+        if (isCheck && !r2Key) {
+          console.error(`[FATAL] Status=${job.Status} but R2 key is null. Job_ID=${job.Job_ID}`)
         }
         if (isCheck && r2Key) {
           consecutiveHits++

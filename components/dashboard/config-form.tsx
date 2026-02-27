@@ -363,27 +363,18 @@ export function ConfigForm({
 
             // Debug: print every poll result + raw Airtable fields
             console.log(`[v0] Poll #${pollCount} | Status: ${job.Status} | Bible_R2_Key: ${job.Bible_R2_Key || "null"} | Lock_Token: ${job.Lock_Token || "null"}`)
-            if (job._raw_fields) console.log(`[v0] Raw Airtable fields:`, job._raw_fields)
+
 
             // Update card progress
             const progress = stageProgress[job.Status] ?? 50
             onProjectUpdate?.(jobId, { progress })
 
             // Check for review-check status with R2 Key
-            // If Airtable doesn't have the R2 key field, construct from convention
+            // R2 key is now constructed server-side in job-status API from Folder_A0_ID
             const isReviewCheck = ["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)
-            const jobNum = job.Job_ID || numericJobId
-            let r2Key = job.Bible_R2_Key || job.Script_R2_Key || job.VO_R2_Key
-            if (!r2Key && isReviewCheck && supabaseUserId && jobNum) {
-              if (job.Status === "S3_Bible_Check") {
-                r2Key = `users/${supabaseUserId}/jobs/${jobNum}/03_brain/series_bible.json`
-              } else if (job.Status === "S5_Script_Check") {
-                r2Key = `users/${supabaseUserId}/jobs/${jobNum}/04_script/script.json`
-              }
-              console.log(`[v0] Constructed R2 key from convention: ${r2Key}`)
-            }
+            const r2Key = job.Bible_R2_Key || job.Script_R2_Key
             if (isReviewCheck && !r2Key) {
-              console.error(`[FATAL] Status is ${job.Status} but cannot determine Bible_R2_Key. Airtable field: ${job.Bible_R2_Key}, userId: ${supabaseUserId}, jobNum: ${jobNum}`)
+              console.error(`[FATAL] Status=${job.Status} but R2 key is null. Job_ID=${job.Job_ID}`)
             }
             if (isReviewCheck && r2Key) {
               consecutiveHits++

@@ -50,21 +50,46 @@ export async function GET(req: NextRequest) {
     const f = record.fields || {}
 
     // Return fields with original Airtable names — no renaming
-    // Also pass through ALL fields so frontend can debug what Airtable actually has
     console.log("[job-status] Record fields:", JSON.stringify(f))
+
+    // Extract user UUID and Job_ID from Folder_A0_ID if available
+    // Format: "users/{uuid}/jobs/{jobNum}/02_a0"
+    let extractedUserId: string | null = null
+    const folderPath = f.Folder_A0_ID || f.Folder_AA_ID || ""
+    const folderMatch = folderPath.match?.(/users\/([a-f0-9-]+)\/jobs\/(\d+)/)
+    if (folderMatch) {
+      extractedUserId = folderMatch[1]
+    }
+
+    // Construct Bible R2 key from convention since Airtable doesn't have Bible_R2_Key field
+    let bibleR2Key: string | null = null
+    if (f.Status === "S3_Bible_Check" && extractedUserId && f.Job_ID) {
+      bibleR2Key = `users/${extractedUserId}/jobs/${f.Job_ID}/03_brain/series_bible.json`
+      console.log("[job-status] Constructed Bible R2 key:", bibleR2Key)
+    }
+
+    let scriptR2Key: string | null = null
+    if (f.Status === "S5_Script_Check" && extractedUserId && f.Job_ID) {
+      scriptR2Key = `users/${extractedUserId}/jobs/${f.Job_ID}/04_script/script.json`
+      console.log("[job-status] Constructed Script R2 key:", scriptR2Key)
+    }
+
     return NextResponse.json({
       Job_Record_ID: record.id,
       Job_ID: f.Job_ID ?? null,
       Status: f.Status ?? "Unknown",
       Work_Mode: f.Work_Mode ?? null,
       Lock_Token: f.Lock_Token ?? null,
-      // Try multiple possible field name variants for R2 keys
-      Bible_R2_Key: f.Bible_R2_Key ?? f.bible_r2_key ?? f.Bible_r2_Key ?? null,
-      Script_R2_Key: f.Script_R2_Key ?? f.script_r2_key ?? null,
-      VO_R2_Key: f.VO_R2_Key ?? f.vo_r2_key ?? null,
+      Run_ID: f.Run_ID ?? null,
+      // Bible_R2_Key: constructed from convention (Airtable doesn't have this field)
+      Bible_R2_Key: bibleR2Key,
+      Script_R2_Key: scriptR2Key,
+      VO_R2_Key: null,
       Video_Parts: f.Video_Parts ?? null,
-      // Debug: pass all raw fields so frontend can inspect
-      _raw_fields: f,
+      // Pass extracted user ID so frontend doesn't need localStorage for it
+      Extracted_User_ID: extractedUserId,
+      Folder_A0_ID: f.Folder_A0_ID ?? null,
+      Folder_AA_ID: f.Folder_AA_ID ?? null,
     })
   } catch (err) {
     console.error("[job-status] Fetch error:", err)

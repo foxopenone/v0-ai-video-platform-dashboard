@@ -11,21 +11,13 @@ import type { InsertedProject, StepReviewData } from "@/components/dashboard/con
 export default function Page() {
   const [reviewProjectId, setReviewProjectId] = useState<string | null>(null)
   const [stepReviewData, setStepReviewData] = useState<StepReviewData | null>(null)
-  const [progressData, setProgressData] = useState<{ jobRecordId: string; projectTitle: string; supabaseUserId?: string; numericJobId?: number } | null>(null)
+  const [progressData, setProgressData] = useState<{ jobRecordId: string; projectTitle: string } | null>(null)
   const [insertedProjects, setInsertedProjects] = useState<InsertedProject[]>([])
 
   // Restore insertedProjects from localStorage on mount.
-  // Version key: bump to force-clear stale data from previous buggy builds.
-  const STORAGE_VERSION = "v4"
+  // Never wipe -- only deduplicate. Preserve existing dispatched projects.
   useEffect(() => {
     try {
-      const ver = localStorage.getItem("insertedProjects_version")
-      if (ver !== STORAGE_VERSION) {
-        // Clear stale data from previous builds
-        localStorage.removeItem("insertedProjects")
-        localStorage.setItem("insertedProjects_version", STORAGE_VERSION)
-        return
-      }
       const saved = localStorage.getItem("insertedProjects")
       if (saved) {
         const parsed: InsertedProject[] = JSON.parse(saved)
@@ -108,8 +100,7 @@ export default function Page() {
         mode="progress"
         jobRecordId={progressData.jobRecordId}
         projectTitle={progressData.projectTitle}
-        supabaseUserId={progressData.supabaseUserId}
-        numericJobId={progressData.numericJobId}
+
         onClose={() => setProgressData(null)}
         onReviewReady={(data) => {
           // Transition from progress -> step_review
@@ -166,20 +157,12 @@ export default function Page() {
                 const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(recordId)}`)
                 if (res.ok) {
                   const job = await res.json()
+                  console.log(`[v0] Card click job-status: Status=${job.Status}, Bible_R2_Key=${job.Bible_R2_Key}, Job_ID=${job.Job_ID}`)
                   const isReviewStatus = ["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)
-                  // Use Airtable field if available, otherwise construct from convention
-                  let r2Key = job.Bible_R2_Key || job.Script_R2_Key
-                  if (!r2Key && isReviewStatus && inserted.supabaseUserId) {
-                    const jobNum = job.Job_ID || inserted.numericJobId
-                    if (jobNum) {
-                      r2Key = job.Status === "S3_Bible_Check"
-                        ? `users/${inserted.supabaseUserId}/jobs/${jobNum}/03_brain/series_bible.json`
-                        : `users/${inserted.supabaseUserId}/jobs/${jobNum}/04_script/script.json`
-                      console.log(`[v0] Constructed R2 key: ${r2Key}`)
-                    }
-                  }
+                  // R2 key is now constructed server-side from Folder_A0_ID convention
+                  const r2Key = job.Bible_R2_Key || job.Script_R2_Key
                   if (isReviewStatus && !r2Key) {
-                    console.error(`[FATAL] Status=${job.Status} but Bible_R2_Key is null. Airtable: ${job.Bible_R2_Key}, userId: ${inserted.supabaseUserId}, Job_ID: ${job.Job_ID}`)
+                    console.error(`[FATAL] Status=${job.Status} but R2 key is null. Job_ID=${job.Job_ID}`)
                   }
                   if (isReviewStatus && r2Key) {
                     // Already in review state -> go directly to step_review
@@ -197,12 +180,7 @@ export default function Page() {
                 // Network error -- still open progress mode (it will poll)
               }
               // Not in review status -> open progress mode (shows real status + auto-transitions)
-              setProgressData({
-                jobRecordId: recordId,
-                projectTitle: inserted.title,
-                supabaseUserId: inserted.supabaseUserId,
-                numericJobId: inserted.numericJobId,
-              })
+              setProgressData({ jobRecordId: recordId, projectTitle: inserted.title })
               return
             }
 
