@@ -11,14 +11,20 @@ import type { InsertedProject, StepReviewData } from "@/components/dashboard/con
 export default function Page() {
   const [reviewProjectId, setReviewProjectId] = useState<string | null>(null)
   const [stepReviewData, setStepReviewData] = useState<StepReviewData | null>(null)
+  const [progressData, setProgressData] = useState<{ jobRecordId: string; projectTitle: string } | null>(null)
   const [insertedProjects, setInsertedProjects] = useState<InsertedProject[]>([])
 
   const handleProjectInsert = useCallback((project: InsertedProject) => {
     setInsertedProjects((prev) => [project, ...prev])
   }, [])
 
+  const handleProjectUpdate = useCallback((id: string, updates: Partial<InsertedProject>) => {
+    setInsertedProjects((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, ...updates } : p))
+    )
+  }, [])
+
   const handleStepReviewReady = useCallback((data: StepReviewData) => {
-    // Update the inserted project card status to pending_review
     if (data.frontendJobId) {
       setInsertedProjects((prev) =>
         prev.map((p) =>
@@ -28,11 +34,11 @@ export default function Page() {
         )
       )
     }
-    // Auto-open ReviewRoom in step_review mode immediately
+    setProgressData(null) // close progress if open
     setStepReviewData(data)
   }, [])
 
-  // Step Review mode (real Bible data from n8n callback)
+  // Step Review mode (real data from R2)
   if (stepReviewData) {
     return (
       <ReviewRoom
@@ -47,7 +53,30 @@ export default function Page() {
     )
   }
 
-  // Legacy review mode (clicking existing project cards)
+  // Progress mode (real project, waiting for review status)
+  if (progressData) {
+    return (
+      <ReviewRoom
+        mode="progress"
+        jobRecordId={progressData.jobRecordId}
+        projectTitle={progressData.projectTitle}
+        onClose={() => setProgressData(null)}
+        onReviewReady={(data) => {
+          // Transition from progress -> step_review
+          setStepReviewData({
+            jobRecordId: progressData.jobRecordId,
+            lockToken: data.lockToken,
+            bibleR2Key: data.bibleR2Key,
+            currentStatus: data.currentStatus,
+            projectTitle: progressData.projectTitle,
+          })
+          setProgressData(null)
+        }}
+      />
+    )
+  }
+
+  // Legacy review mode (placeholder/demo cards only)
   if (reviewProjectId) {
     return (
       <ReviewRoom
@@ -63,7 +92,7 @@ export default function Page() {
       <Header />
 
       <main className="mx-auto w-full max-w-[1400px] flex-1 px-6 py-5">
-        <WorkspaceSection onProjectInsert={handleProjectInsert} onStepReviewReady={handleStepReviewReady} />
+        <WorkspaceSection onProjectInsert={handleProjectInsert} onProjectUpdate={handleProjectUpdate} onStepReviewReady={handleStepReviewReady} />
         <div className="my-5 h-px bg-border/20" />
         <ProjectsSection
           onProjectClick={async (id) => {
@@ -72,7 +101,7 @@ export default function Page() {
             const recordId = inserted?.airtableRecordId
 
             if (recordId) {
-              // Real project: query Airtable for current status
+              // REAL PROJECT: never falls to mock. Query Airtable once to check current state.
               try {
                 const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(recordId)}`)
                 if (res.ok) {
@@ -80,7 +109,7 @@ export default function Page() {
                   const isReviewStatus = ["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)
                   const r2Key = job.Bible_R2_Key || job.Script_R2_Key
                   if (isReviewStatus && r2Key) {
-                    // Ready for review -> open step_review ReviewRoom
+                    // Already in review state -> go directly to step_review
                     setStepReviewData({
                       jobRecordId: recordId,
                       lockToken: job.Lock_Token || "",
@@ -92,13 +121,14 @@ export default function Page() {
                   }
                 }
               } catch {
-                // Network error
+                // Network error -- still open progress mode (it will poll)
               }
-              // Real project but not in review status (still processing) -> do nothing
+              // Not in review status -> open progress mode (shows real status + auto-transitions)
+              setProgressData({ jobRecordId: recordId, projectTitle: inserted.title })
               return
             }
 
-            // Placeholder/demo card -> open legacy ReviewRoom with mock data
+            // PLACEHOLDER card (no airtableRecordId) -> open legacy ReviewRoom with demo data
             setReviewProjectId(id)
           }}
           insertedProjects={insertedProjects}

@@ -58,6 +58,16 @@ interface StepReviewProps {
   onClose: () => void
 }
 
+// ---------- Progress Props (real project, not yet in review status) ----------
+interface ProgressProps {
+  mode: "progress"
+  jobRecordId: string
+  projectTitle: string
+  onClose: () => void
+  /** Called when status reaches a Check state -- parent should switch to step_review */
+  onReviewReady?: (data: { lockToken: string; bibleR2Key: string; currentStatus: string }) => void
+}
+
 // ---------- Legacy Props ----------
 interface LegacyProps {
   mode?: "legacy"
@@ -65,7 +75,7 @@ interface LegacyProps {
   onClose: () => void
 }
 
-type ReviewRoomProps = StepReviewProps | LegacyProps
+type ReviewRoomProps = StepReviewProps | ProgressProps | LegacyProps
 
 // ========== Character Card Component ==========
 function CharacterCard({
@@ -163,6 +173,7 @@ function CharacterCard({
 // ========== Main Component ==========
 export function ReviewRoom(props: ReviewRoomProps) {
   const isStepReview = props.mode === "step_review"
+  const isProgress = props.mode === "progress"
   const onClose = props.onClose
 
   // Step Review state
@@ -304,9 +315,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
     }
   }, [getCallbackInfo, isStepReview, props])
 
-  // ── Legacy: Load project data (check Supabase for real data first) ──
+  // ── Legacy: Load project data ──
   useEffect(() => {
-    if (isStepReview) return
+    if (isStepReview || isProgress) return
     const { projectId } = props as LegacyProps
     setLoading(true)
 
@@ -390,6 +401,125 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const handleDownload = useCallback(async (epId: string) => {
     await downloadEpisode(epId)
   }, [])
+
+  // ===================================================================
+  // ===== PROGRESS MODE (real project, waiting for review status) =====
+  // ===================================================================
+  const [progressStatus, setProgressStatus] = useState("Loading...")
+  const [progressPolling, setProgressPolling] = useState(true)
+
+  useEffect(() => {
+    if (!isProgress) return
+    const { jobRecordId, onReviewReady } = props as ProgressProps
+    let consecutiveHits = 0
+    let stopped = false
+
+    const poll = async () => {
+      if (stopped) return
+      try {
+        const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}`)
+        if (!res.ok) return
+        const job = await res.json()
+        setProgressStatus(job.Status || "Unknown")
+
+        const isCheck = ["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)
+        const r2Key = job.Bible_R2_Key || job.Script_R2_Key
+        if (isCheck && r2Key) {
+          consecutiveHits++
+          if (consecutiveHits >= 2) {
+            stopped = true
+            setProgressPolling(false)
+            onReviewReady?.({ lockToken: job.Lock_Token || "", bibleR2Key: r2Key, currentStatus: job.Status })
+            return
+          }
+        } else {
+          consecutiveHits = 0
+        }
+      } catch { /* ignore */ }
+    }
+
+    poll() // immediate first check
+    const interval = setInterval(poll, 10000)
+    return () => { stopped = true; clearInterval(interval) }
+  }, [isProgress, isProgress ? (props as ProgressProps).jobRecordId : null])
+
+  if (isProgress) {
+    const { projectTitle, jobRecordId } = props as ProgressProps
+
+    const STAGE_LABELS: Record<string, { label: string; pct: number }> = {
+      S1_Ingestion: { label: "Ingesting source files...", pct: 10 },
+      S2_Brain: { label: "AI is analyzing content...", pct: 30 },
+      S3_Bible_Check: { label: "Bible ready for review", pct: 45 },
+      S4_Script: { label: "Generating scripts...", pct: 50 },
+      S5_Script_Check: { label: "Scripts ready for review", pct: 65 },
+      S6_VO: { label: "Generating voice over...", pct: 75 },
+      S7_Render: { label: "Rendering video...", pct: 85 },
+      S8_Render: { label: "Final rendering in progress...", pct: 90 },
+      S9_Done: { label: "Complete!", pct: 100 },
+    }
+
+    const info = STAGE_LABELS[progressStatus] || { label: progressStatus, pct: 0 }
+
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col bg-background">
+        <header className="flex h-12 shrink-0 items-center justify-between border-b border-border/30 px-5">
+          <div className="flex items-center gap-2 text-sm">
+            <button onClick={onClose} className="text-muted-foreground transition-colors hover:text-foreground">Home</button>
+            <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
+            <span className="font-medium text-foreground">{projectTitle}</span>
+          </div>
+          <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border/30 text-muted-foreground transition-colors hover:bg-secondary/40 hover:text-foreground" aria-label="Close">
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+
+        <div className="flex flex-1 items-center justify-center">
+          <div className="flex w-full max-w-md flex-col items-center gap-6 px-6">
+            {progressPolling && <Loader2 className="h-10 w-10 animate-spin text-[var(--brand-pink)]" />}
+            {!progressPolling && <CheckCircle2 className="h-10 w-10 text-emerald-400" />}
+
+            <div className="text-center">
+              <p className="text-lg font-semibold text-foreground">{info.label}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Status: {progressStatus}
+              </p>
+              <p className="mt-0.5 text-[10px] text-muted-foreground/50">
+                Record: {jobRecordId}
+              </p>
+            </div>
+
+            {/* Progress bar */}
+            <div className="w-full">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-secondary/30">
+                <div
+                  className="h-full rounded-full transition-all duration-700"
+                  style={{
+                    width: `${info.pct}%`,
+                    background: "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
+                  }}
+                />
+              </div>
+              <p className="mt-1 text-right text-[10px] text-muted-foreground">{info.pct}%</p>
+            </div>
+
+            {/* S8 special message */}
+            {progressStatus === "S8_Render" && (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-center">
+                <p className="text-xs font-medium text-amber-400">Final Render Stage</p>
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  Video parts are being rendered. This may take several minutes.
+                </p>
+              </div>
+            )}
+
+            {progressPolling && (
+              <p className="text-[10px] text-muted-foreground/50">Auto-refreshing every 10 seconds...</p>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   // ===================================================================
   // ===== STEP REVIEW / REAL BIBLE RENDER =============================

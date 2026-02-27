@@ -326,10 +326,10 @@ export function ConfigForm({
       if (airtableRecordId) {
         let failCount = 0
         const MAX_FAILS = 5
-        const MAX_POLLS = 120 // 20 min at 10s intervals
+        const MAX_POLLS = 120
         let pollCount = 0
+        let consecutiveHits = 0 // debounce: need 2 consecutive hits to trigger
 
-        // Map pipeline stages to rough progress %
         const stageProgress: Record<string, number> = {
           S1_Ingestion: 10, S2_Brain: 30, S3_Bible_Check: 100,
           S4_Script: 50, S5_Script_Check: 100,
@@ -348,28 +348,39 @@ export function ConfigForm({
             const job = await pollRes.json()
             failCount = 0
 
-            // Update card progress based on pipeline stage
+            // Update card progress
             const progress = stageProgress[job.Status] ?? 50
             onProjectUpdate?.(jobId, { progress })
 
-            // Check for any review-check status
+            // Check for review-check status with R2 Key
             const isReviewCheck = ["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)
             const r2Key = job.Bible_R2_Key || job.Script_R2_Key || job.VO_R2_Key
             if (isReviewCheck && r2Key) {
-              clearInterval(pollInterval)
-              onStepReviewReady?.({
-                jobRecordId: airtableRecordId,
-                lockToken: job.Lock_Token || "",
-                bibleR2Key: r2Key,
-                currentStatus: job.Status,
-                projectTitle,
-                frontendJobId: jobId,
-              })
+              consecutiveHits++
+              // Debounce: only trigger after 2 consecutive hits (防止 Airtable 写 Key 慢半拍)
+              if (consecutiveHits >= 2) {
+                clearInterval(pollInterval)
+                onProjectUpdate?.(jobId, { status: "pending_review", progress: 100 })
+                onStepReviewReady?.({
+                  jobRecordId: airtableRecordId,
+                  lockToken: job.Lock_Token || "",
+                  bibleR2Key: r2Key,
+                  currentStatus: job.Status,
+                  projectTitle,
+                  frontendJobId: jobId,
+                })
+              }
+            } else {
+              consecutiveHits = 0
             }
 
-            // Done or failed -> stop polling
+            // Done or failed -> stop polling, update card
             if (["S9_Done", "Error", "Failed"].includes(job.Status)) {
               clearInterval(pollInterval)
+              onProjectUpdate?.(jobId, {
+                status: job.Status === "S9_Done" ? "completed" : "processing",
+                progress: job.Status === "S9_Done" ? 100 : progress,
+              })
             }
           } catch {
             failCount++

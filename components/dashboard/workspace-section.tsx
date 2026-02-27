@@ -9,10 +9,11 @@ import type { R2FileEntry } from "@/components/dashboard/upload-zone"
 
 interface WorkspaceSectionProps {
   onProjectInsert?: (project: InsertedProject) => void
+  onProjectUpdate?: (id: string, updates: Partial<InsertedProject>) => void
   onStepReviewReady?: (data: StepReviewData) => void
 }
 
-export function WorkspaceSection({ onProjectInsert, onStepReviewReady }: WorkspaceSectionProps) {
+export function WorkspaceSection({ onProjectInsert, onProjectUpdate, onStepReviewReady }: WorkspaceSectionProps) {
   const [r2Entries, setR2Entries] = useState<R2FileEntry[]>([])
   const [totalFileCount, setTotalFileCount] = useState(0)
   const clearUploadsRef = useRef<(() => void) | null>(null)
@@ -56,6 +57,7 @@ export function WorkspaceSection({ onProjectInsert, onStepReviewReady }: Workspa
             totalFileCount={totalFileCount}
             clearUploads={clearUploads}
             onProjectInsert={onProjectInsert}
+            onProjectUpdate={onProjectUpdate}
             onStepReviewReady={onStepReviewReady}
           />
         </div>
