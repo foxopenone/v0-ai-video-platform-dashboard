@@ -477,18 +477,26 @@ export function ReviewRoom(props: ReviewRoomProps) {
           return
         }
 
-        const isCheck = ["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)
-        // R2 key is now constructed server-side in job-status API from Folder_A0_ID
+        // Match both "S3_Bible_Check" and "S3_Bible" (Airtable may use either)
+        const isCheck = /^S3_Bible|^S5_Script/i.test(job.Status || "")
         const r2Key = job.Bible_R2_Key || job.Script_R2_Key
         if (isCheck && !r2Key) {
           console.error(`[FATAL] Status=${job.Status} but R2 key is null. Job_ID=${job.Job_ID}`)
         }
         if (isCheck && r2Key) {
+          // Go immediately -- no need to wait for consecutive hits
+          stopped = true
+          setProgressPolling(false)
+          onReviewReady?.({ lockToken: job.Lock_Token || "", bibleR2Key: r2Key, currentStatus: job.Status })
+          return
+        }
+        if (isCheck && !r2Key) {
+          // Status says check but no R2 key yet -- keep polling but bump hits
           consecutiveHits++
-          if (consecutiveHits >= 2) {
+          if (consecutiveHits >= 5) {
             stopped = true
             setProgressPolling(false)
-            onReviewReady?.({ lockToken: job.Lock_Token || "", bibleR2Key: r2Key, currentStatus: job.Status })
+            setProgressError(`Status is ${job.Status} but R2 key is missing after ${consecutiveHits} polls`)
             return
           }
         } else {
@@ -516,8 +524,10 @@ export function ReviewRoom(props: ReviewRoomProps) {
     const STAGE_LABELS: Record<string, { label: string; pct: number }> = {
       S1_Ingestion: { label: "Ingesting source files...", pct: 10 },
       S2_Brain: { label: "AI is analyzing content...", pct: 30 },
+      S3_Bible: { label: "Bible ready for review", pct: 45 },
       S3_Bible_Check: { label: "Bible ready for review", pct: 45 },
       S4_Script: { label: "Generating scripts...", pct: 50 },
+      S5_Script: { label: "Scripts ready for review", pct: 65 },
       S5_Script_Check: { label: "Scripts ready for review", pct: 65 },
       S6_VO: { label: "Generating voice over...", pct: 75 },
       S7_Render: { label: "Rendering video...", pct: 85 },

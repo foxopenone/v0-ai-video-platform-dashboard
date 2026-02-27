@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Play,
+  X,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { fetchProjects } from "@/lib/mock-api"
@@ -64,9 +65,10 @@ interface ProjectsSectionProps {
   onProjectClick?: (projectId: string) => void | Promise<void>
   onProjectDelete?: (projectId: string) => void
   insertedProjects?: Project[]
+  hiddenProjectIds?: Set<string>
 }
 
-export function ProjectsSection({ onProjectClick, onProjectDelete, insertedProjects = [] }: ProjectsSectionProps) {
+export function ProjectsSection({ onProjectClick, onProjectDelete, insertedProjects = [], hiddenProjectIds = new Set() }: ProjectsSectionProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -78,8 +80,8 @@ export function ProjectsSection({ onProjectClick, onProjectDelete, insertedProje
     })
   }, [])
 
-  // Merge inserted placeholder cards at the front
-  const allProjects = [...insertedProjects, ...projects]
+  // Merge inserted placeholder cards at the front, filter out hidden
+  const allProjects = [...insertedProjects, ...projects].filter((p) => !hiddenProjectIds.has(p.id))
 
   const scroll = (direction: "left" | "right") => {
     if (!scrollRef.current) return
@@ -166,14 +168,14 @@ export function ProjectsSection({ onProjectClick, onProjectDelete, insertedProje
                       </span>
                     </div>
 
-                    {/* Delete button for all dispatched (inserted) projects */}
-                    {insertedProjects.some((ip) => ip.id === project.id) && onProjectDelete && (
+                    {/* Delete button for all projects */}
+                    {onProjectDelete && (
                       <button
                         onClick={(e) => { e.stopPropagation(); onProjectDelete(project.id) }}
-                        className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-background/60 text-muted-foreground/60 opacity-0 backdrop-blur-sm transition-opacity hover:bg-red-500/20 hover:text-red-400 group-hover:opacity-100"
+                        className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-background/70 text-muted-foreground/70 opacity-0 backdrop-blur-sm transition-all hover:bg-red-500/20 hover:text-red-400 group-hover:opacity-100"
                         aria-label="Remove project"
                       >
-                        <span className="text-[10px] leading-none">&times;</span>
+                        <X className="h-3 w-3" />
                       </button>
                     )}
 

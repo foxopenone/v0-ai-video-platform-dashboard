@@ -12,6 +12,13 @@ export default function Page() {
   const [stepReviewData, setStepReviewData] = useState<StepReviewData | null>(null)
   const [progressData, setProgressData] = useState<{ jobRecordId: string; projectTitle: string } | null>(null)
   const [insertedProjects, setInsertedProjects] = useState<InsertedProject[]>([])
+  // Track hidden/deleted mock project IDs (not in insertedProjects)
+  const [hiddenProjectIds, setHiddenProjectIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem("hiddenProjectIds")
+      return saved ? new Set(JSON.parse(saved)) : new Set()
+    } catch { return new Set() }
+  })
 
   // Restore insertedProjects from localStorage on mount.
   // 1) Remove entries without airtableRecordId (useless - can't track)
@@ -65,7 +72,7 @@ export default function Page() {
         const job = await res.json()
         console.log(`[v0] Refresh card ${card.id}: Airtable Status=${job.Status}, Bible_R2_Key=${job.Bible_R2_Key || "null"}`)
 
-        if (["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)) {
+        if (/^S3_Bible|^S5_Script/i.test(job.Status || "")) {
           setInsertedProjects((prev) =>
             prev.map((p) => p.id === card.id ? { ...p, status: "pending_review" as const, progress: 100 } : p)
           )
@@ -108,7 +115,15 @@ export default function Page() {
   }, [])
 
   const handleProjectDelete = useCallback((id: string) => {
+    // Remove from insertedProjects if it's there
     setInsertedProjects((prev) => prev.filter((p) => p.id !== id))
+    // Also mark it hidden for mock/placeholder cards
+    setHiddenProjectIds((prev) => {
+      const next = new Set(prev)
+      next.add(id)
+      try { localStorage.setItem("hiddenProjectIds", JSON.stringify([...next])) } catch {}
+      return next
+    })
   }, [])
 
   const handleProjectUpdate = useCallback((id: string, updates: Partial<InsertedProject>) => {
@@ -215,46 +230,15 @@ export default function Page() {
         <div className="my-5 h-px bg-border/20" />
         <ProjectsSection
           onProjectDelete={handleProjectDelete}
-          onProjectClick={async (id) => {
-            // Check if this is a real project (dispatched, has airtableRecordId)
+          hiddenProjectIds={hiddenProjectIds}
+          onProjectClick={(id) => {
             const inserted = insertedProjects.find((p) => p.id === id)
             const recordId = inserted?.airtableRecordId
+            if (!recordId) return // Demo/placeholder card -- ignore
 
-            if (recordId) {
-              // REAL PROJECT: never falls to mock. Query Airtable once to check current state.
-              try {
-                const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(recordId)}`)
-                if (res.ok) {
-                  const job = await res.json()
-                  console.log(`[v0] Card click job-status: Status=${job.Status}, Bible_R2_Key=${job.Bible_R2_Key}, Job_ID=${job.Job_ID}`)
-                  const isReviewStatus = ["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)
-                  // R2 key is now constructed server-side from Folder_A0_ID convention
-                  const r2Key = job.Bible_R2_Key || job.Script_R2_Key
-                  if (isReviewStatus && !r2Key) {
-                    console.error(`[FATAL] Status=${job.Status} but R2 key is null. Job_ID=${job.Job_ID}`)
-                  }
-                  if (isReviewStatus && r2Key) {
-                    // Already in review state -> go directly to step_review
-                    setStepReviewData({
-                      jobRecordId: recordId,
-                      lockToken: job.Lock_Token || "",
-                      bibleR2Key: r2Key,
-                      currentStatus: job.Status,
-                      projectTitle: inserted.title,
-                    })
-                    return
-                  }
-                }
-              } catch {
-                // Network error -- still open progress mode (it will poll)
-              }
-              // Not in review status -> open progress mode (shows real status + auto-transitions)
-              setProgressData({ jobRecordId: recordId, projectTitle: inserted.title })
-              return
-            }
-
-            // Placeholder/demo card with no airtableRecordId -- do nothing (not a real project)
-            console.log("[v0] Clicked demo/placeholder card:", id, "- no airtableRecordId, ignoring")
+            // Open progress mode IMMEDIATELY for instant feedback.
+            // The progress poller will auto-transition to step_review when ready.
+            setProgressData({ jobRecordId: recordId, projectTitle: inserted.title })
           }}
           insertedProjects={insertedProjects}
         />
