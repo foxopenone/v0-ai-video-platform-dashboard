@@ -67,28 +67,34 @@ export default function Page() {
         <div className="my-5 h-px bg-border/20" />
         <ProjectsSection
           onProjectClick={async (id) => {
-            // Only real projects (recXXXX from Airtable) open ReviewRoom
+            // Check if this card has an Airtable record (real project from dispatch)
             const recordId = id.startsWith("rec") ? id : insertedProjects.find((p) => p.id === id)?.airtableRecordId
-            if (!recordId) return // Placeholder card -- do nothing
-            try {
-              const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(recordId)}`)
-              if (!res.ok) return
-              const job = await res.json()
-              const isReviewStatus = ["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)
-              const r2Key = job.Bible_R2_Key || job.Script_R2_Key
-              if (isReviewStatus && r2Key) {
-                const inserted = insertedProjects.find((p) => p.id === id)
-                setStepReviewData({
-                  jobRecordId: recordId,
-                  lockToken: job.Lock_Token || "",
-                  bibleR2Key: r2Key,
-                  currentStatus: job.Status,
-                  projectTitle: inserted?.title || `Job ${job.Job_ID || recordId.slice(-6)}`,
-                })
+            if (recordId) {
+              // Real project: query Airtable for current status
+              try {
+                const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(recordId)}`)
+                if (res.ok) {
+                  const job = await res.json()
+                  const isReviewStatus = ["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)
+                  const r2Key = job.Bible_R2_Key || job.Script_R2_Key
+                  if (isReviewStatus && r2Key) {
+                    const inserted = insertedProjects.find((p) => p.id === id)
+                    setStepReviewData({
+                      jobRecordId: recordId,
+                      lockToken: job.Lock_Token || "",
+                      bibleR2Key: r2Key,
+                      currentStatus: job.Status,
+                      projectTitle: inserted?.title || `Job ${job.Job_ID || recordId.slice(-6)}`,
+                    })
+                    return
+                  }
+                }
+              } catch {
+                // Network error -- fall through to legacy
               }
-            } catch {
-              // Network error -- ignore
             }
+            // Placeholder cards or non-review-status real projects: open legacy ReviewRoom
+            setReviewProjectId(id)
           }}
           insertedProjects={insertedProjects}
         />
