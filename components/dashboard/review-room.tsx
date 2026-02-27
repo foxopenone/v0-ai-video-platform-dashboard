@@ -477,31 +477,25 @@ export function ReviewRoom(props: ReviewRoomProps) {
           return
         }
 
-        // Match both "S3_Bible_Check" and "S3_Bible" (Airtable may use either)
-        const isCheck = /^S3_Bible|^S5_Script/i.test(job.Status || "")
+        // Strategy: if we have BOTH a review-like status AND an R2 key, jump immediately.
+        // Any status with a Bible_R2_Key or Script_R2_Key can be reviewed.
         const r2Key = job.Bible_R2_Key || job.Script_R2_Key
-        if (isCheck && !r2Key) {
-          console.error(`[FATAL] Status=${job.Status} but R2 key is null. Job_ID=${job.Job_ID}`)
-        }
-        if (isCheck && r2Key) {
-          // Go immediately -- no need to wait for consecutive hits
+        if (r2Key) {
           console.log("[v0] TRANSITIONING to step_review! Status:", job.Status, "R2Key:", r2Key)
           stopped = true
           setProgressPolling(false)
           onReviewReady?.({ lockToken: job.Lock_Token || "", bibleR2Key: r2Key, currentStatus: job.Status })
           return
         }
-        if (isCheck && !r2Key) {
-          // Status says check but no R2 key yet -- keep polling but bump hits
-          consecutiveHits++
-          if (consecutiveHits >= 5) {
-            stopped = true
-            setProgressPolling(false)
-            setProgressError(`Status is ${job.Status} but R2 key is missing after ${consecutiveHits} polls`)
-            return
-          }
-        } else {
-          consecutiveHits = 0
+
+        // No R2 key yet -- keep polling
+        consecutiveHits++
+        // After 30 polls (~2 min) with no R2 key, show timeout
+        if (consecutiveHits >= 30) {
+          stopped = true
+          setProgressPolling(false)
+          setProgressError(`Waited too long. Status: ${job.Status}. Please close and try again later.`)
+          return
         }
       } catch (err) {
         failCount++
@@ -603,7 +597,15 @@ export function ReviewRoom(props: ReviewRoomProps) {
             )}
 
             {progressPolling && (
-              <p className="text-[10px] text-muted-foreground/50">Auto-refreshing every few seconds...</p>
+              <>
+                <p className="text-[10px] text-muted-foreground/50">Auto-refreshing every few seconds...</p>
+                <button
+                  onClick={onClose}
+                  className="mt-2 rounded-lg border border-border/30 px-4 py-2 text-xs text-muted-foreground transition-colors hover:bg-secondary/30 hover:text-foreground"
+                >
+                  Back to Home
+                </button>
+              </>
             )}
               </>
             )}

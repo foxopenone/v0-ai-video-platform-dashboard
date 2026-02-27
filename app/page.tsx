@@ -72,7 +72,9 @@ export default function Page() {
         const job = await res.json()
         console.log(`[v0] Refresh card ${card.id}: Airtable Status=${job.Status}, Bible_R2_Key=${job.Bible_R2_Key || "null"}`)
 
-        if (/^S3_Bible|^S5_Script/i.test(job.Status || "")) {
+        // Use R2 key presence as the real indicator for review-ready
+        const hasR2Key = !!(job.Bible_R2_Key || job.Script_R2_Key)
+        if (hasR2Key) {
           setInsertedProjects((prev) =>
             prev.map((p) => p.id === card.id ? { ...p, status: "pending_review" as const, progress: 100 } : p)
           )
@@ -233,13 +235,33 @@ export default function Page() {
         <ProjectsSection
           onProjectDelete={handleProjectDelete}
           hiddenProjectIds={hiddenProjectIds}
-          onProjectClick={(id) => {
+          onProjectClick={async (id) => {
             const inserted = insertedProjects.find((p) => p.id === id)
             const recordId = inserted?.airtableRecordId
-            if (!recordId) return // Demo/placeholder card -- ignore
+            if (!recordId) return
 
-            // Open progress mode IMMEDIATELY for instant feedback.
-            // The progress poller will auto-transition to step_review when ready.
+            // For pending_review cards, try quick fetch to jump directly to review
+            if (inserted.status === "pending_review") {
+              try {
+                const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(recordId)}`)
+                if (res.ok) {
+                  const job = await res.json()
+                  const r2Key = job.Bible_R2_Key || job.Script_R2_Key
+                  if (r2Key) {
+                    setStepReviewData({
+                      jobRecordId: recordId,
+                      lockToken: job.Lock_Token || "",
+                      bibleR2Key: r2Key,
+                      currentStatus: job.Status,
+                      projectTitle: inserted.title,
+                    })
+                    return
+                  }
+                }
+              } catch { /* fall through to progress */ }
+            }
+
+            // Open progress mode for processing cards or if quick fetch failed
             setProgressData({ jobRecordId: recordId, projectTitle: inserted.title })
           }}
           insertedProjects={insertedProjects}
