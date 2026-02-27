@@ -11,12 +11,12 @@ import type { InsertedProject, StepReviewData } from "@/components/dashboard/con
 export default function Page() {
   const [reviewProjectId, setReviewProjectId] = useState<string | null>(null)
   const [stepReviewData, setStepReviewData] = useState<StepReviewData | null>(null)
-  const [progressData, setProgressData] = useState<{ jobRecordId: string; projectTitle: string } | null>(null)
+  const [progressData, setProgressData] = useState<{ jobRecordId: string; projectTitle: string; supabaseUserId?: string; numericJobId?: number } | null>(null)
   const [insertedProjects, setInsertedProjects] = useState<InsertedProject[]>([])
 
   // Restore insertedProjects from localStorage on mount.
   // Version key: bump to force-clear stale data from previous buggy builds.
-  const STORAGE_VERSION = "v2"
+  const STORAGE_VERSION = "v3"
   useEffect(() => {
     try {
       const ver = localStorage.getItem("insertedProjects_version")
@@ -108,6 +108,8 @@ export default function Page() {
         mode="progress"
         jobRecordId={progressData.jobRecordId}
         projectTitle={progressData.projectTitle}
+        supabaseUserId={progressData.supabaseUserId}
+        numericJobId={progressData.numericJobId}
         onClose={() => setProgressData(null)}
         onReviewReady={(data) => {
           // Transition from progress -> step_review
@@ -156,7 +158,17 @@ export default function Page() {
                 if (res.ok) {
                   const job = await res.json()
                   const isReviewStatus = ["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)
-                  const r2Key = job.Bible_R2_Key || job.Script_R2_Key
+                  // Use Airtable field if available, otherwise construct from convention
+                  let r2Key = job.Bible_R2_Key || job.Script_R2_Key
+                  if (!r2Key && isReviewStatus && inserted.supabaseUserId) {
+                    const jobNum = job.Job_ID || inserted.numericJobId
+                    if (jobNum) {
+                      r2Key = job.Status === "S3_Bible_Check"
+                        ? `users/${inserted.supabaseUserId}/jobs/${jobNum}/03_brain/series_bible.json`
+                        : `users/${inserted.supabaseUserId}/jobs/${jobNum}/04_script/script.json`
+                      console.log(`[v0] Constructed R2 key: ${r2Key}`)
+                    }
+                  }
                   if (isReviewStatus && r2Key) {
                     // Already in review state -> go directly to step_review
                     setStepReviewData({
@@ -173,7 +185,12 @@ export default function Page() {
                 // Network error -- still open progress mode (it will poll)
               }
               // Not in review status -> open progress mode (shows real status + auto-transitions)
-              setProgressData({ jobRecordId: recordId, projectTitle: inserted.title })
+              setProgressData({
+                jobRecordId: recordId,
+                projectTitle: inserted.title,
+                supabaseUserId: inserted.supabaseUserId,
+                numericJobId: inserted.numericJobId,
+              })
               return
             }
 

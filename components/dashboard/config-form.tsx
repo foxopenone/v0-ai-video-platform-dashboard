@@ -126,7 +126,9 @@ export interface InsertedProject {
   thumbnail: null
   episodes: number
   airtableRecordId?: string
-}
+  supabaseUserId?: string
+  numericJobId?: number
+  }
 
 export interface StepReviewData {
   jobRecordId: string
@@ -301,16 +303,22 @@ export function ConfigForm({
         ? `${baseName}${epCount > 1 ? ` +${epCount - 1} EP` : ""}`
         : `New Project (${epCount} EP)`
 
-      // Parse dispatch response — only use Job_Record_ID (recXXXX)
+      // Parse dispatch response — only use Job_Record_ID (recXXXX) and Job_ID (numeric)
       let airtableRecordId = ""
+      let numericJobId: number | undefined
       try {
         const resJson = await res.json()
         if (resJson.Job_Record_ID && String(resJson.Job_Record_ID).startsWith("rec")) {
           airtableRecordId = String(resJson.Job_Record_ID)
         }
+        if (resJson.Job_ID && !isNaN(Number(resJson.Job_ID))) {
+          numericJobId = Number(resJson.Job_ID)
+        }
       } catch {
         // Response not JSON
       }
+
+      const supabaseUserId = session.user.id
 
       const newProject: InsertedProject = {
         id: jobId,
@@ -321,6 +329,8 @@ export function ConfigForm({
         thumbnail: null,
         episodes: r2Entries.length,
         airtableRecordId: airtableRecordId || undefined,
+        supabaseUserId,
+        numericJobId,
       }
       onProjectInsert?.(newProject)
       // localStorage persistence handled by page.tsx useEffect -- no double-write
@@ -359,8 +369,18 @@ export function ConfigForm({
             onProjectUpdate?.(jobId, { progress })
 
             // Check for review-check status with R2 Key
+            // If Airtable doesn't have the R2 key field, construct from convention
             const isReviewCheck = ["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)
-            const r2Key = job.Bible_R2_Key || job.Script_R2_Key || job.VO_R2_Key
+            const jobNum = job.Job_ID || numericJobId
+            let r2Key = job.Bible_R2_Key || job.Script_R2_Key || job.VO_R2_Key
+            if (!r2Key && isReviewCheck && supabaseUserId && jobNum) {
+              if (job.Status === "S3_Bible_Check") {
+                r2Key = `users/${supabaseUserId}/jobs/${jobNum}/03_brain/series_bible.json`
+              } else if (job.Status === "S5_Script_Check") {
+                r2Key = `users/${supabaseUserId}/jobs/${jobNum}/04_script/script.json`
+              }
+              console.log(`[v0] Constructed R2 key from convention: ${r2Key}`)
+            }
             if (isReviewCheck && r2Key) {
               consecutiveHits++
               // Debounce: only trigger after 2 consecutive hits (防止 Airtable 写 Key 慢半拍)
