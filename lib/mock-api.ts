@@ -177,10 +177,14 @@ export interface BibleJSON {
   [key: string]: unknown
 }
 
-/** Fetch JSON asset from R2 CDN (Bible, Script, VO). Never returns mock data. */
+/** Fetch JSON asset from R2 CDN (Bible, Script, VO). Never returns mock data.
+ *  Handles nested wrappers like { series_bible: {...} } or { Series_Bible_Data: {...} }.
+ */
 export async function fetchBibleFromR2(r2Key: string): Promise<BibleJSON> {
   if (!r2Key) throw new Error("R2 Key is empty — asset not generated yet")
   const url = `${R2_CDN}/${r2Key}`
+  console.log("[v0] fetchBibleFromR2 URL:", url)
+
   const res = await fetch(url)
   if (res.status === 404) {
     throw new Error(`R2 404: File not found at ${r2Key}`)
@@ -188,13 +192,61 @@ export async function fetchBibleFromR2(r2Key: string): Promise<BibleJSON> {
   if (!res.ok) {
     throw new Error(`R2 ${res.status}: Failed to fetch ${r2Key}`)
   }
-  let json: BibleJSON
+
+  let raw: unknown
   try {
-    json = await res.json()
+    raw = await res.json()
   } catch {
     throw new Error(`JSON parse failed for ${r2Key}`)
   }
-  return json
+
+  console.log("[v0] R2 raw JSON top-level keys:", Object.keys(raw as Record<string, unknown>))
+  console.log("[v0] R2 raw JSON (first 500 chars):", JSON.stringify(raw).slice(0, 500))
+
+  // Unwrap nested wrappers -- backend may wrap Bible in a top-level key
+  let bible = raw as Record<string, unknown>
+
+  // Try common wrapper keys
+  const wrapperKeys = ["series_bible", "Series_Bible_Data", "bible", "data", "result"]
+  for (const key of wrapperKeys) {
+    if (bible[key] && typeof bible[key] === "object" && !Array.isArray(bible[key])) {
+      console.log(`[v0] Unwrapping nested key: "${key}"`)
+      bible = bible[key] as Record<string, unknown>
+      break
+    }
+  }
+
+  // Validate required fields exist
+  if (!bible.story_summary && !bible.characters) {
+    // Last resort: check if any value in the object is itself a valid bible
+    const values = Object.values(bible)
+    for (const val of values) {
+      if (val && typeof val === "object" && !Array.isArray(val)) {
+        const candidate = val as Record<string, unknown>
+        if (candidate.story_summary || candidate.characters) {
+          console.log("[v0] Found bible inside nested value, unwrapping")
+          bible = candidate
+          break
+        }
+      }
+    }
+  }
+
+  // Final validation
+  if (!bible.story_summary && !bible.characters) {
+    throw new Error(
+      `Bible JSON missing required fields (story_summary, characters). ` +
+      `Top-level keys: [${Object.keys(raw as Record<string, unknown>).join(", ")}]. ` +
+      `After unwrap keys: [${Object.keys(bible).join(", ")}]`
+    )
+  }
+
+  // Normalize: ensure characters is always an array
+  if (!Array.isArray(bible.characters)) {
+    bible.characters = []
+  }
+
+  return bible as unknown as BibleJSON
 }
 
 // ── Approve / Redo — per V56 spec ──────────────────────────────

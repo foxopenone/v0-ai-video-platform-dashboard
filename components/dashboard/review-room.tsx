@@ -201,20 +201,28 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
   // ── Step Review: Load Bible JSON ──
   useEffect(() => {
-    if (!isStepReview) return
-    const { bibleR2Key } = props as StepReviewProps
-    setBibleLoading(true)
-    setBibleError(null)
-    fetchBibleFromR2(bibleR2Key)
-      .then((data) => {
-        setBible(data)
-        setOriginalBible(structuredClone(data))
-      })
-      .catch((err) => {
-        console.error("[v0] Bible load error:", err)
-        setBibleError(err.message)
-      })
-      .finally(() => setBibleLoading(false))
+  if (!isStepReview) return
+  const { bibleR2Key, jobRecordId, currentStatus } = props as StepReviewProps
+
+  // Mandatory debug line 1 & 2 per tech director
+  console.log("[v0] 1. Airtable Status:", currentStatus)
+  console.log("[v0] 2. Bible_R2_Key:", bibleR2Key)
+
+  setBibleLoading(true)
+  setBibleError(null)
+  fetchBibleFromR2(bibleR2Key)
+  .then((data) => {
+  // Mandatory debug line 3
+  console.log("[v0] 3. R2 fetched Bible JSON:", data)
+  setBible(data)
+  setOriginalBible(structuredClone(data))
+  })
+  .catch((err) => {
+  // NEVER fallback to mock. Show real error.
+  console.error("[v0] Bible load FAILED:", err.message, "| R2Key:", bibleR2Key, "| RecordId:", jobRecordId)
+  setBibleError(err.message)
+  })
+  .finally(() => setBibleLoading(false))
   }, [isStepReview, isStepReview ? (props as StepReviewProps).bibleR2Key : null])
 
   // ── Step Review: Edit Handlers ──
@@ -419,11 +427,12 @@ export function ReviewRoom(props: ReviewRoomProps) {
       try {
         const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}`)
         if (!res.ok) return
-        const job = await res.json()
-        setProgressStatus(job.Status || "Unknown")
-
-        const isCheck = ["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)
-        const r2Key = job.Bible_R2_Key || job.Script_R2_Key
+  const job = await res.json()
+  console.log(`[v0] Progress poll | Status: ${job.Status} | Bible_R2_Key: ${job.Bible_R2_Key || "null"} | Script_R2_Key: ${job.Script_R2_Key || "null"}`)
+  setProgressStatus(job.Status || "Unknown")
+  
+  const isCheck = ["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)
+  const r2Key = job.Bible_R2_Key || job.Script_R2_Key
         if (isCheck && r2Key) {
           consecutiveHits++
           if (consecutiveHits >= 2) {

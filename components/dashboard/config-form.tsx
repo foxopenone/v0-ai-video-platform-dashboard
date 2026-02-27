@@ -355,6 +355,9 @@ export function ConfigForm({
             const job = await pollRes.json()
             failCount = 0
 
+            // Debug: print every poll result
+            console.log(`[v0] Poll #${pollCount} | Status: ${job.Status} | Bible_R2_Key: ${job.Bible_R2_Key || "null"} | Lock_Token: ${job.Lock_Token || "null"}`)
+
             // Update card progress
             const progress = stageProgress[job.Status] ?? 50
             onProjectUpdate?.(jobId, { progress })
