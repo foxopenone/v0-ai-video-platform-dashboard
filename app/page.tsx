@@ -169,6 +169,7 @@ export default function Page() {
   if (stepReviewData) {
     return (
       <ReviewRoom
+        key={`review-${stepReviewData.jobRecordId}`}
         mode="step_review"
         jobRecordId={stepReviewData.jobRecordId}
         lockToken={stepReviewData.lockToken}
@@ -197,6 +198,7 @@ export default function Page() {
   if (progressData) {
     return (
       <ReviewRoom
+        key={`progress-${progressData.jobRecordId}`}
         mode="progress"
         jobRecordId={progressData.jobRecordId}
         projectTitle={progressData.projectTitle}

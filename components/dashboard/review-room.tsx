@@ -485,6 +485,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
         }
         if (isCheck && r2Key) {
           // Go immediately -- no need to wait for consecutive hits
+          console.log("[v0] TRANSITIONING to step_review! Status:", job.Status, "R2Key:", r2Key)
           stopped = true
           setProgressPolling(false)
           onReviewReady?.({ lockToken: job.Lock_Token || "", bibleR2Key: r2Key, currentStatus: job.Status })
@@ -513,10 +514,12 @@ export function ReviewRoom(props: ReviewRoomProps) {
       }
     }
 
+    console.log("[v0] Progress poller STARTED for record:", jobRecordId)
     poll()
-    const interval = setInterval(poll, 10000)
-    return () => { stopped = true; clearInterval(interval) }
-  }, [isProgress, isProgress ? (props as ProgressProps).jobRecordId : null])
+    const interval = setInterval(poll, 4000)
+    return () => { stopped = true; clearInterval(interval); console.log("[v0] Progress poller STOPPED") }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isProgress])
 
   if (isProgress) {
     const { projectTitle, jobRecordId } = props as ProgressProps
@@ -600,7 +603,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
             )}
 
             {progressPolling && (
-              <p className="text-[10px] text-muted-foreground/50">Auto-refreshing every 10 seconds...</p>
+              <p className="text-[10px] text-muted-foreground/50">Auto-refreshing every few seconds...</p>
             )}
               </>
             )}
