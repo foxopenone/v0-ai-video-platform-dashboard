@@ -67,32 +67,28 @@ export default function Page() {
         <div className="my-5 h-px bg-border/20" />
         <ProjectsSection
           onProjectClick={async (id) => {
-            // id is the Airtable record ID (recXXXX) for real projects
+            // Only real projects (recXXXX from Airtable) open ReviewRoom
             const recordId = id.startsWith("rec") ? id : insertedProjects.find((p) => p.id === id)?.airtableRecordId
-            if (recordId) {
-              try {
-                const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(recordId)}`)
-                if (res.ok) {
-                  const job = await res.json()
-                  const isReviewStatus = ["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)
-                  const r2Key = job.Bible_R2_Key || job.Script_R2_Key
-                  if (isReviewStatus && r2Key) {
-                    const inserted = insertedProjects.find((p) => p.id === id)
-                    setStepReviewData({
-                      jobRecordId: recordId,
-                      lockToken: job.Lock_Token || "",
-                      bibleR2Key: r2Key,
-                      currentStatus: job.Status,
-                      projectTitle: inserted?.title || `Job ${job.Job_ID || recordId.slice(-6)}`,
-                    })
-                    return
-                  }
-                }
-              } catch {
-                // Fall through to legacy
+            if (!recordId) return // Placeholder card -- do nothing
+            try {
+              const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(recordId)}`)
+              if (!res.ok) return
+              const job = await res.json()
+              const isReviewStatus = ["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)
+              const r2Key = job.Bible_R2_Key || job.Script_R2_Key
+              if (isReviewStatus && r2Key) {
+                const inserted = insertedProjects.find((p) => p.id === id)
+                setStepReviewData({
+                  jobRecordId: recordId,
+                  lockToken: job.Lock_Token || "",
+                  bibleR2Key: r2Key,
+                  currentStatus: job.Status,
+                  projectTitle: inserted?.title || `Job ${job.Job_ID || recordId.slice(-6)}`,
+                })
               }
+            } catch {
+              // Network error -- ignore
             }
-            setReviewProjectId(id)
           }}
           insertedProjects={insertedProjects}
         />
