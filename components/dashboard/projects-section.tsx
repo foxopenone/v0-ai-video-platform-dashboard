@@ -166,8 +166,8 @@ export function ProjectsSection({ onProjectClick, onProjectDelete, insertedProje
                       </span>
                     </div>
 
-                    {/* Delete button for dispatched (inserted) projects */}
-                    {project.airtableRecordId !== undefined && onProjectDelete && (
+                    {/* Delete button for all dispatched (inserted) projects */}
+                    {insertedProjects.some((ip) => ip.id === project.id) && onProjectDelete && (
                       <button
                         onClick={(e) => { e.stopPropagation(); onProjectDelete(project.id) }}
                         className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-background/60 text-muted-foreground/60 opacity-0 backdrop-blur-sm transition-opacity hover:bg-red-500/20 hover:text-red-400 group-hover:opacity-100"

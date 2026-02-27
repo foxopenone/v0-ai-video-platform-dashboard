@@ -55,6 +55,7 @@ interface StepReviewProps {
   currentStatus: string // e.g. "S3_Bible_Check" | "S5_Script_Check"
   projectTitle?: string
   onClose: () => void
+  onApproved?: () => void
 }
 
 // ---------- Progress Props (real project, not yet in review status) ----------
@@ -291,6 +292,10 @@ export function ReviewRoom(props: ReviewRoomProps) {
       await reviewApprove(info.jobRecordId, info.lockToken)
       setActionStatus("success")
       setActionMessage("Approved! Pipeline is continuing...")
+      // Notify parent to update card status
+      if (isStepReview && (props as StepReviewProps).onApproved) {
+        (props as StepReviewProps).onApproved!()
+      }
     } catch (err) {
       setActionStatus("error")
       setActionMessage(err instanceof Error ? err.message : "Approve failed")

@@ -54,7 +54,14 @@ export default function Page() {
     processingCards.forEach(async (card) => {
       try {
         const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(card.airtableRecordId!)}`)
-        if (!res.ok) return
+        if (!res.ok) {
+          // API error (403, 404, etc.) -- mark as completed/stale so it stops spinning
+          console.log(`[v0] Refresh card ${card.id}: API returned ${res.status}, marking stale`)
+          setInsertedProjects((prev) =>
+            prev.map((p) => p.id === card.id ? { ...p, status: "completed" as const, progress: 0 } : p)
+          )
+          return
+        }
         const job = await res.json()
         console.log(`[v0] Refresh card ${card.id}: Airtable Status=${job.Status}, Bible_R2_Key=${job.Bible_R2_Key || "null"}`)
 
@@ -74,7 +81,10 @@ export default function Page() {
         }
         // else: still genuinely processing, leave as-is
       } catch {
-        // Network error -- leave as-is
+        // Network error -- mark stale so it stops spinning
+        setInsertedProjects((prev) =>
+          prev.map((p) => p.id === card.id ? { ...p, status: "completed" as const, progress: 0 } : p)
+        )
       }
     })
   }, [insertedProjects])
@@ -121,6 +131,25 @@ export default function Page() {
     setStepReviewData(data)
   }, [])
 
+  // Browser back button: push history state when entering review/progress mode
+  // and listen for popstate to close them gracefully.
+  const isInSubView = !!(stepReviewData || progressData)
+  useEffect(() => {
+    if (isInSubView) {
+      window.history.pushState({ reviewOpen: true }, "")
+    }
+  }, [isInSubView])
+
+  useEffect(() => {
+    const handlePopState = () => {
+      // User pressed browser back -- close any open sub-view
+      if (stepReviewData) setStepReviewData(null)
+      if (progressData) setProgressData(null)
+    }
+    window.addEventListener("popstate", handlePopState)
+    return () => window.removeEventListener("popstate", handlePopState)
+  }, [stepReviewData, progressData])
+
   // Step Review mode (real data from R2)
   if (stepReviewData) {
     return (
@@ -131,7 +160,20 @@ export default function Page() {
         bibleR2Key={stepReviewData.bibleR2Key}
         currentStatus={stepReviewData.currentStatus || "S3_Bible_Check"}
         projectTitle={stepReviewData.projectTitle}
-        onClose={() => setStepReviewData(null)}
+        onClose={() => {
+          setStepReviewData(null)
+          if (window.history.state?.reviewOpen) window.history.back()
+        }}
+        onApproved={() => {
+          // Update the card to "completed" after approve succeeds
+          setInsertedProjects((prev) =>
+            prev.map((p) =>
+              p.airtableRecordId === stepReviewData.jobRecordId
+                ? { ...p, status: "completed" as const, progress: 100 }
+                : p
+            )
+          )
+        }}
       />
     )
   }
@@ -143,8 +185,10 @@ export default function Page() {
         mode="progress"
         jobRecordId={progressData.jobRecordId}
         projectTitle={progressData.projectTitle}
-
-        onClose={() => setProgressData(null)}
+        onClose={() => {
+          setProgressData(null)
+          if (window.history.state?.reviewOpen) window.history.back()
+        }}
         onReviewReady={(data) => {
           // Transition from progress -> step_review
           setStepReviewData({
