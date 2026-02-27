@@ -136,27 +136,16 @@ export async function fetchBGM() {
   ]
 }
 
-/**
- * Fetch real projects from Airtable via /api/projects.
- * Falls back to empty array if API is not available.
- */
-export async function fetchProjects(): Promise<{
-  id: string
-  title: string
-  status: "processing" | "pending_review" | "completed"
-  progress: number
-  date: string
-  thumbnail: string | null
-  episodes: number
-  airtableRecordId: string
-}[]> {
-  try {
-    const res = await fetch("/api/projects")
-    if (!res.ok) return []
-    return res.json()
-  } catch {
-    return []
-  }
+export async function fetchProjects() {
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  return [
+    { id: "p1", title: "Product Launch EP01-EP12", status: "processing" as const, progress: 67, date: "2026-02-14", thumbnail: null, episodes: 12 },
+    { id: "p2", title: "Tutorial Series S02", status: "pending_review" as const, progress: 100, date: "2026-02-13", thumbnail: null, episodes: 8 },
+    { id: "p3", title: "Brand Story Ads", status: "completed" as const, progress: 100, date: "2026-02-12", thumbnail: null, episodes: 5 },
+    { id: "p4", title: "Podcast Highlights", status: "completed" as const, progress: 100, date: "2026-02-10", thumbnail: null, episodes: 15 },
+    { id: "p5", title: "Event Recap Q1", status: "completed" as const, progress: 100, date: "2026-02-08", thumbnail: null, episodes: 6 },
+    { id: "p6", title: "Customer Testimonials", status: "completed" as const, progress: 100, date: "2026-02-05", thumbnail: null, episodes: 10 },
+  ]
 }
 
 // ── Step Review API ──────────────────────────────────────────────
