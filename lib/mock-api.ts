@@ -136,16 +136,9 @@ export async function fetchBGM() {
   ]
 }
 
+/** No more mock cards. Only real dispatched projects appear in My Projects. */
 export async function fetchProjects() {
-  await new Promise((resolve) => setTimeout(resolve, 300))
-  return [
-    { id: "p1", title: "Product Launch EP01-EP12", status: "processing" as const, progress: 67, date: "2026-02-14", thumbnail: null, episodes: 12 },
-    { id: "p2", title: "Tutorial Series S02", status: "pending_review" as const, progress: 100, date: "2026-02-13", thumbnail: null, episodes: 8 },
-    { id: "p3", title: "Brand Story Ads", status: "completed" as const, progress: 100, date: "2026-02-12", thumbnail: null, episodes: 5 },
-    { id: "p4", title: "Podcast Highlights", status: "completed" as const, progress: 100, date: "2026-02-10", thumbnail: null, episodes: 15 },
-    { id: "p5", title: "Event Recap Q1", status: "completed" as const, progress: 100, date: "2026-02-08", thumbnail: null, episodes: 6 },
-    { id: "p6", title: "Customer Testimonials", status: "completed" as const, progress: 100, date: "2026-02-05", thumbnail: null, episodes: 10 },
-  ]
+  return []
 }
 
 // ── Step Review API ──────────────────────────────────────────────
@@ -288,38 +281,9 @@ export async function reviewEditContinue(
   return reviewApprove(jobRecordId, lockToken)
 }
 
-// Review Room API
-export async function fetchProjectDetail(projectId: string) {
-  await new Promise((resolve) => setTimeout(resolve, 400))
-  const projects = await fetchProjects()
-  const p = projects.find((x) => x.id === projectId)
-  if (!p) return null
-
-  const episodes = Array.from({ length: p.episodes }, (_, i) => ({
-    id: `${projectId}-ep${i + 1}`,
-    number: i + 1,
-    title: `Episode ${String(i + 1).padStart(2, "0")}`,
-    status: (p.status === "completed"
-      ? "locked"
-      : i < Math.floor(p.episodes * 0.3)
-        ? "locked"
-        : i === Math.floor(p.episodes * 0.3)
-          ? "reviewing"
-          : "pending") as "locked" | "reviewing" | "pending",
-    videoUrl: null as string | null,
-  }))
-
-  return {
-    ...p,
-    synopsis:
-      "A compelling series exploring the transformative power of AI in content creation. Each episode takes viewers on a journey through different aspects of automation, from script generation to voice synthesis, revealing how creators are leveraging technology to produce engaging short-form content at unprecedented scale. The narrative weaves together expert insights, real-world case studies, and practical demonstrations.",
-    script: Array.from({ length: p.episodes }, (_, i) => ({
-      ep: i + 1,
-      text: `[EP${String(i + 1).padStart(2, "0")} Script]\n\nHook: "What if you could create a week's worth of content in just one hour?"\n\nNarration: In this episode, we explore the cutting-edge tools that are revolutionizing how creators approach short-form video production...\n\nCTA: "Follow for more insights on AI-powered content creation."`,
-    })),
-    episodes,
-    finalized: episodes.filter((e) => e.status === "locked").length,
-  }
+/** Legacy fetchProjectDetail -- no longer returns mock data. */
+export async function fetchProjectDetail(_projectId: string) {
+  return null
 }
 
 export async function reviewSynopsis(projectId: string, action: "approve" | "retry", feedback?: string) {

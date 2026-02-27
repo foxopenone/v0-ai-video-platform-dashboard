@@ -311,7 +311,7 @@ export function ConfigForm({
         // Response not JSON
       }
 
-      onProjectInsert?.({
+      const newProject: InsertedProject = {
         id: jobId,
         title: projectTitle,
         status: "processing",
@@ -320,7 +320,14 @@ export function ConfigForm({
         thumbnail: null,
         episodes: r2Entries.length,
         airtableRecordId: airtableRecordId || undefined,
-      })
+      }
+      onProjectInsert?.(newProject)
+
+      // Persist to localStorage so page refresh doesn't lose recXXXX projects
+      try {
+        const existing = JSON.parse(localStorage.getItem("insertedProjects") || "[]")
+        localStorage.setItem("insertedProjects", JSON.stringify([newProject, ...existing]))
+      } catch {}
 
       // Poll Airtable Jobs table via /api/job-status for status changes
       if (airtableRecordId) {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect, useRef } from "react"
 import { Header } from "@/components/dashboard/header"
 import { WorkspaceSection } from "@/components/dashboard/workspace-section"
 import { ProjectsSection } from "@/components/dashboard/projects-section"
@@ -13,6 +13,23 @@ export default function Page() {
   const [stepReviewData, setStepReviewData] = useState<StepReviewData | null>(null)
   const [progressData, setProgressData] = useState<{ jobRecordId: string; projectTitle: string } | null>(null)
   const [insertedProjects, setInsertedProjects] = useState<InsertedProject[]>([])
+
+  // Restore insertedProjects from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("insertedProjects")
+      if (saved) setInsertedProjects(JSON.parse(saved))
+    } catch {}
+  }, [])
+
+  // Persist insertedProjects to localStorage on every change (skip first render)
+  const hasMounted = useRef(false)
+  useEffect(() => {
+    if (!hasMounted.current) { hasMounted.current = true; return }
+    try {
+      localStorage.setItem("insertedProjects", JSON.stringify(insertedProjects))
+    } catch {}
+  }, [insertedProjects])
 
   const handleProjectInsert = useCallback((project: InsertedProject) => {
     setInsertedProjects((prev) => [project, ...prev])
@@ -128,8 +145,8 @@ export default function Page() {
               return
             }
 
-            // PLACEHOLDER card (no airtableRecordId) -> open legacy ReviewRoom with demo data
-            setReviewProjectId(id)
+            // No airtableRecordId -> placeholder card, do nothing (no legacy mock data)
+            return
           }}
           insertedProjects={insertedProjects}
         />
