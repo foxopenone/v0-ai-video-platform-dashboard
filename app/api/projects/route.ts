@@ -52,19 +52,19 @@ export async function GET() {
     const records = data.records || []
 
     const projects = records.map(
-      (rec: { id: string; fields: Record<string, unknown> }) => {
+      (rec: { id: string; fields: Record<string, unknown>; createdTime?: string }) => {
         const f = rec.fields
         const status = mapStatus(String(f.Status || ""))
         return {
-          id: rec.id,
-          title: String(f.Title || f.Project_Name || `Job ${f.Job_ID || rec.id.slice(-6)}`),
+          id: rec.id, // recXXXX -- used as card ID and for job-status polling
+          title: `Job ${f.Job_ID || rec.id.slice(-6)}`,
           status,
           progress: status === "completed" ? 100 : status === "pending_review" ? 100 : 50,
-          date: f.Created
-            ? String(f.Created).slice(0, 10)
+          date: rec.createdTime
+            ? String(rec.createdTime).slice(0, 10)
             : new Date().toISOString().slice(0, 10),
           thumbnail: null,
-          episodes: Number(f.Episode_Count || f.Video_Count || 1),
+          episodes: 1, // Airtable Jobs 表无集数字段，默认 1
           airtableRecordId: rec.id,
         }
       },
