@@ -14,7 +14,10 @@
 import { NextRequest, NextResponse } from "next/server"
 
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY!
-const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID!
+// Fix: env var has 'l' (lowercase L) at position 7 but Airtable needs 'I' (uppercase i).
+// Correct once server-side to avoid the I/l font ambiguity problem.
+const RAW_BASE_ID = process.env.AIRTABLE_BASE_ID ?? ""
+const AIRTABLE_BASE_ID = RAW_BASE_ID === "appyXXzlQNigMCMOQ" ? "appyXXzIQNigMCMOQ" : RAW_BASE_ID
 const AIRTABLE_TABLE = "Jobs"
 
 export async function GET(req: NextRequest) {
@@ -49,30 +52,8 @@ export async function GET(req: NextRequest) {
     const record = await res.json()
     const f = record.fields || {}
 
-    // Return fields with original Airtable names — no renaming
-    console.log("[job-status] Record fields:", JSON.stringify(f))
-
-    // Extract user UUID and Job_ID from Folder_A0_ID if available
-    // Format: "users/{uuid}/jobs/{jobNum}/02_a0"
-    let extractedUserId: string | null = null
-    const folderPath = f.Folder_A0_ID || f.Folder_AA_ID || ""
-    const folderMatch = folderPath.match?.(/users\/([a-f0-9-]+)\/jobs\/(\d+)/)
-    if (folderMatch) {
-      extractedUserId = folderMatch[1]
-    }
-
-    // Construct Bible R2 key from convention since Airtable doesn't have Bible_R2_Key field
-    let bibleR2Key: string | null = null
-    if (f.Status === "S3_Bible_Check" && extractedUserId && f.Job_ID) {
-      bibleR2Key = `users/${extractedUserId}/jobs/${f.Job_ID}/03_brain/series_bible.json`
-      console.log("[job-status] Constructed Bible R2 key:", bibleR2Key)
-    }
-
-    let scriptR2Key: string | null = null
-    if (f.Status === "S5_Script_Check" && extractedUserId && f.Job_ID) {
-      scriptR2Key = `users/${extractedUserId}/jobs/${f.Job_ID}/04_script/script.json`
-      console.log("[job-status] Constructed Script R2 key:", scriptR2Key)
-    }
+    // Pass through Airtable fields directly -- Bible_R2_Key is a real field
+    console.log("[job-status] Status:", f.Status, "| Bible_R2_Key:", f.Bible_R2_Key || "null", "| Lock_Token:", f.Lock_Token || "null")
 
     return NextResponse.json({
       Job_Record_ID: record.id,
@@ -81,15 +62,21 @@ export async function GET(req: NextRequest) {
       Work_Mode: f.Work_Mode ?? null,
       Lock_Token: f.Lock_Token ?? null,
       Run_ID: f.Run_ID ?? null,
-      // Bible_R2_Key: constructed from convention (Airtable doesn't have this field)
-      Bible_R2_Key: bibleR2Key,
-      Script_R2_Key: scriptR2Key,
-      VO_R2_Key: null,
+      User_ID: f.User_ID ?? null,
+      // Direct from Airtable -- these fields exist
+      Bible_R2_Key: f.Bible_R2_Key ?? null,
+      Bible_Version: f.Bible_Version ?? null,
+      Script_R2_Key: f.Script_R2_Key ?? null,
+      VO_R2_Key: f.VO_R2_Key ?? null,
       Video_Parts: f.Video_Parts ?? null,
-      // Pass extracted user ID so frontend doesn't need localStorage for it
-      Extracted_User_ID: extractedUserId,
+      Video_Files: f.Video_Files ?? null,
       Folder_A0_ID: f.Folder_A0_ID ?? null,
       Folder_AA_ID: f.Folder_AA_ID ?? null,
+      Folder_Raw_ID: f.Folder_Raw_ID ?? null,
+      Folder_Export_ID: f.Folder_Export_ID ?? null,
+      Total_Episodes: f.Total_Episodes ?? null,
+      Ep_Assets: f.Ep_Assets ?? null,
+      Last_Action: f.Last_Action ?? null,
     })
   } catch (err) {
     console.error("[job-status] Fetch error:", err)
