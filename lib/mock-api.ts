@@ -186,26 +186,26 @@ export interface BibleJSON {
   [key: string]: unknown
 }
 
-// ── Script JSON (Voice Over) ──
-export interface ScriptScene {
-  scene_id: string
-  visual: string
-  voice_over: string
-  duration?: number | string
-  [key: string]: unknown
+// ── Voice Over Script JSON ──
+// Real R2 structure: { series_meta, parts: [{ part_id, timeline: [...] }] }
+export interface VOTimelineEvent {
+  type: string              // "VO_HOOK", "ORIGINAL_SOUND", "VO_NARRATION", etc.
+  text: string              // Voice-over text (editable by user)
+  visual_query?: string     // Suggested visual (read-only)
+  description?: string      // For ORIGINAL_SOUND events (read-only)
+  [key: string]: unknown    // Preserve all hidden fields (event_id, suggested_clip_ids, etc.)
 }
 
-export interface ScriptEpisode {
-  key: string             // "Ep01", "Ep02"
-  title?: string
-  scenes: ScriptScene[]
-  [key: string]: unknown
+export interface VOPart {
+  part_id: number
+  timeline: VOTimelineEvent[]
+  [key: string]: unknown    // Preserve all hidden fields
 }
 
 export interface ScriptJSON {
-  episodes: ScriptEpisode[]
-  meta?: Record<string, unknown>
-  _raw?: Record<string, unknown>
+  parts: VOPart[]
+  series_meta?: Record<string, unknown>
+  _raw: Record<string, unknown>   // Full original JSON for lossless writeback
 }
 
 /** Fetch JSON asset from R2 CDN (Bible, Script, VO). Never returns mock data.
@@ -298,12 +298,12 @@ export async function fetchBibleFromR2(r2Key: string): Promise<BibleJSON> {
   }
 }
 
-/** Fetch Script JSON from R2 CDN for Voice Over review.
- *  R2 actual structure varies -- we normalize to ScriptJSON.
- *  Common shapes: { Ep01: { scenes: [...] }, Ep02: ... } or { episodes: [...] }
+/** Fetch Voice Over Script JSON from R2 CDN.
+ *  Real structure: { series_meta: {...}, parts: [{ part_id, timeline: [...] }] }
+ *  We preserve the FULL raw JSON in _raw for lossless writeback.
  */
 export async function fetchScriptFromR2(r2Key: string): Promise<ScriptJSON> {
-  if (!r2Key) throw new Error("Script R2 Key is empty — script not generated yet")
+  if (!r2Key) throw new Error("Script R2 Key is empty -- script not generated yet")
   const url = `${R2_CDN}/${r2Key}`
   console.log("[v0] fetchScriptFromR2 URL:", url)
 
@@ -317,65 +317,35 @@ export async function fetchScriptFromR2(r2Key: string): Promise<ScriptJSON> {
   const rawObj = raw as Record<string, unknown>
   console.log("[v0] Script R2 raw JSON top-level keys:", Object.keys(rawObj))
 
-  // Normalize: the script JSON may have episode keys at top level (Ep01, Ep02...)
-  // or it may have an episodes array, or it may be wrapped in a container key.
-  const episodes: ScriptEpisode[] = []
-
-  // Check for top-level episode keys like "Ep01", "Ep02"
-  const epKeys = Object.keys(rawObj).filter((k) => /^Ep\d+$/i.test(k)).sort()
-
-  if (epKeys.length > 0) {
-    // Top-level episode keys
-    for (const key of epKeys) {
-      const epData = rawObj[key] as Record<string, unknown>
-      const scenes = normalizeScriptScenes(epData)
-      episodes.push({ key, title: String(epData.title ?? key), scenes })
-    }
-  } else if (Array.isArray(rawObj.episodes)) {
-    // episodes array format
-    for (const ep of rawObj.episodes as Array<Record<string, unknown>>) {
-      const key = String(ep.key ?? ep.episode_id ?? `Ep${episodes.length + 1}`)
-      const scenes = normalizeScriptScenes(ep)
-      episodes.push({ key, title: String(ep.title ?? key), scenes })
-    }
-  } else {
-    // Try to find scenes at root level
-    const rootScenes = normalizeScriptScenes(rawObj)
-    if (rootScenes.length > 0) {
-      episodes.push({ key: "Ep01", scenes: rootScenes })
-    }
+  // Parse parts array
+  const rawParts = rawObj.parts as Array<Record<string, unknown>> | undefined
+  if (!Array.isArray(rawParts) || rawParts.length === 0) {
+    throw new Error(
+      `Script JSON has no "parts" array. Top-level keys: [${Object.keys(rawObj).join(", ")}]`
+    )
   }
 
-  if (episodes.length === 0) {
-    throw new Error(`Script JSON has no recognizable episode/scene data. Keys: [${Object.keys(rawObj).join(", ")}]`)
-  }
+  const parts: VOPart[] = rawParts.map((p) => {
+    const timeline = Array.isArray(p.timeline)
+      ? (p.timeline as Array<Record<string, unknown>>).map((evt) => ({
+          ...evt,
+          type: String(evt.type ?? "UNKNOWN").trim(),
+          text: String(evt.text ?? "").trim(),
+          visual_query: evt.visual_query ? String(evt.visual_query).trim() : undefined,
+          description: evt.description ? String(evt.description).trim() : undefined,
+        } as VOTimelineEvent))
+      : []
+    return { ...p, part_id: Number(p.part_id ?? 0), timeline } as VOPart
+  })
 
-  console.log(`[v0] Script normalized: ${episodes.length} episodes, total ${episodes.reduce((s, e) => s + e.scenes.length, 0)} scenes`)
+  const totalEvents = parts.reduce((s, p) => s + p.timeline.length, 0)
+  console.log(`[v0] Script normalized: ${parts.length} parts, ${totalEvents} timeline events`)
 
-  return { episodes, meta: rawObj.meta as Record<string, unknown> | undefined, _raw: rawObj }
-}
-
-/** Extract scenes from an episode object or root object. Handles multiple formats. */
-function normalizeScriptScenes(obj: Record<string, unknown>): ScriptScene[] {
-  // Format 1: { scenes: [ { scene_id, visual, voice_over } ] }
-  if (Array.isArray(obj.scenes)) {
-    return (obj.scenes as Array<Record<string, unknown>>).map((s, i) => ({
-      scene_id: String(s.scene_id ?? s.id ?? `scene_${i + 1}`).trim(),
-      visual: String(s.visual ?? s.visual_description ?? s.description ?? "").trim(),
-      voice_over: String(s.voice_over ?? s.voiceover ?? s.narration ?? s.text ?? "").trim(),
-      duration: s.duration as number | string | undefined,
-    }))
+  return {
+    parts,
+    series_meta: rawObj.series_meta as Record<string, unknown> | undefined,
+    _raw: rawObj,
   }
-  // Format 2: { script: [ ... ] }
-  if (Array.isArray(obj.script)) {
-    return (obj.script as Array<Record<string, unknown>>).map((s, i) => ({
-      scene_id: String(s.scene_id ?? s.id ?? `scene_${i + 1}`).trim(),
-      visual: String(s.visual ?? s.visual_description ?? "").trim(),
-      voice_over: String(s.voice_over ?? s.voiceover ?? s.narration ?? s.text ?? "").trim(),
-      duration: s.duration as number | string | undefined,
-    }))
-  }
-  return []
 }
 
 // ── Approve / Redo — per V56 spec ──────────────────────────────

@@ -19,7 +19,7 @@ import {
   reviewEpisode,
   downloadEpisode,
 } from "@/lib/mock-api"
-import type { BibleJSON, BibleCharacter, ScriptJSON } from "@/lib/mock-api"
+import type { BibleJSON, BibleCharacter, ScriptJSON, VOTimelineEvent } from "@/lib/mock-api"
 import { cn } from "@/lib/utils"
 
 // ---------- Types ----------
@@ -259,7 +259,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
           throw new Error("Script_R2_Key not found in Airtable record")
         })
         .then((data) => {
-          console.log("[v0] Script loaded:", data.episodes.length, "episodes")
+          console.log("[v0] Script loaded:", data.parts.length, "parts")
           setScriptData(data)
         })
         .catch((err) => {
@@ -308,7 +308,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
     setEditMode(false)
   }, [originalBible])
 
-  // ── Step Review: Action Handlers ──
+  // ── Step Review: getCallbackInfo (shared by Bible and VO handlers) ──
   const getCallbackInfo = useCallback(() => {
     if (isStepReview) {
       const p = props as StepReviewProps
@@ -316,6 +316,59 @@ export function ReviewRoom(props: ReviewRoomProps) {
     }
     return null
   }, [isStepReview, props])
+
+  // ── Voice Over: Edit handler (only `text` field is editable) ──
+  const updateVOText = useCallback((partIdx: number, eventIdx: number, newText: string) => {
+    setScriptData((prev) => {
+      if (!prev) return prev
+      const newParts = prev.parts.map((p, pi) => {
+        if (pi !== partIdx) return p
+        const newTimeline = p.timeline.map((evt, ei) =>
+          ei === eventIdx ? { ...evt, text: newText } : evt
+        )
+        return { ...p, timeline: newTimeline }
+      })
+      return { ...prev, parts: newParts }
+    })
+  }, [])
+
+  // ── Voice Over: Save & Continue (lossless writeback) ──
+  const handleVOSaveAndContinue = useCallback(async () => {
+    if (!scriptData?._raw || !scriptR2Key) return
+    const info = getCallbackInfo()
+    if (!info) return
+
+    setActionStatus("submitting")
+    setActionMessage("Saving voice-over edits...")
+
+    try {
+      // Deep-clone the original raw JSON (full structure preserved)
+      const patchedRaw = structuredClone(scriptData._raw) as Record<string, unknown>
+
+      // Patch only `text` fields in parts[].timeline[] — everything else untouched
+      const rawParts = patchedRaw.parts as Array<Record<string, unknown>>
+      for (let pi = 0; pi < scriptData.parts.length; pi++) {
+        const rawTimeline = (rawParts[pi]?.timeline ?? []) as Array<Record<string, unknown>>
+        for (let ei = 0; ei < scriptData.parts[pi].timeline.length; ei++) {
+          if (rawTimeline[ei]) {
+            rawTimeline[ei].text = scriptData.parts[pi].timeline[ei].text
+          }
+        }
+      }
+
+      console.log("[v0] VO writeback patchedRaw keys:", Object.keys(patchedRaw))
+
+      // Write back to the same Script_R2_Key
+      await reviewEditContinue(info.jobRecordId, info.lockToken, scriptR2Key, patchedRaw)
+      setActionStatus("success")
+      setActionMessage("Voice-over saved! Pipeline continuing...")
+    } catch (err) {
+      setActionStatus("error")
+      setActionMessage(err instanceof Error ? err.message : "Save failed")
+    }
+  }, [scriptData, scriptR2Key, getCallbackInfo])
+
+  // ── Step Review: Action Handlers ──
 
   /** After Approve or Save&Continue succeeds, switch to Voice Over tab and start polling */
   const startVoiceOverPolling = useCallback(() => {
@@ -471,7 +524,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
           setScriptR2Key(job.Script_R2_Key)
           try {
             const data = await fetchScriptFromR2(job.Script_R2_Key)
-            console.log("[v0] Script loaded:", data.episodes.length, "episodes")
+            console.log("[v0] Script loaded:", data.parts.length, "parts")
             setScriptData(data)
           } catch (err) {
             setScriptError(err instanceof Error ? err.message : "Failed to load script")
@@ -993,50 +1046,74 @@ export function ReviewRoom(props: ReviewRoomProps) {
                     </div>
                   )}
 
-                  {/* Script content */}
-                  {scriptData && scriptData.episodes.length > 0 && (
+                  {/* Script content — parts / timeline */}
+                  {scriptData && scriptData.parts.length > 0 && (
                     <>
                       <div>
                         <h3 className="text-sm font-semibold text-foreground">
-                          Voice Over Script ({scriptData.episodes.length} episode{scriptData.episodes.length !== 1 ? "s" : ""})
+                          Voice Over Script ({scriptData.parts.length} part{scriptData.parts.length !== 1 ? "s" : ""})
                         </h3>
-                        <p className="text-xs text-muted-foreground">Review the AI-generated storyboard and narration for each episode.</p>
+                        <p className="text-xs text-muted-foreground">
+                          Review the AI-generated voice-over. You can edit the narration text directly.
+                        </p>
                       </div>
-                      {scriptData.episodes.map((ep, epIdx) => (
-                        <div key={epIdx} className="flex flex-col gap-2">
+                      {scriptData.parts.map((part, partIdx) => (
+                        <div key={partIdx} className="flex flex-col gap-2">
                           <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-foreground/70">
                             <span className="rounded-md bg-secondary/40 px-2 py-0.5 text-[10px] font-bold">
-                              {ep.key}
+                              Part {part.part_id}
                             </span>
-                            {ep.title && ep.title !== ep.key && (
-                              <span className="font-normal normal-case text-muted-foreground">{ep.title}</span>
-                            )}
                             <span className="text-[10px] font-normal text-muted-foreground">
-                              {ep.scenes.length} scene{ep.scenes.length !== 1 ? "s" : ""}
+                              {part.timeline.length} event{part.timeline.length !== 1 ? "s" : ""}
                             </span>
                           </h4>
-                          {ep.scenes.map((scene, sIdx) => (
-                            <div key={sIdx} className="rounded-lg border border-border/20 bg-secondary/10 px-4 py-3">
+                          {part.timeline.map((evt, evtIdx) => (
+                            <div key={evtIdx} className="rounded-lg border border-border/20 bg-secondary/10 px-4 py-3">
+                              {/* Event type badge */}
                               <div className="mb-2 flex items-center gap-2">
-                                <span className="rounded bg-[var(--brand-pink)]/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[var(--brand-pink)]">
-                                  {scene.scene_id}
+                                <span className={cn(
+                                  "rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider",
+                                  evt.type.includes("VO") ? "bg-[var(--brand-pink)]/15 text-[var(--brand-pink)]"
+                                    : evt.type === "ORIGINAL_SOUND" ? "bg-amber-500/15 text-amber-400"
+                                    : "bg-secondary/40 text-foreground/60"
+                                )}>
+                                  {evt.type}
                                 </span>
-                                {scene.duration && (
-                                  <span className="text-[9px] text-muted-foreground">
-                                    {scene.duration}s
-                                  </span>
-                                )}
                               </div>
-                              {scene.visual && (
+                              {/* Voice-over text (editable) */}
+                              {(evt.type.includes("VO") || evt.text) && (
                                 <div className="mb-2">
-                                  <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">Visual</span>
-                                  <p className="mt-0.5 text-xs leading-relaxed text-foreground/60">{scene.visual}</p>
+                                  <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
+                                    Narration {editMode && <span className="normal-case text-[var(--brand-pink)]">(editable)</span>}
+                                  </span>
+                                  {editMode ? (
+                                    <textarea
+                                      value={evt.text}
+                                      onChange={(e) => updateVOText(partIdx, evtIdx, e.target.value)}
+                                      rows={Math.max(2, Math.ceil(evt.text.length / 80))}
+                                      className="mt-1 w-full resize-none rounded-md border border-[var(--brand-pink)]/30 bg-secondary/15 px-3 py-2 text-xs leading-relaxed text-foreground/90 outline-none transition-colors focus:border-[var(--brand-pink)]/50"
+                                    />
+                                  ) : (
+                                    <p className="mt-0.5 text-xs leading-relaxed text-foreground/80">
+                                      {evt.text || <span className="italic text-muted-foreground">No text</span>}
+                                    </p>
+                                  )}
                                 </div>
                               )}
-                              <div>
-                                <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">Voice Over</span>
-                                <p className="mt-0.5 text-xs leading-relaxed text-foreground/80">{scene.voice_over}</p>
-                              </div>
+                              {/* Visual query (read-only) */}
+                              {evt.visual_query && (
+                                <div className="mb-2">
+                                  <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">Visual</span>
+                                  <p className="mt-0.5 text-xs leading-relaxed text-foreground/60">{evt.visual_query}</p>
+                                </div>
+                              )}
+                              {/* Description for ORIGINAL_SOUND (read-only) */}
+                              {evt.description && (
+                                <div>
+                                  <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">Description</span>
+                                  <p className="mt-0.5 text-xs leading-relaxed text-foreground/60">{evt.description}</p>
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -1150,33 +1227,66 @@ export function ReviewRoom(props: ReviewRoomProps) {
                     </p>
                   ) : scriptData ? (
                     <>
-                      <button
-                        onClick={() => { const fn = (props as StepReviewProps).onDelete; if (fn) fn(); else onClose(); }}
-                        className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Delete
-                      </button>
-                      <button
-                        onClick={handleRedo}
-                        disabled={actionStatus === "submitting"}
-                        className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
-                      >
-                        <RotateCcw className="h-3.5 w-3.5" />
-                        Redo
-                      </button>
-                      <button
-                        onClick={handleApprove}
-                        disabled={actionStatus === "submitting"}
-                        className="brand-gradient flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-xs font-semibold text-[#fff] transition-opacity hover:opacity-90 disabled:opacity-50"
-                      >
-                        {actionStatus === "submitting" ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                        )}
-                        Approve
-                      </button>
+                      {editMode ? (
+                        <>
+                          <button
+                            onClick={() => setEditMode(false)}
+                            className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={handleVOSaveAndContinue}
+                            disabled={actionStatus === "submitting"}
+                            className="brand-gradient flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-xs font-semibold text-[#fff] transition-opacity hover:opacity-90 disabled:opacity-50"
+                          >
+                            {actionStatus === "submitting" ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                            )}
+                            Save & Continue
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => { const fn = (props as StepReviewProps).onDelete; if (fn) fn(); else onClose(); }}
+                            className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Delete
+                          </button>
+                          <button
+                            onClick={handleRedo}
+                            disabled={actionStatus === "submitting"}
+                            className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            Redo
+                          </button>
+                          <button
+                            onClick={() => setEditMode(true)}
+                            disabled={actionStatus === "submitting"}
+                            className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40 disabled:opacity-50"
+                          >
+                            <Edit3 className="h-3.5 w-3.5" />
+                            Edit
+                          </button>
+                          <button
+                            onClick={handleApprove}
+                            disabled={actionStatus === "submitting"}
+                            className="brand-gradient flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-xs font-semibold text-[#fff] transition-opacity hover:opacity-90 disabled:opacity-50"
+                          >
+                            {actionStatus === "submitting" ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                            )}
+                            Approve
+                          </button>
+                        </>
+                      )}
                     </>
                   ) : scriptError ? (
                     <button
