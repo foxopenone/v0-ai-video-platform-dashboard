@@ -168,14 +168,14 @@ export function ProjectsSection({ onProjectClick, onProjectDelete, insertedProje
                       </span>
                     </div>
 
-                    {/* Delete button for all projects */}
+                    {/* Delete button — always visible */}
                     {onProjectDelete && (
                       <button
                         onClick={(e) => { e.stopPropagation(); onProjectDelete(project.id) }}
-                        className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-background/70 text-muted-foreground/70 opacity-0 backdrop-blur-sm transition-all hover:bg-red-500/20 hover:text-red-400 group-hover:opacity-100"
+                        className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-background/80 text-muted-foreground backdrop-blur-sm transition-colors hover:bg-red-500/30 hover:text-red-400"
                         aria-label="Remove project"
                       >
-                        <X className="h-3 w-3" />
+                        <X className="h-3.5 w-3.5" />
                       </button>
                     )}
 
