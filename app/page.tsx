@@ -75,8 +75,8 @@ export default function Page() {
         // Update title from Airtable data if we only have the default name
         const betterTitle = job.Job_ID ? `Job #${job.Job_ID}${job.Total_Episodes ? ` (${job.Total_Episodes} EP)` : ""}` : null
 
-        // Use R2 key presence as the real indicator for review-ready
-        const hasR2Key = !!(job.Bible_R2_Key || job.Script_R2_Key)
+        // Use Bible_R2_Key presence as the real indicator for review-ready
+        const hasR2Key = !!job.Bible_R2_Key
         if (hasR2Key) {
           setInsertedProjects((prev) =>
             prev.map((p) => p.id === card.id ? {
@@ -269,12 +269,13 @@ export default function Page() {
                 const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(recordId)}`)
                 if (res.ok) {
                   const job = await res.json()
-                  const r2Key = job.Bible_R2_Key || job.Script_R2_Key
-                  if (r2Key) {
+                  // Always use Bible_R2_Key for bible loading; Script_R2_Key is fetched separately by ReviewRoom
+                  const bibleKey = job.Bible_R2_Key
+                  if (bibleKey) {
                     setStepReviewData({
                       jobRecordId: recordId,
                       lockToken: job.Lock_Token || "",
-                      bibleR2Key: r2Key,
+                      bibleR2Key: bibleKey,
                       currentStatus: job.Status,
                       projectTitle: inserted.title,
                     })

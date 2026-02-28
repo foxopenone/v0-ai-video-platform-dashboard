@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   fetchBibleFromR2,
+  fetchScriptFromR2,
   reviewApprove,
   reviewEditContinue,
   reviewRedo,
@@ -18,7 +19,7 @@ import {
   reviewEpisode,
   downloadEpisode,
 } from "@/lib/mock-api"
-import type { BibleJSON, BibleCharacter } from "@/lib/mock-api"
+import type { BibleJSON, BibleCharacter, ScriptJSON } from "@/lib/mock-api"
 import { cn } from "@/lib/utils"
 
 // ---------- Types ----------
@@ -196,6 +197,13 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const [editMode, setEditMode] = useState(false)
   const [actionStatus, setActionStatus] = useState<"idle" | "submitting" | "success" | "error">("idle")
   const [actionMessage, setActionMessage] = useState("")
+  // Voice Over (Script) state for step_review
+  type ReviewTab = "bible" | "voiceover" | "preview"
+  const [activeTab, setActiveTab] = useState<ReviewTab>("bible")
+  const [scriptPolling, setScriptPolling] = useState(false)
+  const [scriptData, setScriptData] = useState<ScriptJSON | null>(null)
+  const [scriptError, setScriptError] = useState<string | null>(null)
+  const [scriptR2Key, setScriptR2Key] = useState<string | null>(null)
   // Legacy review state
   const [project, setProject] = useState<ProjectDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -213,28 +221,52 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
   // ── Step Review: Load Bible JSON ──
   useEffect(() => {
-  if (!isStepReview) return
-  const { bibleR2Key, jobRecordId, currentStatus } = props as StepReviewProps
+    if (!isStepReview) return
+    const { bibleR2Key, jobRecordId, currentStatus } = props as StepReviewProps
 
-  // Mandatory debug line 1 & 2 per tech director
-  console.log("[v0] 1. Airtable Status:", currentStatus)
-  console.log("[v0] 2. Bible_R2_Key:", bibleR2Key)
+    console.log("[v0] 1. Airtable Status:", currentStatus)
+    console.log("[v0] 2. Bible_R2_Key:", bibleR2Key)
 
-  setBibleLoading(true)
-  setBibleError(null)
-  fetchBibleFromR2(bibleR2Key)
-  .then((data) => {
-  // Mandatory debug line 3
-  console.log("[v0] 3. R2 fetched Bible JSON:", data)
-  setBible(data)
-  setOriginalBible(structuredClone(data))
-  })
-  .catch((err) => {
-  // NEVER fallback to mock. Show real error.
-  console.error("[v0] Bible load FAILED:", err.message, "| R2Key:", bibleR2Key, "| RecordId:", jobRecordId)
-  setBibleError(err.message)
-  })
-  .finally(() => setBibleLoading(false))
+    // Always load bible (it's the base data)
+    setBibleLoading(true)
+    setBibleError(null)
+    fetchBibleFromR2(bibleR2Key)
+      .then((data) => {
+        console.log("[v0] 3. R2 fetched Bible JSON:", data)
+        setBible(data)
+        setOriginalBible(structuredClone(data))
+      })
+      .catch((err) => {
+        console.error("[v0] Bible load FAILED:", err.message, "| R2Key:", bibleR2Key, "| RecordId:", jobRecordId)
+        setBibleError(err.message)
+      })
+      .finally(() => setBibleLoading(false))
+
+    // If status is already S5_Script_Check, auto-switch to Voice Over tab
+    if (/^S5_Script/i.test(currentStatus)) {
+      console.log("[v0] Status is S5_Script -- auto-switching to Voice Over tab")
+      setActiveTab("voiceover")
+      // Fetch the script using job-status to get Script_R2_Key
+      fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}`)
+        .then((r) => r.ok ? r.json() : Promise.reject(new Error(`API ${r.status}`)))
+        .then((job) => {
+          const sKey = job.Script_R2_Key
+          if (sKey) {
+            console.log("[v0] Auto-fetching script from R2:", sKey)
+            setScriptR2Key(sKey)
+            return fetchScriptFromR2(sKey)
+          }
+          throw new Error("Script_R2_Key not found in Airtable record")
+        })
+        .then((data) => {
+          console.log("[v0] Script loaded:", data.episodes.length, "episodes")
+          setScriptData(data)
+        })
+        .catch((err) => {
+          console.error("[v0] Script auto-load failed:", err.message)
+          setScriptError(err.message)
+        })
+    }
   }, [isStepReview, isStepReview ? (props as StepReviewProps).bibleR2Key : null])
 
   // ── Step Review: Edit Handlers ──
@@ -285,6 +317,15 @@ export function ReviewRoom(props: ReviewRoomProps) {
     return null
   }, [isStepReview, props])
 
+  /** After Approve or Save&Continue succeeds, switch to Voice Over tab and start polling */
+  const startVoiceOverPolling = useCallback(() => {
+    console.log("[v0] Switching to Voice Over tab and starting script polling")
+    setActiveTab("voiceover")
+    setScriptPolling(true)
+    setScriptData(null)
+    setScriptError(null)
+  }, [])
+
   const handleApprove = useCallback(async () => {
     const info = getCallbackInfo()
     if (!info) return
@@ -293,16 +334,18 @@ export function ReviewRoom(props: ReviewRoomProps) {
     try {
       await reviewApprove(info.jobRecordId, info.lockToken)
       setActionStatus("success")
-      setActionMessage("Approved! Pipeline is continuing...")
+      setActionMessage("Approved! Switching to Voice Over...")
       // Notify parent to update card status
       if (isStepReview && (props as StepReviewProps).onApproved) {
         (props as StepReviewProps).onApproved!()
       }
+      // Switch to Voice Over tab and start polling
+      startVoiceOverPolling()
     } catch (err) {
       setActionStatus("error")
       setActionMessage(err instanceof Error ? err.message : "Approve failed")
     }
-  }, [getCallbackInfo])
+  }, [getCallbackInfo, startVoiceOverPolling])
 
   const handleSaveAndContinue = useCallback(async () => {
     const info = getCallbackInfo()
@@ -349,7 +392,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
       setOriginalBible(structuredClone(bible))
       setEditMode(false)
       setActionStatus("success")
-      setActionMessage("Changes saved! Pipeline is continuing...")
+      setActionMessage("Changes saved! Switching to Voice Over...")
+      // Switch to Voice Over tab and start polling
+      startVoiceOverPolling()
     } catch (err) {
       setActionStatus("error")
       setActionMessage(err instanceof Error ? err.message : "Save & Continue failed")
@@ -372,6 +417,81 @@ export function ReviewRoom(props: ReviewRoomProps) {
       setActionMessage(err instanceof Error ? err.message : "Redo failed")
     }
   }, [getCallbackInfo, isStepReview, props])
+
+  // ── Voice Over Script Polling (after Bible Approve/Save&Continue) ──
+  useEffect(() => {
+    if (!scriptPolling || !isStepReview) return
+    const { jobRecordId } = props as StepReviewProps
+    let stopped = false
+    let failCount = 0
+    const startTime = Date.now()
+    const TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
+
+    console.log("[v0] Script poller STARTED for record:", jobRecordId)
+
+    const poll = async () => {
+      if (stopped) return
+
+      // Timeout check
+      if (Date.now() - startTime > TIMEOUT_MS) {
+        stopped = true
+        setScriptPolling(false)
+        setScriptError("Request timed out (5 min). Please refresh the page or check task status.")
+        return
+      }
+
+      try {
+        const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}`)
+        if (!res.ok) {
+          failCount++
+          if (failCount >= 3) {
+            stopped = true
+            setScriptPolling(false)
+            setScriptError(`API returned ${res.status} after ${failCount} retries`)
+          }
+          return
+        }
+        failCount = 0
+        const job = await res.json()
+        console.log(`[v0] Script poll | Status: ${job.Status} | Script_R2_Key: ${job.Script_R2_Key || "null"}`)
+
+        // Check for error/failed
+        if (["Error", "Failed"].includes(job.Status)) {
+          stopped = true
+          setScriptPolling(false)
+          setScriptError("Generation failed. Please retry or contact support.")
+          return
+        }
+
+        // Check for Script_R2_Key
+        if (job.Script_R2_Key) {
+          console.log("[v0] Script R2 Key found! Fetching script...", job.Script_R2_Key)
+          stopped = true
+          setScriptPolling(false)
+          setScriptR2Key(job.Script_R2_Key)
+          try {
+            const data = await fetchScriptFromR2(job.Script_R2_Key)
+            console.log("[v0] Script loaded:", data.episodes.length, "episodes")
+            setScriptData(data)
+          } catch (err) {
+            setScriptError(err instanceof Error ? err.message : "Failed to load script")
+          }
+          return
+        }
+      } catch (err) {
+        failCount++
+        if (failCount >= 3) {
+          stopped = true
+          setScriptPolling(false)
+          setScriptError("Network error - could not reach backend")
+        }
+      }
+    }
+
+    poll()
+    const interval = setInterval(poll, 10000) // 10 seconds per spec
+    return () => { stopped = true; clearInterval(interval); console.log("[v0] Script poller STOPPED") }
+  }, [scriptPolling, isStepReview])
 
   // ── Legacy mode: no more mock data. Show loading=false immediately. ──
   useEffect(() => {
@@ -485,14 +605,13 @@ export function ReviewRoom(props: ReviewRoomProps) {
           return
         }
 
-        // Strategy: if we have BOTH a review-like status AND an R2 key, jump immediately.
-        // Any status with a Bible_R2_Key or Script_R2_Key can be reviewed.
-        const r2Key = job.Bible_R2_Key || job.Script_R2_Key
-        if (r2Key) {
-          console.log("[v0] TRANSITIONING to step_review! Status:", job.Status, "R2Key:", r2Key)
+        // Strategy: if Bible_R2_Key exists, transition to step_review.
+        // ReviewRoom auto-detects S5_Script_Check and fetches script separately.
+        if (job.Bible_R2_Key) {
+          console.log("[v0] TRANSITIONING to step_review! Status:", job.Status, "Bible_R2_Key:", job.Bible_R2_Key)
           stopped = true
           setProgressPolling(false)
-          onReviewReady?.({ lockToken: job.Lock_Token || "", bibleR2Key: r2Key, currentStatus: job.Status })
+          onReviewReady?.({ lockToken: job.Lock_Token || "", bibleR2Key: job.Bible_R2_Key, currentStatus: job.Status })
           return
         }
 
@@ -741,90 +860,199 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
           {/* RIGHT: Story Summary + Actions */}
           <div className="flex w-3/5 flex-col">
-            {/* Phase indicator */}
+            {/* Phase tabs */}
             <div className="flex shrink-0 items-center gap-1 border-b border-border/20 px-5 py-3">
-              <div className="flex items-center gap-1.5 rounded-lg bg-secondary/60 px-3 py-1.5 text-xs font-medium text-foreground">
+              <button
+                onClick={() => setActiveTab("bible")}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                  activeTab === "bible" ? "bg-secondary/60 text-foreground" : "text-muted-foreground hover:text-foreground/70"
+                )}
+              >
                 <FileText className="h-3.5 w-3.5" />
                 Story Bible
-              </div>
+              </button>
               <div className="mx-2 h-px w-6 bg-border/30" />
-              <div className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground">
+              <button
+                onClick={() => { if (scriptData || scriptPolling || scriptError) setActiveTab("voiceover") }}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                  activeTab === "voiceover" ? "bg-secondary/60 text-foreground" : "text-muted-foreground hover:text-foreground/70",
+                  !scriptData && !scriptPolling && !scriptError && "cursor-not-allowed opacity-50"
+                )}
+              >
                 <Mic className="h-3.5 w-3.5" />
                 Voice Over
-              </div>
+                {scriptPolling && <Loader2 className="ml-1 h-3 w-3 animate-spin text-[var(--brand-pink)]" />}
+              </button>
               <div className="mx-2 h-px w-6 bg-border/30" />
-              <div className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground">
+              <button
+                disabled
+                className="flex cursor-not-allowed items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground opacity-50"
+              >
                 <Film className="h-3.5 w-3.5" />
                 Final Preview
-              </div>
+              </button>
             </div>
 
             <ScrollArea className="flex-1 px-5 py-4">
-              <div className="flex flex-col gap-5">
-                {/* Story Summary */}
-                <div>
-                  <div className="mb-2 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-foreground">Story Summary</h3>
-                    {!editMode && (
-                      <button
-                        onClick={() => setEditMode(true)}
-                        className="flex items-center gap-1 text-[10px] text-[var(--brand-pink)] transition-colors hover:text-[var(--brand-pink)]/70"
-                      >
-                        <Edit3 className="h-3 w-3" />
-                        Edit
-                      </button>
+              {/* ====== BIBLE TAB ====== */}
+              {activeTab === "bible" && (
+                <div className="flex flex-col gap-5">
+                  {/* Story Summary */}
+                  <div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-foreground">Story Summary</h3>
+                      {!editMode && (
+                        <button
+                          onClick={() => setEditMode(true)}
+                          className="flex items-center gap-1 text-[10px] text-[var(--brand-pink)] transition-colors hover:text-[var(--brand-pink)]/70"
+                        >
+                          <Edit3 className="h-3 w-3" />
+                          Edit
+                        </button>
+                      )}
+                    </div>
+
+                    {editMode ? (
+                      <textarea
+                        value={bible.story_summary}
+                        onChange={(e) => updateStorySummary(e.target.value)}
+                        className="min-h-[180px] w-full resize-none rounded-lg border border-[var(--brand-pink)]/30 bg-secondary/15 px-4 py-3 text-sm leading-relaxed text-foreground/90 outline-none transition-colors focus:border-[var(--brand-pink)]/50"
+                      />
+                    ) : (
+                      <div className="rounded-lg border border-border/20 bg-secondary/10 px-4 py-3">
+                        <p className="whitespace-pre-line text-sm leading-relaxed text-foreground/80">
+                          {bible.story_summary}
+                        </p>
+                      </div>
                     )}
                   </div>
 
-                  {editMode ? (
-                    <textarea
-                      value={bible.story_summary}
-                      onChange={(e) => updateStorySummary(e.target.value)}
-                      className="min-h-[180px] w-full resize-none rounded-lg border border-[var(--brand-pink)]/30 bg-secondary/15 px-4 py-3 text-sm leading-relaxed text-foreground/90 outline-none transition-colors focus:border-[var(--brand-pink)]/50"
-                    />
-                  ) : (
-                    <div className="rounded-lg border border-border/20 bg-secondary/10 px-4 py-3">
-                      <p className="whitespace-pre-line text-sm leading-relaxed text-foreground/80">
-                        {bible.story_summary}
-                      </p>
+                  {/* Episodes preview */}
+                  {bible.episodes && bible.episodes.length > 0 && (
+                    <div>
+                      <h3 className="mb-2 text-sm font-semibold text-foreground">
+                        Episodes ({bible.episodes.length})
+                      </h3>
+                      <div className="flex flex-col gap-2">
+                        {bible.episodes.map((ep, i) => (
+                          <div key={i} className="rounded-lg border border-border/20 bg-secondary/10 px-4 py-3">
+                            <div className="mb-1.5 flex items-center gap-2">
+                              <span className="rounded-md bg-secondary/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-foreground/70">
+                                {ep.key}
+                              </span>
+                              {ep.setting && (
+                                <span className="text-[10px] text-muted-foreground">{ep.setting}</span>
+                              )}
+                            </div>
+                            <p className="text-xs leading-relaxed text-foreground/70">{ep.summary}</p>
+                            {ep.visual_anchors && ep.visual_anchors.length > 0 && (
+                              <div className="mt-2 border-t border-border/10 pt-2">
+                                <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">Visual Anchors</span>
+                                <ul className="mt-1 flex flex-col gap-0.5">
+                                  {ep.visual_anchors.map((anchor, j) => (
+                                    <li key={j} className="text-[10px] leading-relaxed text-foreground/50">{anchor}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
+              )}
 
-                {/* Episodes preview */}
-                {bible.episodes && bible.episodes.length > 0 && (
-                  <div>
-                    <h3 className="mb-2 text-sm font-semibold text-foreground">
-                      Episodes ({bible.episodes.length})
-                    </h3>
-                    <div className="flex flex-col gap-2">
-                      {bible.episodes.map((ep, i) => (
-                        <div key={i} className="rounded-lg border border-border/20 bg-secondary/10 px-4 py-3">
-                          <div className="mb-1.5 flex items-center gap-2">
-                            <span className="rounded-md bg-secondary/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-foreground/70">
+              {/* ====== VOICE OVER TAB ====== */}
+              {activeTab === "voiceover" && (
+                <div className="flex flex-col gap-5">
+                  {/* Polling / Loading state */}
+                  {scriptPolling && !scriptData && !scriptError && (
+                    <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-border/20 bg-secondary/10 px-6 py-16">
+                      <Loader2 className="h-8 w-8 animate-spin text-[var(--brand-pink)]" />
+                      <p className="text-center text-sm font-medium text-foreground/80">
+                        AI Director is crafting the storyboard & voice-over script...
+                      </p>
+                      <p className="text-center text-xs text-muted-foreground">
+                        This usually takes 1~3 minutes. Please wait...
+                      </p>
+                      <div className="relative h-1.5 w-48 overflow-hidden rounded-full bg-[var(--brand-pink)]/20">
+                        <div className="absolute inset-y-0 left-0 w-1/3 animate-[progress-slide_1.8s_ease-in-out_infinite] rounded-full bg-[var(--brand-pink)]" />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Error state */}
+                  {scriptError && (
+                    <div className="flex flex-col items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-10">
+                      <AlertCircle className="h-8 w-8 text-red-400" />
+                      <p className="text-center text-sm font-semibold text-red-400">Generation Failed</p>
+                      <p className="text-center text-xs text-red-400/70">{scriptError}</p>
+                    </div>
+                  )}
+
+                  {/* Script content */}
+                  {scriptData && scriptData.episodes.length > 0 && (
+                    <>
+                      <div>
+                        <h3 className="text-sm font-semibold text-foreground">
+                          Voice Over Script ({scriptData.episodes.length} episode{scriptData.episodes.length !== 1 ? "s" : ""})
+                        </h3>
+                        <p className="text-xs text-muted-foreground">Review the AI-generated storyboard and narration for each episode.</p>
+                      </div>
+                      {scriptData.episodes.map((ep, epIdx) => (
+                        <div key={epIdx} className="flex flex-col gap-2">
+                          <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-foreground/70">
+                            <span className="rounded-md bg-secondary/40 px-2 py-0.5 text-[10px] font-bold">
                               {ep.key}
                             </span>
-                            {ep.setting && (
-                              <span className="text-[10px] text-muted-foreground">{ep.setting}</span>
+                            {ep.title && ep.title !== ep.key && (
+                              <span className="font-normal normal-case text-muted-foreground">{ep.title}</span>
                             )}
-                          </div>
-                          <p className="text-xs leading-relaxed text-foreground/70">{ep.summary}</p>
-                          {ep.visual_anchors && ep.visual_anchors.length > 0 && (
-                            <div className="mt-2 border-t border-border/10 pt-2">
-                              <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">Visual Anchors</span>
-                              <ul className="mt-1 flex flex-col gap-0.5">
-                                {ep.visual_anchors.map((anchor, j) => (
-                                  <li key={j} className="text-[10px] leading-relaxed text-foreground/50">{anchor}</li>
-                                ))}
-                              </ul>
+                            <span className="text-[10px] font-normal text-muted-foreground">
+                              {ep.scenes.length} scene{ep.scenes.length !== 1 ? "s" : ""}
+                            </span>
+                          </h4>
+                          {ep.scenes.map((scene, sIdx) => (
+                            <div key={sIdx} className="rounded-lg border border-border/20 bg-secondary/10 px-4 py-3">
+                              <div className="mb-2 flex items-center gap-2">
+                                <span className="rounded bg-[var(--brand-pink)]/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[var(--brand-pink)]">
+                                  {scene.scene_id}
+                                </span>
+                                {scene.duration && (
+                                  <span className="text-[9px] text-muted-foreground">
+                                    {scene.duration}s
+                                  </span>
+                                )}
+                              </div>
+                              {scene.visual && (
+                                <div className="mb-2">
+                                  <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">Visual</span>
+                                  <p className="mt-0.5 text-xs leading-relaxed text-foreground/60">{scene.visual}</p>
+                                </div>
+                              )}
+                              <div>
+                                <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">Voice Over</span>
+                                <p className="mt-0.5 text-xs leading-relaxed text-foreground/80">{scene.voice_over}</p>
+                              </div>
                             </div>
-                          )}
+                          ))}
                         </div>
                       ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* ====== FINAL PREVIEW TAB (placeholder) ====== */}
+              {activeTab === "preview" && (
+                <div className="flex flex-col items-center justify-center gap-3 py-16">
+                  <Film className="h-8 w-8 text-muted-foreground/30" />
+                  <p className="text-sm text-muted-foreground">Final Preview is not yet available.</p>
+                </div>
+              )}
             </ScrollArea>
 
             {/* Action Status */}
@@ -846,68 +1074,119 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
             {/* Action Bar */}
             <div className="shrink-0 border-t border-border/20 px-5 py-3">
-              {editMode ? (
+              {/* ---- Bible Tab Actions ---- */}
+              {activeTab === "bible" && (
+                <>
+                  {editMode ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={cancelEdit}
+                        className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleSaveAndContinue}
+                        disabled={actionStatus === "submitting"}
+                        className="brand-gradient flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-xs font-semibold text-[#fff] transition-opacity hover:opacity-90 disabled:opacity-50"
+                      >
+                        {actionStatus === "submitting" ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                        )}
+                        Save & Continue
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => { const fn = (props as StepReviewProps).onDelete; if (fn) fn(); else onClose(); }}
+                        className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete
+                      </button>
+                      <button
+                        onClick={handleRedo}
+                        disabled={actionStatus === "submitting" || actionStatus === "success"}
+                        className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Redo
+                      </button>
+                      <button
+                        onClick={() => setEditMode(true)}
+                        disabled={actionStatus === "submitting" || actionStatus === "success"}
+                        className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40 disabled:opacity-50"
+                      >
+                        <Edit3 className="h-3.5 w-3.5" />
+                        Edit
+                      </button>
+                      <button
+                        onClick={handleApprove}
+                        disabled={actionStatus === "submitting" || actionStatus === "success"}
+                        className="brand-gradient flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-xs font-semibold text-[#fff] transition-opacity hover:opacity-90 disabled:opacity-50"
+                      >
+                        {actionStatus === "submitting" ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                        )}
+                        Approve
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* ---- Voice Over Tab Actions ---- */}
+              {activeTab === "voiceover" && (
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={cancelEdit}
-                    className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSaveAndContinue}
-                    disabled={actionStatus === "submitting"}
-                    className="brand-gradient flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-xs font-semibold text-[#fff] transition-opacity hover:opacity-90 disabled:opacity-50"
-                  >
-                    {actionStatus === "submitting" ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                    )}
-                    Save & Continue
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  {/* Delete */}
-                  <button
-                    onClick={() => { const fn = (props as StepReviewProps).onDelete; if (fn) fn(); else onClose(); }}
-                    className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Delete
-                  </button>
-                  {/* Reject */}
-                  <button
-                    onClick={handleRedo}
-                    disabled={actionStatus === "submitting" || actionStatus === "success"}
-                    className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                    Redo
-                  </button>
-                  {/* Edit */}
-                  <button
-                    onClick={() => setEditMode(true)}
-                    disabled={actionStatus === "submitting" || actionStatus === "success"}
-                    className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40 disabled:opacity-50"
-                  >
-                    <Edit3 className="h-3.5 w-3.5" />
-                    Edit
-                  </button>
-                  {/* Approve */}
-                  <button
-                    onClick={handleApprove}
-                    disabled={actionStatus === "submitting" || actionStatus === "success"}
-                    className="brand-gradient flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-xs font-semibold text-[#fff] transition-opacity hover:opacity-90 disabled:opacity-50"
-                  >
-                    {actionStatus === "submitting" ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                    )}
-                    Approve
-                  </button>
+                  {scriptPolling ? (
+                    <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--brand-pink)]" />
+                      Waiting for script generation...
+                    </p>
+                  ) : scriptData ? (
+                    <>
+                      <button
+                        onClick={() => { const fn = (props as StepReviewProps).onDelete; if (fn) fn(); else onClose(); }}
+                        className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete
+                      </button>
+                      <button
+                        onClick={handleRedo}
+                        disabled={actionStatus === "submitting"}
+                        className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Redo
+                      </button>
+                      <button
+                        onClick={handleApprove}
+                        disabled={actionStatus === "submitting"}
+                        className="brand-gradient flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-xs font-semibold text-[#fff] transition-opacity hover:opacity-90 disabled:opacity-50"
+                      >
+                        {actionStatus === "submitting" ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                        )}
+                        Approve
+                      </button>
+                    </>
+                  ) : scriptError ? (
+                    <button
+                      onClick={() => { setScriptError(null); setScriptPolling(true); }}
+                      className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      Retry
+                    </button>
+                  ) : null}
                 </div>
               )}
             </div>
