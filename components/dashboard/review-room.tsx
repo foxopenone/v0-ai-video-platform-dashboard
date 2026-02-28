@@ -324,6 +324,12 @@ export function ReviewRoom(props: ReviewRoomProps) {
         intent_tag: c.intent_tag ?? "",
       }))
 
+      // Patch meta.story_summary with the edited value
+      if (!patchedRaw.meta || typeof patchedRaw.meta !== "object") {
+        patchedRaw.meta = {}
+      }
+      ;(patchedRaw.meta as Record<string, unknown>).story_summary = bible.story_summary
+
       // Patch episode_index: convert episodes array back to object
       if (bible.episodes && bible.episodes.length > 0) {
         const epIndex: Record<string, unknown> = {}

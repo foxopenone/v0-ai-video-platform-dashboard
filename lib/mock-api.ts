@@ -243,11 +243,11 @@ export async function fetchBibleFromR2(r2Key: string): Promise<BibleJSON> {
         }))
     : []
 
-  // 3) Story summary: combine all episode summaries
-  const storySummary = episodes.map((ep) => `[${ep.key}] ${ep.summary}`).join("\n\n")
-
-  // 4) Meta
+  // 3) Story summary: read from meta.story_summary (NEVER concatenate episodes)
   const meta = rawObj.meta as BibleJSON["meta"] | undefined
+  const storySummary = (meta as Record<string, unknown>)?.story_summary as string
+    ?? (rawObj as Record<string, unknown>).story_summary as string
+    ?? ""
 
   // Validate we got something useful
   if (characters.length === 0 && episodes.length === 0) {
