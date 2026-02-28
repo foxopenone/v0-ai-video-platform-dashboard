@@ -555,9 +555,18 @@ export function ReviewRoom(props: ReviewRoomProps) {
               <div className="flex flex-col items-center gap-3 text-center">
                 <X className="h-10 w-10 text-red-400" />
                 <p className="text-sm font-medium text-red-400">{progressError}</p>
-                <button onClick={onClose} className="mt-2 rounded-lg border border-border/40 px-4 py-2 text-xs text-muted-foreground hover:bg-secondary/30">
-                  Back to Home
-                </button>
+                <div className="mt-2 flex items-center gap-2">
+                  <button onClick={onClose} className="rounded-lg border border-border/40 px-4 py-2 text-xs text-muted-foreground hover:bg-secondary/30">
+                    Back to Home
+                  </button>
+                  <button
+                    onClick={() => { const fn = (props as ProgressProps).onDelete; if (fn) fn(); else onClose(); }}
+                    className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-400 hover:bg-red-500/20"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete Project
+                  </button>
+                </div>
               </div>
             ) : (
               <>
@@ -598,17 +607,24 @@ export function ReviewRoom(props: ReviewRoomProps) {
               </div>
             )}
 
-            {progressPolling && (
-              <>
-                <p className="text-[10px] text-muted-foreground/50">Auto-refreshing every few seconds...</p>
-                <button
-                  onClick={onClose}
-                  className="mt-2 rounded-lg border border-border/30 px-4 py-2 text-xs text-muted-foreground transition-colors hover:bg-secondary/30 hover:text-foreground"
-                >
-                  Back to Home
-                </button>
-              </>
-            )}
+            <p className="text-[10px] text-muted-foreground/50">
+              {progressPolling ? "Auto-refreshing every few seconds..." : "Done"}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onClose}
+                className="rounded-lg border border-border/30 px-4 py-2 text-xs text-muted-foreground transition-colors hover:bg-secondary/30 hover:text-foreground"
+              >
+                Back to Home
+              </button>
+              <button
+                onClick={() => { const fn = (props as ProgressProps).onDelete; if (fn) fn(); else onClose(); }}
+                className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete Project
+              </button>
+            </div>
               </>
             )}
           </div>
