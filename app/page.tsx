@@ -197,7 +197,6 @@ export default function Page() {
               ?? stepReviewData.jobRecordId
           )
           setStepReviewData(null)
-          if (window.history.state?.reviewOpen) window.history.back()
         }}
         onApproved={() => {
           // Update the card to "completed" after approve succeeds
@@ -231,7 +230,6 @@ export default function Page() {
               ?? progressData.jobRecordId
           )
           setProgressData(null)
-          if (window.history.state?.reviewOpen) window.history.back()
         }}
         onReviewReady={(data) => {
           // Transition from progress -> step_review
