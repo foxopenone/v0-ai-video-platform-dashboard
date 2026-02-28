@@ -72,11 +72,20 @@ export default function Page() {
         const job = await res.json()
         console.log(`[v0] Refresh card ${card.id}: Airtable Status=${job.Status}, Bible_R2_Key=${job.Bible_R2_Key || "null"}`)
 
+        // Update title from Airtable data if we only have the default name
+        const betterTitle = job.Job_ID ? `Job #${job.Job_ID}${job.Total_Episodes ? ` (${job.Total_Episodes} EP)` : ""}` : null
+
         // Use R2 key presence as the real indicator for review-ready
         const hasR2Key = !!(job.Bible_R2_Key || job.Script_R2_Key)
         if (hasR2Key) {
           setInsertedProjects((prev) =>
-            prev.map((p) => p.id === card.id ? { ...p, status: "pending_review" as const, progress: 100 } : p)
+            prev.map((p) => p.id === card.id ? {
+              ...p,
+              status: "pending_review" as const,
+              progress: 100,
+              ...(betterTitle && p.title.startsWith("New Project") ? { title: betterTitle } : {}),
+              ...(job.Total_Episodes ? { episodes: Number(job.Total_Episodes) } : {}),
+            } : p)
           )
         } else if (job.Status === "S9_Done") {
           setInsertedProjects((prev) =>

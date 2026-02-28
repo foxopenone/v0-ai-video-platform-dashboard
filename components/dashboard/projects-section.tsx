@@ -168,16 +168,14 @@ export function ProjectsSection({ onProjectClick, onProjectDelete, insertedProje
                       </span>
                     </div>
 
-                    {/* Delete button — always visible */}
-                    {onProjectDelete && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onProjectDelete(project.id) }}
-                        className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-background/80 text-muted-foreground backdrop-blur-sm transition-colors hover:bg-red-500/30 hover:text-red-400"
-                        aria-label="Remove project"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    )}
+                    {/* Delete button */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onProjectDelete?.(project.id) }}
+                      style={{ position: "absolute", top: 8, right: 8, zIndex: 50, width: 24, height: 24, borderRadius: "50%", background: "rgba(0,0,0,0.7)", border: "1px solid rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                      aria-label="Remove project"
+                    >
+                      <X style={{ width: 14, height: 14, color: "rgba(255,255,255,0.8)" }} />
+                    </button>
 
                     {/* Bottom info */}
                     <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1.5 bg-gradient-to-t from-background/95 via-background/70 to-transparent px-2.5 pb-2.5 pt-10">
