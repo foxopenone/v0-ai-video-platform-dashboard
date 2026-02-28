@@ -56,6 +56,7 @@ interface StepReviewProps {
   projectTitle?: string
   onClose: () => void
   onApproved?: () => void
+  onDelete?: () => void
 }
 
 // ---------- Progress Props (real project, not yet in review status) ----------
@@ -64,6 +65,7 @@ interface ProgressProps {
   jobRecordId: string
   projectTitle: string
   onClose: () => void
+  onDelete?: () => void
   /** Called when status reaches a Check state -- parent should switch to step_review */
   onReviewReady?: (data: { lockToken: string; bibleR2Key: string; currentStatus: string }) => void
   }
@@ -847,7 +849,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                 <div className="flex items-center gap-2">
                   {/* Delete */}
                   <button
-                    onClick={onClose}
+                    onClick={() => { (props as StepReviewProps).onDelete?.() || onClose() }}
                     className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400"
                   >
                     <Trash2 className="h-3.5 w-3.5" />

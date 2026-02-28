@@ -191,6 +191,14 @@ export default function Page() {
           setStepReviewData(null)
           if (window.history.state?.reviewOpen) window.history.back()
         }}
+        onDelete={() => {
+          handleProjectDelete(
+            insertedProjects.find((p) => p.airtableRecordId === stepReviewData.jobRecordId)?.id
+              ?? stepReviewData.jobRecordId
+          )
+          setStepReviewData(null)
+          if (window.history.state?.reviewOpen) window.history.back()
+        }}
         onApproved={() => {
           // Update the card to "completed" after approve succeeds
           setInsertedProjects((prev) =>
@@ -214,6 +222,14 @@ export default function Page() {
         jobRecordId={progressData.jobRecordId}
         projectTitle={progressData.projectTitle}
         onClose={() => {
+          setProgressData(null)
+          if (window.history.state?.reviewOpen) window.history.back()
+        }}
+        onDelete={() => {
+          handleProjectDelete(
+            insertedProjects.find((p) => p.airtableRecordId === progressData.jobRecordId)?.id
+              ?? progressData.jobRecordId
+          )
           setProgressData(null)
           if (window.history.state?.reviewOpen) window.history.back()
         }}
