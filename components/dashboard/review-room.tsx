@@ -317,28 +317,28 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
       // Patch character_graph: map display characters back to raw format
       patchedRaw.character_graph = bible.characters.map((c) => ({
-        name: c.name,
-        role: c.role,
-        visual_feature: c.description,  // description is mapped from visual_feature
-        relation_map: c.relation_map ?? "",
-        intent_tag: c.intent_tag ?? "",
+        name: (c.name ?? "").trim(),
+        role: (c.role ?? "").trim(),
+        visual_feature: (c.description ?? "").trim(),
+        relation_map: (c.relation_map ?? "").trim(),
+        intent_tag: (c.intent_tag ?? "").trim(),
       }))
 
       // Patch meta.story_summary with the edited value
       if (!patchedRaw.meta || typeof patchedRaw.meta !== "object") {
         patchedRaw.meta = {}
       }
-      ;(patchedRaw.meta as Record<string, unknown>).story_summary = bible.story_summary
+      ;(patchedRaw.meta as Record<string, unknown>).story_summary = (bible.story_summary ?? "").trim()
 
       // Patch episode_index: convert episodes array back to object
       if (bible.episodes && bible.episodes.length > 0) {
         const epIndex: Record<string, unknown> = {}
         for (const ep of bible.episodes) {
-          epIndex[ep.key] = {
-            setting: ep.setting,
-            summary: ep.summary,
-            special_alerts: ep.special_alerts,
-            visual_anchors: ep.visual_anchors,
+          epIndex[ep.key.trim()] = {
+            setting: (ep.setting ?? "").trim(),
+            summary: (ep.summary ?? "").trim(),
+            special_alerts: Array.isArray(ep.special_alerts) ? ep.special_alerts.map((s) => s.trim()) : [],
+            visual_anchors: Array.isArray(ep.visual_anchors) ? ep.visual_anchors.map((s) => s.trim()) : [],
           }
         }
         patchedRaw.episode_index = epIndex

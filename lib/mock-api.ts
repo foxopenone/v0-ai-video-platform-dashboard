@@ -220,12 +220,12 @@ export async function fetchBibleFromR2(r2Key: string): Promise<BibleJSON> {
   const charGraph = rawObj.character_graph as Array<Record<string, unknown>> | undefined
   const characters: BibleCharacter[] = Array.isArray(charGraph)
     ? charGraph.map((c) => ({
-        name: String(c.name ?? "Unknown"),
-        role: String(c.role ?? "Supporting"),
-        description: String(c.visual_feature ?? c.description ?? ""),
-        relation_map: c.relation_map ? String(c.relation_map) : undefined,
-        intent_tag: c.intent_tag ? String(c.intent_tag) : undefined,
-        visual_feature: c.visual_feature ? String(c.visual_feature) : undefined,
+        name: String(c.name ?? "Unknown").trim(),
+        role: String(c.role ?? "Supporting").trim(),
+        description: String(c.visual_feature ?? c.description ?? "").trim(),
+        relation_map: c.relation_map ? String(c.relation_map).trim() : undefined,
+        intent_tag: c.intent_tag ? String(c.intent_tag).trim() : undefined,
+        visual_feature: c.visual_feature ? String(c.visual_feature).trim() : undefined,
       }))
     : []
 
@@ -235,19 +235,21 @@ export async function fetchBibleFromR2(r2Key: string): Promise<BibleJSON> {
     ? Object.entries(epIndex)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([key, ep]) => ({
-          key,
-          setting: String(ep.setting ?? ""),
-          summary: String(ep.summary ?? ""),
-          special_alerts: Array.isArray(ep.special_alerts) ? ep.special_alerts.map(String) : [],
-          visual_anchors: Array.isArray(ep.visual_anchors) ? ep.visual_anchors.map(String) : [],
+          key: key.trim(),
+          setting: String(ep.setting ?? "").trim(),
+          summary: String(ep.summary ?? "").trim(),
+          special_alerts: Array.isArray(ep.special_alerts) ? ep.special_alerts.map((s: unknown) => String(s).trim()) : [],
+          visual_anchors: Array.isArray(ep.visual_anchors) ? ep.visual_anchors.map((s: unknown) => String(s).trim()) : [],
         }))
     : []
 
   // 3) Story summary: read from meta.story_summary (NEVER concatenate episodes)
   const meta = rawObj.meta as BibleJSON["meta"] | undefined
-  const storySummary = (meta as Record<string, unknown>)?.story_summary as string
+  const storySummary = (
+    (meta as Record<string, unknown>)?.story_summary as string
     ?? (rawObj as Record<string, unknown>).story_summary as string
     ?? ""
+  ).trim()
 
   // Validate we got something useful
   if (characters.length === 0 && episodes.length === 0) {

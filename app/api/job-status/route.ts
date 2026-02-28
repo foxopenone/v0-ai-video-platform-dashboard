@@ -52,31 +52,32 @@ export async function GET(req: NextRequest) {
     const record = await res.json()
     const f = record.fields || {}
 
-    // Pass through Airtable fields directly -- Bible_R2_Key is a real field
-    console.log("[job-status] Status:", f.Status, "| Bible_R2_Key:", f.Bible_R2_Key || "null", "| Lock_Token:", f.Lock_Token || "null")
+    // Helper: trim string fields, pass through non-strings as-is
+    const t = (v: unknown): string | null => (typeof v === "string" ? v.trim() : null)
+
+    console.log("[job-status] Status:", t(f.Status), "| Bible_R2_Key:", t(f.Bible_R2_Key) || "null", "| Lock_Token:", t(f.Lock_Token) || "null")
 
     return NextResponse.json({
       Job_Record_ID: record.id,
       Job_ID: f.Job_ID ?? null,
-      Status: f.Status ?? "Unknown",
-      Work_Mode: f.Work_Mode ?? null,
-      Lock_Token: f.Lock_Token ?? null,
-      Run_ID: f.Run_ID ?? null,
-      User_ID: f.User_ID ?? null,
-      // Direct from Airtable -- these fields exist
-      Bible_R2_Key: f.Bible_R2_Key ?? null,
+      Status: t(f.Status) ?? "Unknown",
+      Work_Mode: t(f.Work_Mode),
+      Lock_Token: t(f.Lock_Token),
+      Run_ID: t(f.Run_ID),
+      User_ID: t(f.User_ID),
+      Bible_R2_Key: t(f.Bible_R2_Key),
       Bible_Version: f.Bible_Version ?? null,
-      Script_R2_Key: f.Script_R2_Key ?? null,
-      VO_R2_Key: f.VO_R2_Key ?? null,
+      Script_R2_Key: t(f.Script_R2_Key),
+      VO_R2_Key: t(f.VO_R2_Key),
       Video_Parts: f.Video_Parts ?? null,
       Video_Files: f.Video_Files ?? null,
-      Folder_A0_ID: f.Folder_A0_ID ?? null,
-      Folder_AA_ID: f.Folder_AA_ID ?? null,
-      Folder_Raw_ID: f.Folder_Raw_ID ?? null,
-      Folder_Export_ID: f.Folder_Export_ID ?? null,
+      Folder_A0_ID: t(f.Folder_A0_ID),
+      Folder_AA_ID: t(f.Folder_AA_ID),
+      Folder_Raw_ID: t(f.Folder_Raw_ID),
+      Folder_Export_ID: t(f.Folder_Export_ID),
       Total_Episodes: f.Total_Episodes ?? null,
       Ep_Assets: f.Ep_Assets ?? null,
-      Last_Action: f.Last_Action ?? null,
+      Last_Action: t(f.Last_Action),
     })
   } catch (err) {
     console.error("[job-status] Fetch error:", err)
