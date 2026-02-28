@@ -65,10 +65,10 @@ interface ProjectsSectionProps {
   onProjectClick?: (projectId: string) => void | Promise<void>
   onProjectDelete?: (projectId: string) => void
   insertedProjects?: Project[]
-  hiddenProjectIds?: Set<string>
+  hiddenProjectIds?: string[]
 }
 
-export function ProjectsSection({ onProjectClick, onProjectDelete, insertedProjects = [], hiddenProjectIds = new Set() }: ProjectsSectionProps) {
+export function ProjectsSection({ onProjectClick, onProjectDelete, insertedProjects = [], hiddenProjectIds = [] }: ProjectsSectionProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -81,7 +81,7 @@ export function ProjectsSection({ onProjectClick, onProjectDelete, insertedProje
   }, [])
 
   // Merge inserted placeholder cards at the front, filter out hidden
-  const allProjects = [...insertedProjects, ...projects].filter((p) => !hiddenProjectIds.has(p.id))
+  const allProjects = [...insertedProjects, ...projects].filter((p) => !hiddenProjectIds.includes(p.id))
 
   const scroll = (direction: "left" | "right") => {
     if (!scrollRef.current) return

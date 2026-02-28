@@ -12,12 +12,12 @@ export default function Page() {
   const [stepReviewData, setStepReviewData] = useState<StepReviewData | null>(null)
   const [progressData, setProgressData] = useState<{ jobRecordId: string; projectTitle: string } | null>(null)
   const [insertedProjects, setInsertedProjects] = useState<InsertedProject[]>([])
-  // Track hidden/deleted mock project IDs (not in insertedProjects)
-  const [hiddenProjectIds, setHiddenProjectIds] = useState<Set<string>>(() => {
+  // Track hidden/deleted project IDs (array for React state diffing)
+  const [hiddenProjectIds, setHiddenProjectIds] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem("hiddenProjectIds")
-      return saved ? new Set(JSON.parse(saved)) : new Set()
-    } catch { return new Set() }
+      return saved ? JSON.parse(saved) : []
+    } catch { return [] }
   })
 
   // Restore insertedProjects from localStorage on mount.
@@ -130,9 +130,9 @@ export default function Page() {
     setInsertedProjects((prev) => prev.filter((p) => p.id !== id))
     // Also mark it hidden for mock/placeholder cards
     setHiddenProjectIds((prev) => {
-      const next = new Set(prev)
-      next.add(id)
-      try { localStorage.setItem("hiddenProjectIds", JSON.stringify([...next])) } catch {}
+      if (prev.includes(id)) return prev
+      const next = [...prev, id]
+      try { localStorage.setItem("hiddenProjectIds", JSON.stringify(next)) } catch {}
       return next
     })
   }, [])
