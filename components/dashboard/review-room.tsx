@@ -849,7 +849,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                 <div className="flex items-center gap-2">
                   {/* Delete */}
                   <button
-                    onClick={() => { (props as StepReviewProps).onDelete?.() || onClose() }}
+                    onClick={() => { const fn = (props as StepReviewProps).onDelete; if (fn) fn(); else onClose(); }}
                     className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
