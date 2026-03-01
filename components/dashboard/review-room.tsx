@@ -197,6 +197,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const [editMode, setEditMode] = useState(false)
   const [actionStatus, setActionStatus] = useState<"idle" | "submitting" | "success" | "error">("idle")
   const [actionMessage, setActionMessage] = useState("")
+  // Global action lock: once any action fires, ALL buttons are disabled until next phase loads.
+  // This prevents duplicate POST requests that blow up backend AI nodes.
+  const [actionLocked, setActionLocked] = useState(false)
   // Voice Over (Script) state for step_review
   type ReviewTab = "bible" | "voiceover" | "preview"
   const [activeTab, setActiveTab] = useState<ReviewTab>("bible")
@@ -345,6 +348,14 @@ export function ReviewRoom(props: ReviewRoomProps) {
     return null
   }, [isStepReview, props])
 
+  /** Derive the backend status string from the active tab for API routing.
+   *  Bible tab -> S3_Bible_Check -> routes to /webhook/04-review-action
+   *  VO tab -> S5_Script_Check -> routes to /webhook/05-review-action
+   *  Preview tab -> S8_Render (used for redo only) */
+  const currentPhaseStatus = activeTab === "voiceover" ? "S5_Script_Check"
+    : activeTab === "preview" ? "S8_Render"
+    : "S3_Bible_Check"
+
   // ── Voice Over: Edit handler (only `text` field is editable) ──
   const updateVOText = useCallback((partIdx: number, eventIdx: number, newText: string) => {
     setScriptData((prev) => {
@@ -362,10 +373,13 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
   // ── Voice Over: Save & Continue (lossless writeback) ──
   const handleVOSaveAndContinue = useCallback(async () => {
+    if (actionLocked) return // hard debounce
     if (!scriptData?._raw || !scriptR2Key) return
     const info = getCallbackInfo()
     if (!info) return
 
+    // GLOBAL LOCK immediately
+    setActionLocked(true)
     setActionStatus("submitting")
     setActionMessage("Saving voice-over edits...")
 
@@ -373,7 +387,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
       // Deep-clone the original raw JSON (full structure preserved)
       const patchedRaw = structuredClone(scriptData._raw) as Record<string, unknown>
 
-      // Patch only `text` fields in parts[].timeline[] — everything else untouched
+      // Patch only `text` fields in parts[].timeline[]
       const rawParts = patchedRaw.parts as Array<Record<string, unknown>>
       for (let pi = 0; pi < scriptData.parts.length; pi++) {
         const rawTimeline = (rawParts[pi]?.timeline ?? []) as Array<Record<string, unknown>>
@@ -386,17 +400,18 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
       console.log("[v0] VO writeback patchedRaw keys:", Object.keys(patchedRaw))
 
-      // Write back to the same Script_R2_Key, then approve to continue pipeline
-      await reviewEditContinue(info.jobRecordId, info.lockToken, scriptR2Key, patchedRaw)
+      // VO is S5_Script_Check -> routes to /webhook/05-review-action
+      await reviewEditContinue(info.jobRecordId, info.lockToken, scriptR2Key, patchedRaw, "S5_Script_Check")
       setActionStatus("success")
       setActionMessage("Voice-over saved! Switching to Final Preview...")
-      // Transition to video rendering phase
       startVideoPolling()
+      // actionLocked stays TRUE until video data arrives
     } catch (err) {
       setActionStatus("error")
       setActionMessage(err instanceof Error ? err.message : "Save failed")
+      setActionLocked(false) // unlock on error
     }
-  }, [scriptData, scriptR2Key, getCallbackInfo])
+  }, [scriptData, scriptR2Key, getCallbackInfo, actionLocked])
 
   // ── Step Review: Action Handlers ──
 
@@ -420,12 +435,16 @@ export function ReviewRoom(props: ReviewRoomProps) {
   }, [])
 
   const handleApprove = useCallback(async () => {
+    if (actionLocked) return // hard debounce
     const info = getCallbackInfo()
     if (!info) return
+    // GLOBAL LOCK: disable all buttons immediately before any network call
+    setActionLocked(true)
     setActionStatus("submitting")
     setActionMessage("Approving and continuing pipeline...")
     try {
-      await reviewApprove(info.jobRecordId, info.lockToken)
+      // Route approve to correct webhook based on current phase status
+      await reviewApprove(info.jobRecordId, info.lockToken, currentPhaseStatus)
       setActionStatus("success")
       // Notify parent to update card status
       if (isStepReview && (props as StepReviewProps).onApproved) {
@@ -439,24 +458,28 @@ export function ReviewRoom(props: ReviewRoomProps) {
         setActionMessage("Approved! Switching to Voice Over...")
         startVoiceOverPolling()
       }
+      // actionLocked stays TRUE -- only cleared when next phase data arrives
     } catch (err) {
       setActionStatus("error")
       setActionMessage(err instanceof Error ? err.message : "Approve failed")
+      setActionLocked(false) // unlock on error so user can retry
     }
-  }, [getCallbackInfo, startVoiceOverPolling, startVideoPolling, activeTab])
+  }, [getCallbackInfo, startVoiceOverPolling, startVideoPolling, activeTab, actionLocked, currentPhaseStatus])
 
   const handleSaveAndContinue = useCallback(async () => {
+    if (actionLocked) return // hard debounce
     const info = getCallbackInfo()
     if (!info || !bible) return
     const { jobRecordId, lockToken, bibleR2Key } = info
+    // GLOBAL LOCK immediately
+    setActionLocked(true)
     setActionStatus("submitting")
     setActionMessage("Writing changes to R2 and continuing...")
     try {
       // Per backend spec: writeback MUST patch the original raw, not the display view.
-      // bible._raw holds the original R2 JSON; we patch character_graph and episode_index.
       const patchedRaw = structuredClone(bible._raw ?? {}) as Record<string, unknown>
 
-      // Patch character_graph: map display characters back to raw format
+      // Patch character_graph
       patchedRaw.character_graph = bible.characters.map((c) => ({
         name: (c.name ?? "").trim(),
         role: (c.role ?? "").trim(),
@@ -465,13 +488,13 @@ export function ReviewRoom(props: ReviewRoomProps) {
         intent_tag: (c.intent_tag ?? "").trim(),
       }))
 
-      // Patch meta.story_summary with the edited value
+      // Patch meta.story_summary
       if (!patchedRaw.meta || typeof patchedRaw.meta !== "object") {
         patchedRaw.meta = {}
       }
       ;(patchedRaw.meta as Record<string, unknown>).story_summary = (bible.story_summary ?? "").trim()
 
-      // Patch episode_index: convert episodes array back to object
+      // Patch episode_index
       if (bible.episodes && bible.episodes.length > 0) {
         const epIndex: Record<string, unknown> = {}
         for (const ep of bible.episodes) {
@@ -486,42 +509,40 @@ export function ReviewRoom(props: ReviewRoomProps) {
       }
 
       console.log("[v0] Writeback patchedRaw keys:", Object.keys(patchedRaw))
-      await reviewEditContinue(jobRecordId, lockToken, bibleR2Key, patchedRaw)
+      // Bible is S3_Bible_Check -> routes to /webhook/04-review-action
+      await reviewEditContinue(jobRecordId, lockToken, bibleR2Key, patchedRaw, "S3_Bible_Check")
       setOriginalBible(structuredClone(bible))
       setEditMode(false)
       setActionStatus("success")
       setActionMessage("Changes saved! Switching to Voice Over...")
-      // Switch to Voice Over tab and start polling
       startVoiceOverPolling()
+      // actionLocked stays TRUE until VO data arrives
     } catch (err) {
       setActionStatus("error")
       setActionMessage(err instanceof Error ? err.message : "Save & Continue failed")
+      setActionLocked(false) // unlock on error
     }
-  }, [getCallbackInfo, bible])
+  }, [getCallbackInfo, bible, actionLocked])
 
   const handleRedo = useCallback(async () => {
+    if (actionLocked) return // hard debounce
     const info = getCallbackInfo()
     if (!info) return
-    // Determine current status for redo routing based on active tab
-    let status: string
-    if (activeTab === "voiceover") {
-      status = "S5_Script_Check"
-    } else if (activeTab === "preview") {
-      status = "S8_Render"
-    } else {
-      status = isStepReview ? (props as StepReviewProps).currentStatus || "S3_Bible_Check" : "S3_Bible_Check"
-    }
+    // GLOBAL LOCK immediately
+    setActionLocked(true)
     setActionStatus("submitting")
     setActionMessage("Requesting redo...")
     try {
-      await reviewRedo(info.jobRecordId, info.lockToken, status)
+      await reviewRedo(info.jobRecordId, info.lockToken, currentPhaseStatus)
       setActionStatus("success")
       setActionMessage("Redo triggered! Pipeline will restart this phase.")
+      // Redo keeps lock -- page should be closed or refreshed
     } catch (err) {
       setActionStatus("error")
       setActionMessage(err instanceof Error ? err.message : "Redo failed")
+      setActionLocked(false) // unlock on error
     }
-  }, [getCallbackInfo, isStepReview, props, activeTab])
+  }, [getCallbackInfo, currentPhaseStatus, actionLocked])
 
   // ── Final Preview: Per-Part Approve (frontend-only, mark done) ──
   const handleVideoPartApprove = useCallback((partId: string) => {
@@ -620,6 +641,10 @@ export function ReviewRoom(props: ReviewRoomProps) {
             const data = await fetchScriptFromR2(job.Script_R2_Key)
             console.log("[v0] Script loaded:", data.parts.length, "parts")
             setScriptData(data)
+            // UNLOCK: next phase data arrived, user can interact again
+            setActionLocked(false)
+            setActionStatus("idle")
+            setActionMessage("")
           } catch (err) {
             setScriptError(err instanceof Error ? err.message : "Failed to load script")
           }
@@ -698,6 +723,10 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
         if (finalVideos.length > 0) {
           console.log("[v0] Final_Video found:", finalVideos.length, "parts")
+          // UNLOCK: video data arrived, user can interact with per-part actions
+          setActionLocked(false)
+          setActionStatus("idle")
+          setActionMessage("")
           // Merge with existing state (preserve approved/redoing flags)
           setVideoParts((prev) => {
             return finalVideos.map((fv) => {
@@ -1065,6 +1094,25 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
     return (
       <div className="fixed inset-0 z-50 flex flex-col bg-background">
+        {/* ===== GLOBAL ACTION LOCK OVERLAY ===== */}
+        {actionLocked && (
+          <div className="absolute inset-0 z-[60] flex items-center justify-center bg-background/80 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-4 rounded-2xl border border-border/20 bg-card px-10 py-8 shadow-2xl">
+              <Loader2 className="h-10 w-10 animate-spin text-[var(--brand-pink)]" />
+              <p className="text-sm font-semibold text-foreground">
+                {actionMessage || "Processing, please wait..."}
+              </p>
+              <p className="max-w-xs text-center text-xs text-muted-foreground">
+                {actionStatus === "submitting"
+                  ? "Sending request to backend..."
+                  : "Waiting for AI pipeline (1~3 min). Do NOT close this page."}
+              </p>
+              <div className="relative h-1.5 w-48 overflow-hidden rounded-full bg-[var(--brand-pink)]/20">
+                <div className="absolute inset-y-0 left-0 w-1/3 animate-[progress-slide_1.8s_ease-in-out_infinite] rounded-full bg-[var(--brand-pink)]" />
+              </div>
+            </div>
+          </div>
+        )}
         {/* Header */}
         <header className="flex h-12 shrink-0 items-center justify-between border-b border-border/30 px-5">
           <div className="flex items-center gap-2 text-sm">
@@ -1480,16 +1528,17 @@ export function ReviewRoom(props: ReviewRoomProps) {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={cancelEdit}
-                        className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40"
+                        disabled={actionLocked}
+                        className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40 disabled:opacity-50"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={handleSaveAndContinue}
-                        disabled={actionStatus === "submitting"}
+                        disabled={actionLocked}
                         className="brand-gradient flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-xs font-semibold text-[#fff] transition-opacity hover:opacity-90 disabled:opacity-50"
                       >
-                        {actionStatus === "submitting" ? (
+                        {actionLocked ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : (
                           <CheckCircle2 className="h-3.5 w-3.5" />
@@ -1501,14 +1550,15 @@ export function ReviewRoom(props: ReviewRoomProps) {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => { const fn = (props as StepReviewProps).onDelete; if (fn) fn(); else onClose(); }}
-                        className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400"
+                        disabled={actionLocked}
+                        className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                         Delete
                       </button>
                       <button
                         onClick={handleRedo}
-                        disabled={actionStatus === "submitting" || actionStatus === "success"}
+                        disabled={actionLocked}
                         className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
                       >
                         <RotateCcw className="h-3.5 w-3.5" />
@@ -1516,7 +1566,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                       </button>
                       <button
                         onClick={() => setEditMode(true)}
-                        disabled={actionStatus === "submitting" || actionStatus === "success"}
+                        disabled={actionLocked}
                         className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40 disabled:opacity-50"
                       >
                         <Edit3 className="h-3.5 w-3.5" />
@@ -1524,10 +1574,10 @@ export function ReviewRoom(props: ReviewRoomProps) {
                       </button>
                       <button
                         onClick={handleApprove}
-                        disabled={actionStatus === "submitting" || actionStatus === "success"}
+                        disabled={actionLocked}
                         className="brand-gradient flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-xs font-semibold text-[#fff] transition-opacity hover:opacity-90 disabled:opacity-50"
                       >
-                        {actionStatus === "submitting" ? (
+                        {actionLocked ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : (
                           <CheckCircle2 className="h-3.5 w-3.5" />
@@ -1553,16 +1603,17 @@ export function ReviewRoom(props: ReviewRoomProps) {
                         <>
                           <button
                             onClick={() => setEditMode(false)}
-                            className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40"
+                            disabled={actionLocked}
+                            className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40 disabled:opacity-50"
                           >
                             Cancel
                           </button>
                           <button
                             onClick={handleVOSaveAndContinue}
-                            disabled={actionStatus === "submitting"}
+                            disabled={actionLocked}
                             className="brand-gradient flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-xs font-semibold text-[#fff] transition-opacity hover:opacity-90 disabled:opacity-50"
                           >
-                            {actionStatus === "submitting" ? (
+                            {actionLocked ? (
                               <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             ) : (
                               <CheckCircle2 className="h-3.5 w-3.5" />
@@ -1574,14 +1625,15 @@ export function ReviewRoom(props: ReviewRoomProps) {
                         <>
                           <button
                             onClick={() => { const fn = (props as StepReviewProps).onDelete; if (fn) fn(); else onClose(); }}
-                            className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400"
+                            disabled={actionLocked}
+                            className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                             Delete
                           </button>
                           <button
                             onClick={handleRedo}
-                            disabled={actionStatus === "submitting"}
+                            disabled={actionLocked}
                             className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
                           >
                             <RotateCcw className="h-3.5 w-3.5" />
@@ -1589,7 +1641,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                           </button>
                           <button
                             onClick={() => setEditMode(true)}
-                            disabled={actionStatus === "submitting"}
+                            disabled={actionLocked}
                             className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40 disabled:opacity-50"
                           >
                             <Edit3 className="h-3.5 w-3.5" />
@@ -1597,10 +1649,10 @@ export function ReviewRoom(props: ReviewRoomProps) {
                           </button>
                           <button
                             onClick={handleApprove}
-                            disabled={actionStatus === "submitting"}
+                            disabled={actionLocked}
                             className="brand-gradient flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-xs font-semibold text-[#fff] transition-opacity hover:opacity-90 disabled:opacity-50"
                           >
-                            {actionStatus === "submitting" ? (
+                            {actionLocked ? (
                               <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             ) : (
                               <CheckCircle2 className="h-3.5 w-3.5" />

@@ -351,11 +351,27 @@ export async function fetchScriptFromR2(r2Key: string): Promise<ScriptJSON> {
 // ── Approve / Redo — per V56 spec ──────────────────────────────
 
 /**
- * Unified Approve (all review stages).
- * POST /webhook/04-review-action  { action: "approve" }
+ * Status-based Approve routing (V56 contract).
+ *   S3_Bible_Check  -> POST /webhook/04-review-action  { action: "approve" }
+ *   S5_Script_Check -> POST /webhook/05-review-action  { action: "approve" }
+ * Frontend MUST pass the current status so we hit the correct endpoint.
  */
-export async function reviewApprove(jobRecordId: string, lockToken: string) {
-  const res = await fetch(`${N8N_BASE}/04-review-action`, {
+export async function reviewApprove(
+  jobRecordId: string,
+  lockToken: string,
+  currentStatus: string,
+) {
+  let endpoint: string
+  if (currentStatus === "S5_Script_Check") {
+    endpoint = "05-review-action"
+  } else {
+    // S3_Bible_Check and any other status default to 04
+    endpoint = "04-review-action"
+  }
+
+  console.log(`[v0] reviewApprove -> POST /${endpoint}  (status: ${currentStatus})`)
+
+  const res = await fetch(`${N8N_BASE}/${endpoint}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -364,7 +380,7 @@ export async function reviewApprove(jobRecordId: string, lockToken: string) {
       action: "approve",
     }),
   })
-  if (!res.ok) throw new Error("Approve failed: " + res.status)
+  if (!res.ok) throw new Error(`Approve failed (${endpoint}): ` + res.status)
   return res.json()
 }
 
@@ -408,14 +424,16 @@ export async function reviewRedo(
 }
 
 /**
- * Edit & Continue (writeback to R2, then approve).
+ * Edit & Continue (writeback to R2, then approve via correct route).
  * Works for both Bible (S3) and Script/VO (S5).
+ * currentStatus is REQUIRED for routing the approve to the correct webhook.
  */
 export async function reviewEditContinue(
   jobRecordId: string,
   lockToken: string,
   r2Key: string,
   editedJson: Record<string, unknown>,
+  currentStatus: string,
 ) {
   // Step 1: Writeback original-structure JSON to R2
   const writeRes = await fetch(R2_WRITEBACK, {
@@ -435,8 +453,8 @@ export async function reviewEditContinue(
     throw new Error("R2 writeback failed: " + writeRes.status + " " + errBody)
   }
 
-  // Step 2: Approve to continue pipeline
-  return reviewApprove(jobRecordId, lockToken)
+  // Step 2: Approve to continue pipeline (routed by status)
+  return reviewApprove(jobRecordId, lockToken, currentStatus)
 }
 
 // fetchProjectDetail has been permanently deleted.
