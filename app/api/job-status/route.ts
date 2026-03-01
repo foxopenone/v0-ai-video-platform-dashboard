@@ -78,6 +78,8 @@ export async function GET(req: NextRequest) {
       Total_Episodes: f.Total_Episodes ?? null,
       Ep_Assets: f.Ep_Assets ?? null,
       Last_Action: t(f.Last_Action),
+      // Final_Video: JSON array string e.g. [{"part":"1","url":"https://..."}]
+      Final_Video: f.Final_Video ?? null,
     })
   } catch (err) {
     console.error("[job-status] Fetch error:", err)

@@ -53,7 +53,7 @@ interface StepReviewProps {
   jobRecordId: string
   lockToken: string
   bibleR2Key: string
-  currentStatus: string // e.g. "S3_Bible_Check" | "S5_Script_Check"
+  currentStatus: string // e.g. "S3_Bible_Check" | "S5_Script_Check" | "S8_Render" | "S9_Done"
   projectTitle?: string
   onClose: () => void
   onApproved?: () => void
@@ -204,6 +204,16 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const [scriptData, setScriptData] = useState<ScriptJSON | null>(null)
   const [scriptError, setScriptError] = useState<string | null>(null)
   const [scriptR2Key, setScriptR2Key] = useState<string | null>(null)
+  // Final Preview (Video) state for step_review
+  interface VideoPart {
+    part: string
+    url: string
+    approved: boolean     // frontend-only: user clicked Approve for this part
+    redoing: boolean      // this part is being re-rendered after Redo
+  }
+  const [videoPolling, setVideoPolling] = useState(false)
+  const [videoParts, setVideoParts] = useState<VideoPart[]>([])
+  const [videoError, setVideoError] = useState<string | null>(null)
   // Legacy review state
   const [project, setProject] = useState<ProjectDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -241,6 +251,24 @@ export function ReviewRoom(props: ReviewRoomProps) {
         setBibleError(err.message)
       })
       .finally(() => setBibleLoading(false))
+
+    // If status is S8_Render or S9, auto-switch to Final Preview tab
+    if (/^S8_Render|^S9/i.test(currentStatus)) {
+      console.log("[v0] Status is S8/S9 -- auto-switching to Final Preview tab")
+      setActiveTab("preview")
+      setVideoPolling(true)
+      // Also try to load script data in background (for VO tab browsing)
+      fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}`)
+        .then((r) => r.ok ? r.json() : Promise.reject(new Error(`API ${r.status}`)))
+        .then((job) => {
+          if (job.Script_R2_Key) {
+            setScriptR2Key(job.Script_R2_Key)
+            return fetchScriptFromR2(job.Script_R2_Key).then((data) => setScriptData(data))
+          }
+        })
+        .catch(() => { /* non-critical, VO tab just won't be browseable */ })
+      return // skip S5 check below
+    }
 
     // If status is already S5_Script_Check, auto-switch to Voice Over tab
     if (/^S5_Script/i.test(currentStatus)) {
@@ -358,10 +386,12 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
       console.log("[v0] VO writeback patchedRaw keys:", Object.keys(patchedRaw))
 
-      // Write back to the same Script_R2_Key
+      // Write back to the same Script_R2_Key, then approve to continue pipeline
       await reviewEditContinue(info.jobRecordId, info.lockToken, scriptR2Key, patchedRaw)
       setActionStatus("success")
-      setActionMessage("Voice-over saved! Pipeline continuing...")
+      setActionMessage("Voice-over saved! Switching to Final Preview...")
+      // Transition to video rendering phase
+      startVideoPolling()
     } catch (err) {
       setActionStatus("error")
       setActionMessage(err instanceof Error ? err.message : "Save failed")
@@ -379,6 +409,16 @@ export function ReviewRoom(props: ReviewRoomProps) {
     setScriptError(null)
   }, [])
 
+  /** After VO Approve/SaveAndContinue succeeds, switch to Final Preview tab and start video polling */
+  const startVideoPolling = useCallback(() => {
+    console.log("[v0] Switching to Final Preview tab and starting video polling")
+    setActiveTab("preview")
+    setVideoPolling(true)
+    setVideoParts([])
+    setVideoError(null)
+    setEditMode(false) // lock all edits
+  }, [])
+
   const handleApprove = useCallback(async () => {
     const info = getCallbackInfo()
     if (!info) return
@@ -387,18 +427,23 @@ export function ReviewRoom(props: ReviewRoomProps) {
     try {
       await reviewApprove(info.jobRecordId, info.lockToken)
       setActionStatus("success")
-      setActionMessage("Approved! Switching to Voice Over...")
       // Notify parent to update card status
       if (isStepReview && (props as StepReviewProps).onApproved) {
         (props as StepReviewProps).onApproved!()
       }
-      // Switch to Voice Over tab and start polling
-      startVoiceOverPolling()
+      // Route to next phase based on current tab
+      if (activeTab === "voiceover") {
+        setActionMessage("Approved! Switching to Final Preview...")
+        startVideoPolling()
+      } else {
+        setActionMessage("Approved! Switching to Voice Over...")
+        startVoiceOverPolling()
+      }
     } catch (err) {
       setActionStatus("error")
       setActionMessage(err instanceof Error ? err.message : "Approve failed")
     }
-  }, [getCallbackInfo, startVoiceOverPolling])
+  }, [getCallbackInfo, startVoiceOverPolling, startVideoPolling, activeTab])
 
   const handleSaveAndContinue = useCallback(async () => {
     const info = getCallbackInfo()
@@ -457,8 +502,15 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const handleRedo = useCallback(async () => {
     const info = getCallbackInfo()
     if (!info) return
-    // Determine current status for redo routing
-    const status = isStepReview ? (props as StepReviewProps).currentStatus || "S3_Bible_Check" : "S3_Bible_Check"
+    // Determine current status for redo routing based on active tab
+    let status: string
+    if (activeTab === "voiceover") {
+      status = "S5_Script_Check"
+    } else if (activeTab === "preview") {
+      status = "S8_Render"
+    } else {
+      status = isStepReview ? (props as StepReviewProps).currentStatus || "S3_Bible_Check" : "S3_Bible_Check"
+    }
     setActionStatus("submitting")
     setActionMessage("Requesting redo...")
     try {
@@ -469,7 +521,49 @@ export function ReviewRoom(props: ReviewRoomProps) {
       setActionStatus("error")
       setActionMessage(err instanceof Error ? err.message : "Redo failed")
     }
-  }, [getCallbackInfo, isStepReview, props])
+  }, [getCallbackInfo, isStepReview, props, activeTab])
+
+  // ── Final Preview: Per-Part Approve (frontend-only, mark done) ──
+  const handleVideoPartApprove = useCallback((partId: string) => {
+    setVideoParts((prev) =>
+      prev.map((vp) => vp.part === partId ? { ...vp, approved: true } : vp)
+    )
+  }, [])
+
+  // ── Final Preview: Per-Part Redo (POST /webhook/05-redo with Part_Index) ──
+  const handleVideoPartRedo = useCallback(async (partId: string) => {
+    const info = getCallbackInfo()
+    if (!info) return
+    // Mark this part as redoing
+    setVideoParts((prev) =>
+      prev.map((vp) => vp.part === partId ? { ...vp, redoing: true, approved: false, url: "" } : vp)
+    )
+    try {
+      await reviewRedo(info.jobRecordId, info.lockToken, "S8_Render", Number(partId))
+      console.log("[v0] Video redo triggered for Part", partId)
+      // Keep polling -- the poller will pick up the new URL when ready
+      setVideoPolling(true)
+    } catch (err) {
+      console.error("[v0] Video redo failed:", err)
+      setVideoParts((prev) =>
+        prev.map((vp) => vp.part === partId ? { ...vp, redoing: false } : vp)
+      )
+      setActionStatus("error")
+      setActionMessage(err instanceof Error ? err.message : "Redo failed for Part " + partId)
+    }
+  }, [getCallbackInfo])
+
+  // ── Final Preview: Per-Part Download ──
+  const handleVideoDownload = useCallback((url: string, partId: string) => {
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `part_${partId}.mp4`
+    a.target = "_blank"
+    a.rel = "noopener noreferrer"
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  }, [])
 
   // ── Voice Over Script Polling (after Bible Approve/Save&Continue) ──
   useEffect(() => {
@@ -545,6 +639,119 @@ export function ReviewRoom(props: ReviewRoomProps) {
     const interval = setInterval(poll, 10000) // 10 seconds per spec
     return () => { stopped = true; clearInterval(interval); console.log("[v0] Script poller STOPPED") }
   }, [scriptPolling, isStepReview])
+
+  // ── Final Preview: Video Polling (after VO Approve or S8_Render auto-detect) ──
+  useEffect(() => {
+    if (!videoPolling || !isStepReview) return
+    const { jobRecordId } = props as StepReviewProps
+    let stopped = false
+    let failCount = 0
+    const startTime = Date.now()
+    const TIMEOUT_MS = 15 * 60 * 1000 // 15 minutes (video rendering takes longer)
+
+    console.log("[v0] Video poller STARTED for record:", jobRecordId)
+
+    const poll = async () => {
+      if (stopped) return
+
+      if (Date.now() - startTime > TIMEOUT_MS) {
+        stopped = true
+        setVideoPolling(false)
+        setVideoError("Video rendering timed out (15 min). Please refresh the page.")
+        return
+      }
+
+      try {
+        const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}`)
+        if (!res.ok) {
+          failCount++
+          if (failCount >= 3) {
+            stopped = true
+            setVideoPolling(false)
+            setVideoError(`API returned ${res.status} after ${failCount} retries`)
+          }
+          return
+        }
+        failCount = 0
+        const job = await res.json()
+        console.log(`[v0] Video poll | Status: ${job.Status} | Final_Video: ${job.Final_Video ? "present" : "null"}`)
+
+        // Check for error/failed
+        if (["Error", "Failed"].includes(job.Status)) {
+          stopped = true
+          setVideoPolling(false)
+          setVideoError("Video rendering failed. Please retry or contact support.")
+          return
+        }
+
+        // Parse Final_Video field (JSON array string or already parsed)
+        let finalVideos: Array<{ part: string; url: string }> = []
+        if (job.Final_Video) {
+          try {
+            finalVideos = typeof job.Final_Video === "string"
+              ? JSON.parse(job.Final_Video)
+              : job.Final_Video
+          } catch {
+            console.error("[v0] Failed to parse Final_Video:", job.Final_Video)
+          }
+        }
+
+        if (finalVideos.length > 0) {
+          console.log("[v0] Final_Video found:", finalVideos.length, "parts")
+          // Merge with existing state (preserve approved/redoing flags)
+          setVideoParts((prev) => {
+            return finalVideos.map((fv) => {
+              const existing = prev.find((p) => p.part === String(fv.part))
+              if (existing && existing.redoing && fv.url) {
+                // Redo completed: new URL arrived, clear redoing
+                return { part: String(fv.part), url: fv.url, approved: false, redoing: false }
+              }
+              if (existing && existing.approved) {
+                // Keep approved state, update URL in case it changed
+                return { ...existing, url: fv.url }
+              }
+              if (existing && !fv.url) {
+                // URL not yet ready for this part
+                return existing
+              }
+              // New part or update
+              return {
+                part: String(fv.part),
+                url: fv.url || "",
+                approved: existing?.approved ?? false,
+                redoing: existing?.redoing ?? false,
+              }
+            })
+          })
+
+          // Check if all parts have URLs (rendering complete)
+          const allReady = finalVideos.every((fv) => !!fv.url)
+          // Check if any part is being re-done
+          const anyRedoing = videoParts.some((vp) => vp.redoing)
+          if (allReady && !anyRedoing) {
+            // If status is S9_Done, stop polling entirely
+            if (job.Status === "S9_Done") {
+              console.log("[v0] All videos done, status S9_Done. Stopping video poller.")
+              stopped = true
+              setVideoPolling(false)
+            }
+            // Otherwise keep polling for status updates
+          }
+        }
+      } catch (err) {
+        failCount++
+        if (failCount >= 3) {
+          stopped = true
+          setVideoPolling(false)
+          setVideoError("Network error - could not reach backend")
+        }
+      }
+    }
+
+    poll()
+    const interval = setInterval(poll, 10000) // 10 seconds
+    return () => { stopped = true; clearInterval(interval); console.log("[v0] Video poller STOPPED") }
+  }, [videoPolling, isStepReview])
 
   // ── Legacy mode: no more mock data. Show loading=false immediately. ──
   useEffect(() => {
@@ -940,11 +1147,16 @@ export function ReviewRoom(props: ReviewRoomProps) {
               </button>
               <div className="mx-2 h-px w-6 bg-border/30" />
               <button
-                disabled
-                className="flex cursor-not-allowed items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground opacity-50"
+                onClick={() => { if (videoParts.length > 0 || videoPolling || videoError) setActiveTab("preview") }}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                  activeTab === "preview" ? "bg-secondary/60 text-foreground" : "text-muted-foreground hover:text-foreground/70",
+                  !videoParts.length && !videoPolling && !videoError && "cursor-not-allowed opacity-50"
+                )}
               >
                 <Film className="h-3.5 w-3.5" />
                 Final Preview
+                {videoPolling && <Loader2 className="ml-1 h-3 w-3 animate-spin text-[var(--brand-pink)]" />}
               </button>
             </div>
 
@@ -1123,11 +1335,121 @@ export function ReviewRoom(props: ReviewRoomProps) {
                 </div>
               )}
 
-              {/* ====== FINAL PREVIEW TAB (placeholder) ====== */}
+              {/* ====== FINAL PREVIEW TAB ====== */}
               {activeTab === "preview" && (
-                <div className="flex flex-col items-center justify-center gap-3 py-16">
-                  <Film className="h-8 w-8 text-muted-foreground/30" />
-                  <p className="text-sm text-muted-foreground">Final Preview is not yet available.</p>
+                <div className="flex flex-col gap-5">
+                  {/* Polling / Rendering in progress */}
+                  {videoPolling && videoParts.length === 0 && !videoError && (
+                    <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-border/20 bg-secondary/10 px-6 py-16">
+                      <Loader2 className="h-8 w-8 animate-spin text-[var(--brand-pink)]" />
+                      <p className="text-center text-sm font-medium text-foreground/80">
+                        Video factory is rendering your episodes...
+                      </p>
+                      <p className="text-center text-xs text-muted-foreground">
+                        This may take 5~15 minutes depending on video length. Videos appear per-part as they finish.
+                      </p>
+                      <div className="relative h-1.5 w-48 overflow-hidden rounded-full bg-[var(--brand-pink)]/20">
+                        <div className="absolute inset-y-0 left-0 w-1/3 animate-[progress-slide_1.8s_ease-in-out_infinite] rounded-full bg-[var(--brand-pink)]" />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Error state */}
+                  {videoError && (
+                    <div className="flex flex-col items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-10">
+                      <AlertCircle className="h-8 w-8 text-red-400" />
+                      <p className="text-center text-sm font-semibold text-red-400">Rendering Failed</p>
+                      <p className="text-center text-xs text-red-400/70">{videoError}</p>
+                    </div>
+                  )}
+
+                  {/* Video parts */}
+                  {videoParts.length > 0 && (
+                    <>
+                      <div>
+                        <h3 className="text-sm font-semibold text-foreground">
+                          Final Videos ({videoParts.length} part{videoParts.length !== 1 ? "s" : ""})
+                        </h3>
+                        <p className="text-xs text-muted-foreground">
+                          Review each part. Approve to finalize, or Redo to re-render.
+                        </p>
+                      </div>
+                      {videoParts.map((vp) => (
+                        <div key={vp.part} className="overflow-hidden rounded-xl border border-border/20 bg-secondary/10">
+                          {/* Part header */}
+                          <div className="flex items-center justify-between border-b border-border/10 px-4 py-2">
+                            <div className="flex items-center gap-2">
+                              <span className="rounded-md bg-secondary/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-foreground/70">
+                                Part {vp.part}
+                              </span>
+                              {vp.approved && (
+                                <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[9px] font-semibold text-emerald-400">
+                                  <CheckCircle2 className="h-3 w-3" /> Approved
+                                </span>
+                              )}
+                              {vp.redoing && (
+                                <span className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[9px] font-semibold text-amber-400">
+                                  <Loader2 className="h-3 w-3 animate-spin" /> Re-rendering...
+                                </span>
+                              )}
+                            </div>
+                            {/* Per-part actions */}
+                            <div className="flex items-center gap-1.5">
+                              {vp.url && !vp.redoing && !vp.approved && (
+                                <>
+                                  <button
+                                    onClick={() => handleVideoPartRedo(vp.part)}
+                                    className="flex items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-[10px] font-medium text-red-400 transition-colors hover:bg-red-500/20"
+                                  >
+                                    <RotateCcw className="h-3 w-3" />
+                                    Redo
+                                  </button>
+                                  <button
+                                    onClick={() => handleVideoPartApprove(vp.part)}
+                                    className="flex items-center gap-1 rounded-md bg-emerald-500/15 px-2.5 py-1 text-[10px] font-medium text-emerald-400 transition-colors hover:bg-emerald-500/25"
+                                  >
+                                    <CheckCircle2 className="h-3 w-3" />
+                                    Approve
+                                  </button>
+                                </>
+                              )}
+                              {vp.approved && vp.url && (
+                                <button
+                                  onClick={() => handleVideoDownload(vp.url, vp.part)}
+                                  className="flex items-center gap-1 rounded-md border border-border/30 bg-secondary/20 px-2.5 py-1 text-[10px] font-medium text-foreground transition-colors hover:bg-secondary/40"
+                                >
+                                  <Download className="h-3 w-3" />
+                                  Download
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          {/* Video player or loading */}
+                          {vp.redoing || !vp.url ? (
+                            <div className="flex items-center justify-center py-12">
+                              <div className="flex flex-col items-center gap-3">
+                                <Loader2 className="h-6 w-6 animate-spin text-[var(--brand-pink)]" />
+                                <p className="text-xs text-muted-foreground">
+                                  {vp.redoing ? "Re-rendering this part..." : "Waiting for video..."}
+                                </p>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="relative bg-black">
+                              <video
+                                controls
+                                preload="metadata"
+                                className="w-full"
+                                src={vp.url}
+                              >
+                                Your browser does not support the video tag.
+                              </video>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </div>
               )}
             </ScrollArea>
@@ -1291,6 +1613,40 @@ export function ReviewRoom(props: ReviewRoomProps) {
                   ) : scriptError ? (
                     <button
                       onClick={() => { setScriptError(null); setScriptPolling(true); }}
+                      className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      Retry
+                    </button>
+                  ) : null}
+                </div>
+              )}
+
+              {/* ---- Final Preview Tab Actions ---- */}
+              {activeTab === "preview" && (
+                <div className="flex items-center gap-2">
+                  {videoPolling && videoParts.length === 0 ? (
+                    <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--brand-pink)]" />
+                      Waiting for video rendering...
+                    </p>
+                  ) : videoParts.length > 0 ? (
+                    <>
+                      {videoParts.every((vp) => vp.approved) ? (
+                        <p className="flex items-center gap-2 text-xs text-emerald-400">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          All {videoParts.length} parts approved. Use the download buttons above to save.
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          {videoParts.filter((vp) => vp.approved).length} / {videoParts.length} parts approved.
+                          Review each part above.
+                        </p>
+                      )}
+                    </>
+                  ) : videoError ? (
+                    <button
+                      onClick={() => { setVideoError(null); setVideoPolling(true); }}
                       className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40"
                     >
                       <RotateCcw className="h-3.5 w-3.5" />
