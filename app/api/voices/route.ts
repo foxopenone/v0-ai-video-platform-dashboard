@@ -2,12 +2,14 @@
  * /api/voices
  *
  * Fetches the "voices" table from Airtable.
- * Returns: [{ name, voice_id, preview_url }]
+ * Returns: [{ name, voice_id, gender, language, preview_url }]
  *
  * Airtable fields used:
  *   - Name          -> name (display label)
  *   - ElevenLabs_ID -> voice_id (production voice_id for ElevenLabs)
- *   - Preview_Audio -> preview_url (optional audio preview URL)
+ *   - Gender        -> gender (male / female / neutral)
+ *   - Language       -> language (e.g. "en")
+ *   - Preview_Audio -> preview_url (Airtable ATTACHMENT field: [{url, filename}])
  *
  * Caches for 5 minutes to avoid excessive Airtable reads.
  */
@@ -22,7 +24,17 @@ const AIRTABLE_TABLE = "voices"
 export interface VoiceRecord {
   name: string
   voice_id: string
+  gender: string
+  language: string
   preview_url: string | null
+}
+
+/** Extract URL from an Airtable attachment field (array of {url, filename, ...}) */
+function extractAttachmentUrl(field: unknown): string | null {
+  if (Array.isArray(field) && field.length > 0 && typeof field[0]?.url === "string") {
+    return field[0].url
+  }
+  return null
 }
 
 export async function GET() {
@@ -31,32 +43,42 @@ export async function GET() {
   }
 
   try {
-    const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_TABLE)}?pageSize=100`
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
-      next: { revalidate: 300 }, // cache 5 min
-    })
+    // Fetch all records (paginate if > 100)
+    let allRecords: Array<{ id: string; fields: Record<string, unknown> }> = []
+    let offset: string | undefined
 
-    if (!res.ok) {
-      const body = await res.text().catch(() => "")
-      console.error("[voices] Airtable error:", res.status, body)
-      return NextResponse.json(
-        { error: `Airtable ${res.status}`, detail: body },
-        { status: res.status },
-      )
-    }
+    do {
+      const params = new URLSearchParams({ pageSize: "100" })
+      if (offset) params.set("offset", offset)
 
-    const data = await res.json()
-    const records: Array<{ id: string; fields: Record<string, unknown> }> = data.records || []
+      const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_TABLE)}?${params}`
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+        next: { revalidate: 300 },
+      })
 
-    const voices: VoiceRecord[] = records
-      .filter((r) => r.fields.ElevenLabs_ID) // must have a voice_id
+      if (!res.ok) {
+        const body = await res.text().catch(() => "")
+        console.error("[voices] Airtable error:", res.status, body)
+        return NextResponse.json(
+          { error: `Airtable ${res.status}`, detail: body },
+          { status: res.status },
+        )
+      }
+
+      const data = await res.json()
+      allRecords = allRecords.concat(data.records || [])
+      offset = data.offset // undefined when no more pages
+    } while (offset)
+
+    const voices: VoiceRecord[] = allRecords
+      .filter((r) => r.fields.ElevenLabs_ID)
       .map((r) => ({
         name: String(r.fields.Name || "Unnamed").trim(),
         voice_id: String(r.fields.ElevenLabs_ID).trim(),
-        preview_url: r.fields.Preview_Audio
-          ? String(r.fields.Preview_Audio).trim()
-          : null,
+        gender: String(r.fields.Gender || "").trim().toLowerCase(),
+        language: String(r.fields.Language || "en").trim().toLowerCase(),
+        preview_url: extractAttachmentUrl(r.fields.Preview_Audio),
       }))
 
     return NextResponse.json(voices)

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import {
   Play, Pause, Check, Mic, Music, Volume2, AlertCircle,
-  ChevronRight, FolderOpen,
+  ChevronRight, FolderOpen, Filter,
 } from "lucide-react"
 import {
   Sheet,
@@ -14,21 +14,16 @@ import {
 } from "@/components/ui/sheet"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { fetchVoices, fetchBGM } from "@/lib/mock-api"
+import type { VoiceOption } from "@/lib/mock-api"
 import { cn } from "@/lib/utils"
 
-/* ── Types ───────────────────────────────────────────── */
-
-interface VoiceItem {
-  id: string
-  name: string
-  preview: string
-}
+/* ── BGM type ────────────────────────────────────────── */
 
 interface BGMItem {
-  id: string       // r2_key -- this is the value stored as BGM_Select
-  name: string     // track_name
-  category: string // folder label
-  preview: string  // playback URL
+  id: string
+  name: string
+  category: string
+  preview: string
 }
 
 interface AudioDrawerProps {
@@ -37,83 +32,6 @@ interface AudioDrawerProps {
   onOpenChange: (open: boolean) => void
   selectedId: string | null
   onSelect: (id: string, name: string) => void
-}
-
-/* ── Reusable track row ─────────────────────────────── */
-
-function TrackRow({
-  id,
-  name,
-  preview,
-  isSelected,
-  isPlaying,
-  brandColor,
-  onPlay,
-  onSelect,
-  subtitle,
-}: {
-  id: string
-  name: string
-  preview: string
-  isSelected: boolean
-  isPlaying: boolean
-  brandColor: string
-  onPlay: () => void
-  onSelect: () => void
-  subtitle: string
-}) {
-  const hasPreview = !!preview && preview !== "#"
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onSelect}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect() }
-      }}
-      className={cn(
-        "group flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-left transition-all",
-        isSelected
-          ? `border-[${brandColor}]/30 bg-[${brandColor}]/5`
-          : "border-border/20 bg-secondary/15 hover:border-border/40 hover:bg-secondary/30",
-      )}
-    >
-      {/* Play / Pause */}
-      <button
-        onClick={(e) => { e.stopPropagation(); onPlay() }}
-        disabled={!hasPreview}
-        className={cn(
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all",
-          isPlaying
-            ? "brand-gradient text-[#fff]"
-            : hasPreview
-              ? "bg-secondary/60 text-muted-foreground hover:text-foreground"
-              : "cursor-not-allowed bg-secondary/30 text-muted-foreground/30",
-        )}
-        aria-label={isPlaying ? "Pause preview" : hasPreview ? "Play preview" : "No preview"}
-      >
-        {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="ml-0.5 h-3.5 w-3.5" />}
-      </button>
-
-      {/* Name + subtitle */}
-      <div className="flex-1 overflow-hidden">
-        <p className="truncate text-sm font-medium text-foreground">{name}</p>
-        <p className="text-[11px] text-muted-foreground">{subtitle}</p>
-      </div>
-
-      {/* Playing indicator */}
-      {isPlaying && (
-        <Volume2 className="h-4 w-4 shrink-0 animate-pulse" style={{ color: brandColor }} />
-      )}
-
-      {/* Selected check */}
-      {isSelected && (
-        <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full brand-gradient">
-          <Check className="h-3 w-3 text-[#fff]" />
-        </div>
-      )}
-    </div>
-  )
 }
 
 /* ── Main AudioDrawer ────────────────────────────────── */
@@ -125,7 +43,7 @@ export function AudioDrawer({
   selectedId,
   onSelect,
 }: AudioDrawerProps) {
-  const [voiceItems, setVoiceItems] = useState<VoiceItem[]>([])
+  const [voiceItems, setVoiceItems] = useState<VoiceOption[]>([])
   const [bgmItems, setBgmItems] = useState<BGMItem[]>([])
   const [playingId, setPlayingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -133,6 +51,10 @@ export function AudioDrawer({
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const isVoice = type === "voice"
+
+  // Voice filters
+  const [genderFilter, setGenderFilter] = useState<string>("all")
+  const [languageFilter, setLanguageFilter] = useState<string>("all")
 
   /* ── Load data ─────────────────────────────────────── */
   useEffect(() => {
@@ -148,7 +70,6 @@ export function AudioDrawer({
       fetchBGM()
         .then((data) => {
           setBgmItems(data)
-          // Auto-expand the category of the currently selected track (if any)
           if (selectedId) {
             const sel = data.find((d) => d.id === selectedId)
             if (sel) setExpandedCategories(new Set([sel.category]))
@@ -167,6 +88,26 @@ export function AudioDrawer({
     }
   }, [open])
 
+  /* ── Derive unique genders / languages for filters ─── */
+  const genderOptions = useMemo(() => {
+    const set = new Set(voiceItems.map((v) => v.gender).filter(Boolean))
+    return Array.from(set).sort()
+  }, [voiceItems])
+
+  const languageOptions = useMemo(() => {
+    const set = new Set(voiceItems.map((v) => v.language).filter(Boolean))
+    return Array.from(set).sort()
+  }, [voiceItems])
+
+  /* ── Filtered voice list ───────────────────────────── */
+  const filteredVoices = useMemo(() => {
+    return voiceItems.filter((v) => {
+      if (genderFilter !== "all" && v.gender !== genderFilter) return false
+      if (languageFilter !== "all" && v.language !== languageFilter) return false
+      return true
+    })
+  }, [voiceItems, genderFilter, languageFilter])
+
   /* ── Group BGM items by category ────────────────────── */
   const bgmByCategory = useMemo(() => {
     const map = new Map<string, BGMItem[]>()
@@ -175,7 +116,6 @@ export function AudioDrawer({
       if (!map.has(cat)) map.set(cat, [])
       map.get(cat)!.push(item)
     }
-    // Sort categories alphabetically
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b))
   }, [bgmItems])
 
@@ -207,6 +147,16 @@ export function AudioDrawer({
     audio.play().then(() => setPlayingId(id)).catch(() => setPlayingId(null))
   }, [playingId])
 
+  /* ── Gender display label ──────────────────────────── */
+  const genderLabel = (g: string) => {
+    if (g === "female") return "Female"
+    if (g === "male") return "Male"
+    if (g === "neutral") return "Neutral"
+    return g
+  }
+
+  const langLabel = (l: string) => l.toUpperCase()
+
   /* ── Render ─────────────────────────────────────────── */
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -227,11 +177,46 @@ export function AudioDrawer({
           </SheetDescription>
         </SheetHeader>
 
-        <ScrollArea className="mt-6 h-[calc(100vh-12rem)]">
-          <div className="flex flex-col gap-2 pr-4">
+        {/* ════ Voice Filters ════ */}
+        {isVoice && !loading && voiceItems.length > 0 && (
+          <div className="mt-4 flex items-center gap-2 px-1">
+            <Filter className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <select
+              value={genderFilter}
+              onChange={(e) => setGenderFilter(e.target.value)}
+              className="h-8 rounded-md border border-border/30 bg-secondary/20 px-2 text-xs text-foreground outline-none focus:border-[var(--brand-pink)]/50"
+            >
+              <option value="all">All Genders</option>
+              {genderOptions.map((g) => (
+                <option key={g} value={g}>{genderLabel(g)}</option>
+              ))}
+            </select>
+            <select
+              value={languageFilter}
+              onChange={(e) => setLanguageFilter(e.target.value)}
+              className="h-8 rounded-md border border-border/30 bg-secondary/20 px-2 text-xs text-foreground outline-none focus:border-[var(--brand-pink)]/50"
+            >
+              <option value="all">All Languages</option>
+              {languageOptions.map((l) => (
+                <option key={l} value={l}>{langLabel(l)}</option>
+              ))}
+            </select>
+            {(genderFilter !== "all" || languageFilter !== "all") && (
+              <button
+                onClick={() => { setGenderFilter("all"); setLanguageFilter("all") }}
+                className="ml-auto text-[10px] text-muted-foreground hover:text-foreground"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
+
+        <ScrollArea className={cn("h-[calc(100vh-12rem)] pr-1", isVoice && !loading ? "mt-3" : "mt-6")}>
+          <div className="flex flex-col gap-2 pr-3">
             {/* Loading */}
             {loading && Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-14 animate-pulse rounded-lg bg-secondary/40" />
+              <div key={i} className="h-16 animate-pulse rounded-lg bg-secondary/40" />
             ))}
 
             {/* Error */}
@@ -242,7 +227,7 @@ export function AudioDrawer({
               </div>
             )}
 
-            {/* Empty */}
+            {/* Empty (no data at all) */}
             {!loading && !error && (isVoice ? voiceItems : bgmItems).length === 0 && (
               <div className="flex flex-col items-center gap-2 py-10">
                 {isVoice
@@ -254,21 +239,89 @@ export function AudioDrawer({
               </div>
             )}
 
-            {/* ════ Voice flat list ════ */}
-            {!loading && isVoice && voiceItems.map((v) => (
-              <TrackRow
-                key={v.id}
-                id={v.id}
-                name={v.name}
-                preview={v.preview}
-                isSelected={selectedId === v.id}
-                isPlaying={playingId === v.id}
-                brandColor="var(--brand-pink)"
-                onPlay={() => handlePlay(v.id, v.preview)}
-                onSelect={() => onSelect(v.id, v.name)}
-                subtitle="ElevenLabs AI"
-              />
-            ))}
+            {/* Empty after filter */}
+            {!loading && isVoice && voiceItems.length > 0 && filteredVoices.length === 0 && (
+              <div className="flex flex-col items-center gap-2 py-8">
+                <Filter className="h-5 w-5 text-muted-foreground/30" />
+                <p className="text-sm text-muted-foreground">No voices match filters</p>
+              </div>
+            )}
+
+            {/* ════ Voice list with cards ════ */}
+            {!loading && isVoice && filteredVoices.map((v) => {
+              const isSelected = selectedId === v.id
+              const isPlaying = playingId === v.id
+              const hasPreview = !!v.preview && v.preview !== "#"
+
+              return (
+                <div
+                  key={v.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onSelect(v.id, v.name)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(v.id, v.name) }
+                  }}
+                  className={cn(
+                    "group flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-left transition-all",
+                    isSelected
+                      ? "border-[var(--brand-pink)]/30 bg-[var(--brand-pink)]/5"
+                      : "border-border/20 bg-secondary/15 hover:border-border/40 hover:bg-secondary/30",
+                  )}
+                >
+                  {/* Play / Pause */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handlePlay(v.id, v.preview) }}
+                    disabled={!hasPreview}
+                    className={cn(
+                      "flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all",
+                      isPlaying
+                        ? "brand-gradient text-[#fff]"
+                        : hasPreview
+                          ? "bg-secondary/60 text-muted-foreground hover:text-foreground"
+                          : "cursor-not-allowed bg-secondary/30 text-muted-foreground/30",
+                    )}
+                    aria-label={isPlaying ? "Pause preview" : hasPreview ? "Play preview" : "No preview"}
+                  >
+                    {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="ml-0.5 h-4 w-4" />}
+                  </button>
+
+                  {/* Name + tags */}
+                  <div className="flex-1 overflow-hidden">
+                    <p className="truncate text-sm font-medium text-foreground">{v.name}</p>
+                    <div className="mt-1 flex items-center gap-1.5">
+                      {v.gender && (
+                        <span className={cn(
+                          "inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium leading-none",
+                          v.gender === "female" ? "bg-pink-500/15 text-pink-400"
+                            : v.gender === "male" ? "bg-blue-500/15 text-blue-400"
+                            : "bg-emerald-500/15 text-emerald-400",
+                        )}>
+                          {genderLabel(v.gender)}
+                        </span>
+                      )}
+                      {v.language && (
+                        <span className="inline-flex rounded bg-secondary/60 px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground">
+                          {langLabel(v.language)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Playing indicator */}
+                  {isPlaying && (
+                    <Volume2 className="h-4 w-4 shrink-0 animate-pulse text-[var(--brand-pink)]" />
+                  )}
+
+                  {/* Selected check */}
+                  {isSelected && (
+                    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full brand-gradient">
+                      <Check className="h-3 w-3 text-[#fff]" />
+                    </div>
+                  )}
+                </div>
+              )
+            })}
 
             {/* ════ BGM category folders ════ */}
             {!loading && !isVoice && bgmByCategory.map(([category, tracks]) => {
@@ -310,20 +363,55 @@ export function AudioDrawer({
                   {/* Tracks inside folder */}
                   {isExpanded && (
                     <div className="ml-2 flex flex-col gap-1.5 border-l border-border/15 pl-3 pt-1.5 pb-1">
-                      {tracks.map((t) => (
-                        <TrackRow
-                          key={t.id}
-                          id={t.id}
-                          name={t.name}
-                          preview={t.preview}
-                          isSelected={selectedId === t.id}
-                          isPlaying={playingId === t.id}
-                          brandColor="var(--brand-purple)"
-                          onPlay={() => handlePlay(t.id, t.preview)}
-                          onSelect={() => onSelect(t.id, t.name)}
-                          subtitle={category}
-                        />
-                      ))}
+                      {tracks.map((t) => {
+                        const isSelected = selectedId === t.id
+                        const isPlaying = playingId === t.id
+                        const hasPreview = !!t.preview && t.preview !== "#"
+
+                        return (
+                          <div
+                            key={t.id}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => onSelect(t.id, t.name)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(t.id, t.name) }
+                            }}
+                            className={cn(
+                              "group flex cursor-pointer items-center gap-3 rounded-lg border p-2.5 text-left transition-all",
+                              isSelected
+                                ? "border-[var(--brand-purple)]/30 bg-[var(--brand-purple)]/5"
+                                : "border-border/20 bg-secondary/15 hover:border-border/40 hover:bg-secondary/30",
+                            )}
+                          >
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handlePlay(t.id, t.preview) }}
+                              disabled={!hasPreview}
+                              className={cn(
+                                "flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all",
+                                isPlaying
+                                  ? "brand-gradient text-[#fff]"
+                                  : hasPreview
+                                    ? "bg-secondary/60 text-muted-foreground hover:text-foreground"
+                                    : "cursor-not-allowed bg-secondary/30 text-muted-foreground/30",
+                              )}
+                              aria-label={isPlaying ? "Pause" : "Play"}
+                            >
+                              {isPlaying ? <Pause className="h-3 w-3" /> : <Play className="ml-0.5 h-3 w-3" />}
+                            </button>
+                            <div className="flex-1 overflow-hidden">
+                              <p className="truncate text-xs font-medium text-foreground">{t.name}</p>
+                              <p className="text-[10px] text-muted-foreground">{category}</p>
+                            </div>
+                            {isPlaying && <Volume2 className="h-3.5 w-3.5 shrink-0 animate-pulse text-[var(--brand-purple)]" />}
+                            {isSelected && (
+                              <div className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full brand-gradient">
+                                <Check className="h-2.5 w-2.5 text-[#fff]" />
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
                 </div>

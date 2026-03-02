@@ -110,20 +110,34 @@ export async function uploadVideoToR2(
 
 /**
  * Fetch voices from Airtable via /api/voices.
- * Returns: { id: ElevenLabs_ID, name: Name, preview: Preview_Audio | "" }
+ * Returns: { id: ElevenLabs_ID, name, gender, language, preview }
  * The `id` IS the real ElevenLabs voice_id used in production.
  */
-export async function fetchVoices(): Promise<
-  Array<{ id: string; name: string; preview: string }>
-> {
+export interface VoiceOption {
+  id: string       // ElevenLabs_ID -> used as Voice_Select value
+  name: string     // Display label
+  gender: string   // male / female / neutral
+  language: string // e.g. "en"
+  preview: string  // Audio preview URL (may be empty)
+}
+
+export async function fetchVoices(): Promise<VoiceOption[]> {
   try {
     const res = await fetch("/api/voices")
     if (!res.ok) throw new Error(`/api/voices returned ${res.status}`)
-    const data: Array<{ name: string; voice_id: string; preview_url: string | null }> = await res.json()
+    const data: Array<{
+      name: string
+      voice_id: string
+      gender: string
+      language: string
+      preview_url: string | null
+    }> = await res.json()
     return data.map((v) => ({
-      id: v.voice_id,       // ElevenLabs_ID -> used as Voice_Select value
-      name: v.name,         // Display label
-      preview: v.preview_url || "", // Audio preview URL (may be empty)
+      id: v.voice_id,
+      name: v.name,
+      gender: v.gender || "",
+      language: v.language || "en",
+      preview: v.preview_url || "",
     }))
   } catch (err) {
     console.error("[fetchVoices] Failed to load from /api/voices, using empty list:", err)
