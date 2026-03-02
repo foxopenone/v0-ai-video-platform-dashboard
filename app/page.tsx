@@ -199,15 +199,18 @@ export default function Page() {
           setStepReviewData(null)
         }}
         onApproved={() => {
-          // Approve triggers next pipeline phase (not final completion).
-          // Update the card to "processing" so polling continues.
+          // Update the card to "approved" so it shows Approved badge
           setInsertedProjects((prev) =>
             prev.map((p) =>
               p.airtableRecordId === stepReviewData.jobRecordId
-                ? { ...p, status: "processing" as const }
+                ? { ...p, status: "approved" as const }
                 : p
             )
           )
+        }}
+        onStop={() => {
+          setStepReviewData(null)
+          if (window.history.state?.reviewOpen) window.history.back()
         }}
       />
     )
@@ -231,6 +234,10 @@ export default function Page() {
               ?? progressData.jobRecordId
           )
           setProgressData(null)
+        }}
+        onStop={() => {
+          setProgressData(null)
+          if (window.history.state?.reviewOpen) window.history.back()
         }}
         onReviewReady={(data) => {
           // Transition from progress -> step_review
@@ -264,8 +271,8 @@ export default function Page() {
             const recordId = inserted?.airtableRecordId
             if (!recordId) return
 
-            // For pending_review cards, try quick fetch to jump directly to review
-            if (inserted.status === "pending_review") {
+            // For pending_review / approved cards, try quick fetch to jump directly to review
+            if (inserted.status === "pending_review" || inserted.status === "approved") {
               try {
                 const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(recordId)}`)
                 if (res.ok) {

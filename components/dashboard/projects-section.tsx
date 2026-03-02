@@ -10,7 +10,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Play,
-  X,
+  Trash2,
+  Send,
+  ShieldCheck,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { fetchProjects } from "@/lib/mock-api"
@@ -19,7 +21,7 @@ import { cn } from "@/lib/utils"
 interface Project {
   id: string
   title: string
-  status: "processing" | "pending_review" | "completed"
+  status: "processing" | "pending_review" | "approved" | "completed"
   progress: number
   date: string
   thumbnail: string | null
@@ -36,10 +38,17 @@ const STATUS_CONFIG = {
     iconClass: "animate-spin",
   },
   pending_review: {
-    label: "Pending Review",
+    label: "Pending",
     icon: Eye,
     className:
       "border-[hsl(38,92%,50%)]/30 bg-[hsl(38,92%,50%)]/10 text-[hsl(38,92%,50%)]",
+    iconClass: "",
+  },
+  approved: {
+    label: "Approved",
+    icon: ShieldCheck,
+    className:
+      "border-[hsl(200,80%,55%)]/30 bg-[hsl(200,80%,55%)]/10 text-[hsl(200,80%,55%)]",
     iconClass: "",
   },
   completed: {
@@ -171,11 +180,23 @@ export function ProjectsSection({ onProjectClick, onProjectDelete, insertedProje
                     {/* Delete button */}
                     <button
                       onClick={(e) => { e.stopPropagation(); onProjectDelete?.(project.id) }}
-                      style={{ position: "absolute", top: 8, right: 8, zIndex: 50, width: 24, height: 24, borderRadius: "50%", background: "rgba(0,0,0,0.7)", border: "1px solid rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
-                      aria-label="Remove project"
+                      className="absolute right-1.5 top-1.5 z-50 flex h-6 w-6 items-center justify-center rounded-full bg-background/70 border border-border/30 opacity-0 transition-all group-hover:opacity-100 hover:bg-red-500/20 hover:border-red-500/40"
+                      aria-label="Delete project"
                     >
-                      <X style={{ width: 14, height: 14, color: "rgba(255,255,255,0.8)" }} />
+                      <Trash2 className="h-3 w-3 text-muted-foreground group-hover:text-red-400" />
                     </button>
+
+                    {/* Post to Discovery button (only for completed) */}
+                    {project.status === "completed" && (
+                      <button
+                        onClick={(e) => { e.stopPropagation() }}
+                        className="absolute right-1.5 top-9 z-50 flex h-6 w-6 items-center justify-center rounded-full bg-background/70 border border-border/30 opacity-0 transition-all group-hover:opacity-100 hover:bg-[var(--brand-pink)]/20 hover:border-[var(--brand-pink)]/40"
+                        aria-label="Post to Discovery"
+                        title="Post to Discovery"
+                      >
+                        <Send className="h-3 w-3 text-muted-foreground group-hover:text-[var(--brand-pink)]" />
+                      </button>
+                    )}
 
                     {/* Bottom info */}
                     <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1.5 bg-gradient-to-t from-background/95 via-background/70 to-transparent px-2.5 pb-2.5 pt-10">
