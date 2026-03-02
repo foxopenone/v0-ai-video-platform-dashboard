@@ -348,10 +348,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
     return null
   }, [isStepReview, props])
 
-  /** Derive the backend status string from the active tab for API routing.
-   *  Bible tab -> S3_Bible_Check -> routes to /webhook/04-review-action
-   *  VO tab -> S5_Script_Check -> routes to /webhook/05-review-action
-   *  Preview tab -> S8_Render (used for redo only) */
+  /** Derive the backend status string from the active tab.
+   *  All approve/redo calls go to unified /webhook/05-redo.
+   *  n8n's Normalize_Entrance routes by action field. */
   const currentPhaseStatus = activeTab === "voiceover" ? "S5_Script_Check"
     : activeTab === "preview" ? "S8_Render"
     : "S3_Bible_Check"
@@ -400,7 +399,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
       console.log("[v0] VO writeback patchedRaw keys:", Object.keys(patchedRaw))
 
-      // VO is S5_Script_Check -> routes to /webhook/05-review-action
+      // VO approve -> unified /webhook/05-redo { action: "approve" }
       await reviewEditContinue(info.jobRecordId, info.lockToken, scriptR2Key, patchedRaw, "S5_Script_Check")
       setActionStatus("success")
       setActionMessage("Voice-over saved! Switching to Final Preview...")
@@ -509,7 +508,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
       }
 
       console.log("[v0] Writeback patchedRaw keys:", Object.keys(patchedRaw))
-      // Bible is S3_Bible_Check -> routes to /webhook/04-review-action
+      // Bible approve -> unified /webhook/05-redo { action: "approve" }
       await reviewEditContinue(jobRecordId, lockToken, bibleR2Key, patchedRaw, "S3_Bible_Check")
       setOriginalBible(structuredClone(bible))
       setEditMode(false)

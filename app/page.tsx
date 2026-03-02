@@ -199,11 +199,12 @@ export default function Page() {
           setStepReviewData(null)
         }}
         onApproved={() => {
-          // Update the card to "completed" after approve succeeds
+          // Approve triggers next pipeline phase (not final completion).
+          // Update the card to "processing" so polling continues.
           setInsertedProjects((prev) =>
             prev.map((p) =>
               p.airtableRecordId === stepReviewData.jobRecordId
-                ? { ...p, status: "completed" as const, progress: 100 }
+                ? { ...p, status: "processing" as const }
                 : p
             )
           )
