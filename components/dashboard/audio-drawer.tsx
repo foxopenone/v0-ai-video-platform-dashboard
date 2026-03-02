@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import {
-  Play, Pause, Check, Mic, Music, Volume2, AlertCircle,
+  Play, Pause, Check, Plus, Mic, Music, Volume2, AlertCircle,
   ChevronRight, FolderOpen, Filter,
 } from "lucide-react"
 import {
@@ -265,7 +265,7 @@ export function AudioDrawer({
                   className={cn(
                     "group flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-left transition-all",
                     isSelected
-                      ? "border-[var(--brand-pink)]/30 bg-[var(--brand-pink)]/5"
+                      ? "border-pink-500/40 bg-pink-500/10 ring-1 ring-pink-500/20"
                       : "border-border/20 bg-secondary/15 hover:border-border/40 hover:bg-secondary/30",
                   )}
                 >
@@ -310,15 +310,20 @@ export function AudioDrawer({
 
                   {/* Playing indicator */}
                   {isPlaying && (
-                    <Volume2 className="h-4 w-4 shrink-0 animate-pulse text-[var(--brand-pink)]" />
+                    <Volume2 className="h-4 w-4 shrink-0 animate-pulse text-pink-400" />
                   )}
 
-                  {/* Selected check */}
-                  {isSelected && (
-                    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full brand-gradient">
-                      <Check className="h-3 w-3 text-[#fff]" />
-                    </div>
-                  )}
+                  {/* + / checkmark toggle */}
+                  <div
+                    className={cn(
+                      "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-all",
+                      isSelected
+                        ? "border-pink-500 bg-pink-500 text-white"
+                        : "border-border/40 bg-transparent text-muted-foreground/50 group-hover:border-border/60 group-hover:text-muted-foreground",
+                    )}
+                  >
+                    {isSelected ? <Check className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+                  </div>
                 </div>
               )
             })}
@@ -339,7 +344,7 @@ export function AudioDrawer({
                       isExpanded
                         ? "bg-secondary/30"
                         : "hover:bg-secondary/20",
-                      categoryHasSelected && !isExpanded && "border border-[var(--brand-purple)]/20 bg-[var(--brand-purple)]/5",
+                      categoryHasSelected && !isExpanded && "border border-violet-500/20 bg-violet-500/5",
                     )}
                   >
                     <FolderOpen
@@ -364,7 +369,7 @@ export function AudioDrawer({
                   {isExpanded && (
                     <div className="ml-2 flex flex-col gap-1.5 border-l border-border/15 pl-3 pt-1.5 pb-1">
                       {tracks.map((t) => {
-                        const isSelected = selectedId === t.id
+                        const isTrackSelected = selectedId === t.id
                         const isPlaying = playingId === t.id
                         const hasPreview = !!t.preview && t.preview !== "#"
 
@@ -379,8 +384,8 @@ export function AudioDrawer({
                             }}
                             className={cn(
                               "group flex cursor-pointer items-center gap-3 rounded-lg border p-2.5 text-left transition-all",
-                              isSelected
-                                ? "border-[var(--brand-purple)]/30 bg-[var(--brand-purple)]/5"
+                              isTrackSelected
+                                ? "border-violet-500/40 bg-violet-500/10 ring-1 ring-violet-500/20"
                                 : "border-border/20 bg-secondary/15 hover:border-border/40 hover:bg-secondary/30",
                             )}
                           >
@@ -403,12 +408,18 @@ export function AudioDrawer({
                               <p className="truncate text-xs font-medium text-foreground">{t.name}</p>
                               <p className="text-[10px] text-muted-foreground">{category}</p>
                             </div>
-                            {isPlaying && <Volume2 className="h-3.5 w-3.5 shrink-0 animate-pulse text-[var(--brand-purple)]" />}
-                            {isSelected && (
-                              <div className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full brand-gradient">
-                                <Check className="h-2.5 w-2.5 text-[#fff]" />
-                              </div>
-                            )}
+                            {isPlaying && <Volume2 className="h-3.5 w-3.5 shrink-0 animate-pulse text-violet-400" />}
+                            {/* + / checkmark toggle */}
+                            <div
+                              className={cn(
+                                "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-all",
+                                isTrackSelected
+                                  ? "border-violet-500 bg-violet-500 text-white"
+                                  : "border-border/40 bg-transparent text-muted-foreground/50 group-hover:border-border/60 group-hover:text-muted-foreground",
+                              )}
+                            >
+                              {isTrackSelected ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+                            </div>
                           </div>
                         )
                       })}
