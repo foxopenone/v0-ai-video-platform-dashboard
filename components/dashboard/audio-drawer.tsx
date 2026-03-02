@@ -212,7 +212,7 @@ export function AudioDrawer({
           </div>
         )}
 
-        <ScrollArea className={cn("h-[calc(100vh-12rem)] pr-1", isVoice && !loading ? "mt-3" : "mt-6")}>
+        <ScrollArea className={cn("pr-1", isVoice && !loading ? "mt-3" : "mt-6")} style={{ height: "calc(100vh - 16rem)" }}>
           <div className="flex flex-col gap-2 pr-3">
             {/* Loading */}
             {loading && Array.from({ length: 6 }).map((_, i) => (
@@ -419,6 +419,32 @@ export function AudioDrawer({
             })}
           </div>
         </ScrollArea>
+
+        {/* Confirm button -- always visible at bottom */}
+        <div className="mt-3 flex items-center gap-3 border-t border-border/20 pt-3">
+          {selectedId && (
+            <p className="flex-1 truncate text-xs text-muted-foreground">
+              Selected: <span className="font-medium text-foreground">
+                {isVoice
+                  ? voiceItems.find((v) => v.id === selectedId)?.name
+                  : bgmItems.find((b) => b.id === selectedId)?.name
+                  || "..."}
+              </span>
+            </p>
+          )}
+          {!selectedId && <p className="flex-1 text-xs text-muted-foreground">No selection</p>}
+          <button
+            onClick={() => onOpenChange(false)}
+            className={cn(
+              "shrink-0 rounded-lg px-5 py-2 text-xs font-semibold transition-all",
+              selectedId
+                ? "brand-gradient text-[#fff] hover:opacity-90"
+                : "bg-secondary/40 text-muted-foreground hover:bg-secondary/60",
+            )}
+          >
+            {selectedId ? "Confirm" : "Close"}
+          </button>
+        </div>
       </SheetContent>
     </Sheet>
   )

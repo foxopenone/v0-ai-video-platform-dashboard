@@ -261,6 +261,10 @@ export function ConfigForm({
       Work_Mode: mode === "full_auto" ? "Full_Auto" : "Step_Review",
     }
 
+    console.log("[v0] Payload Voice_Select:", payload.Voice_Select)
+    console.log("[v0] Payload BGM_Select:", payload.BGM_Select)
+    console.log("[v0] Full payload:", JSON.stringify(payload, null, 2))
+
     try {
       const res = await fetch(DISPATCHER_URL, {
         method: "POST",
@@ -644,7 +648,7 @@ export function ConfigForm({
         onSelect={(id, name) => {
           setSelectedVoice(id)
           setSelectedVoiceName(name)
-          setVoiceDrawerOpen(false)
+          // Do NOT close drawer -- let user preview and browse freely
         }}
       />
       <AudioDrawer
@@ -655,7 +659,7 @@ export function ConfigForm({
         onSelect={(id, name) => {
           setSelectedBgm(id)
           setSelectedBgmName(name)
-          setBgmDrawerOpen(false)
+          // Do NOT close drawer -- let user preview and browse freely
         }}
       />
 
