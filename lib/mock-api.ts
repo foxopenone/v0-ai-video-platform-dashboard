@@ -108,18 +108,27 @@ export async function uploadVideoToR2(
   }
 }
 
-export async function fetchVoices() {
-  await new Promise((resolve) => setTimeout(resolve, 400))
-  return [
-    { id: "v1", name: "Rachel", accent: "American", gender: "Female", preview: "https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM/stream" },
-    { id: "v2", name: "Clyde", accent: "American", gender: "Male", preview: "https://api.elevenlabs.io/v1/text-to-speech/2EiwWnXFnvU5JabPnv8n/stream" },
-    { id: "v3", name: "Domi", accent: "American", gender: "Female", preview: "https://api.elevenlabs.io/v1/text-to-speech/AZnzlk1XvdvUeBnXmlld/stream" },
-    { id: "v4", name: "Dave", accent: "British", gender: "Male", preview: "https://api.elevenlabs.io/v1/text-to-speech/CYw3kZ02Hs0563khs1Fj/stream" },
-    { id: "v5", name: "Fin", accent: "Irish", gender: "Male", preview: "https://api.elevenlabs.io/v1/text-to-speech/D38z5RcWu1voky8WS1ja/stream" },
-    { id: "v6", name: "Sarah", accent: "American", gender: "Female", preview: "https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL/stream" },
-    { id: "v7", name: "Antoni", accent: "American", gender: "Male", preview: "https://api.elevenlabs.io/v1/text-to-speech/ErXwobaYiN019PkySvjV/stream" },
-    { id: "v8", name: "Elli", accent: "American", gender: "Female", preview: "https://api.elevenlabs.io/v1/text-to-speech/MF3mGyEYCl7XYWbV9V6O/stream" },
-  ]
+/**
+ * Fetch voices from Airtable via /api/voices.
+ * Returns: { id: ElevenLabs_ID, name: Name, preview: Preview_Audio | "" }
+ * The `id` IS the real ElevenLabs voice_id used in production.
+ */
+export async function fetchVoices(): Promise<
+  Array<{ id: string; name: string; preview: string }>
+> {
+  try {
+    const res = await fetch("/api/voices")
+    if (!res.ok) throw new Error(`/api/voices returned ${res.status}`)
+    const data: Array<{ name: string; voice_id: string; preview_url: string | null }> = await res.json()
+    return data.map((v) => ({
+      id: v.voice_id,       // ElevenLabs_ID -> used as Voice_Select value
+      name: v.name,         // Display label
+      preview: v.preview_url || "", // Audio preview URL (may be empty)
+    }))
+  } catch (err) {
+    console.error("[fetchVoices] Failed to load from /api/voices, using empty list:", err)
+    return []
+  }
 }
 
 export async function fetchBGM() {
