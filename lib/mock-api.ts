@@ -131,18 +131,31 @@ export async function fetchVoices(): Promise<
   }
 }
 
-export async function fetchBGM() {
-  await new Promise((resolve) => setTimeout(resolve, 400))
-  return [
-    { id: "b1", name: "Cinematic Rise", mood: "Epic", duration: "2:34", preview: "#" },
-    { id: "b2", name: "Lo-Fi Chill", mood: "Relaxed", duration: "3:12", preview: "#" },
-    { id: "b3", name: "Tech Pulse", mood: "Energetic", duration: "2:48", preview: "#" },
-    { id: "b4", name: "Ambient Dreams", mood: "Calm", duration: "4:01", preview: "#" },
-    { id: "b5", name: "Urban Beat", mood: "Upbeat", duration: "2:22", preview: "#" },
-    { id: "b6", name: "Soft Piano", mood: "Emotional", duration: "3:45", preview: "#" },
-    { id: "b7", name: "Dark Synthwave", mood: "Intense", duration: "3:18", preview: "#" },
-    { id: "b8", name: "Nature Flow", mood: "Peaceful", duration: "4:30", preview: "#" },
-  ]
+/**
+ * Fetch BGM list from Workers API.
+ * Returns: { id: r2_key, name: track_name, category, preview: url }
+ * The `id` IS the r2_key passed directly as BGM_Select to n8n.
+ */
+export async function fetchBGM(): Promise<
+  Array<{ id: string; name: string; category: string; preview: string }>
+> {
+  try {
+    const res = await fetch("https://reel.digipalca.workers.dev/api/bgm/list")
+    if (!res.ok) throw new Error(`BGM API returned ${res.status}`)
+    const json = await res.json()
+    if (!json.success || !Array.isArray(json.data)) {
+      throw new Error("BGM API returned invalid data")
+    }
+    return json.data.map((t: { track_name: string; category: string; r2_key: string; url: string }) => ({
+      id: t.r2_key,         // r2_key IS the BGM_Select value
+      name: t.track_name,
+      category: t.category,
+      preview: t.url || "",  // playback URL
+    }))
+  } catch (err) {
+    console.error("[fetchBGM] Failed to load from BGM API:", err)
+    return []
+  }
 }
 
 export async function fetchProjects() {
