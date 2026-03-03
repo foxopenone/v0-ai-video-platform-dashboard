@@ -205,6 +205,8 @@ export function ReviewRoom(props: ReviewRoomProps) {
   // Track when lock started for fake progress and 5-min auto-stop
   const [lockStartTime, setLockStartTime] = useState<number | null>(null)
   const [fakeProgress, setFakeProgress] = useState(0)
+  // Remember which tab user was on before an approve/action switched tabs
+  const [tabBeforeAction, setTabBeforeAction] = useState<string | null>(null)
   // Voice Over (Script) state for step_review
   type ReviewTab = "bible" | "voiceover" | "preview"
   const [activeTab, setActiveTab] = useState<ReviewTab>("bible")
@@ -244,13 +246,19 @@ export function ReviewRoom(props: ReviewRoomProps) {
     const interval = setInterval(() => {
       const elapsed = Date.now() - lockStartTime
       if (elapsed >= TIMEOUT_MS) {
-        // Auto-stop after 5 minutes
+        // Auto-stop after 5 minutes, restore pre-action tab
         clearInterval(interval)
         setActionLocked(false)
         setActionStatus("error")
         setActionMessage("Timed out after 5 minutes. Please check task status or try again.")
         setLockStartTime(null)
         setFakeProgress(0)
+        setScriptPolling(false)
+        setVideoPolling(false)
+        if (tabBeforeAction) {
+          setActiveTab(tabBeforeAction)
+          setTabBeforeAction(null)
+        }
         return
       }
       // Ease-out curve: fast at start, slows toward 92%
@@ -259,7 +267,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
       setFakeProgress(pct)
     }, 500)
     return () => clearInterval(interval)
-  }, [actionLocked, lockStartTime])
+  }, [actionLocked, lockStartTime, tabBeforeAction])
 
   // Helper: start the action lock with timestamp
   const startActionLock = useCallback((msg: string) => {
@@ -270,7 +278,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
     setFakeProgress(0)
   }, [])
 
-  // Stop handler: cancel the waiting state, return to idle
+  // Stop handler: cancel the waiting state, return to pre-action state
   const handleStop = useCallback(() => {
     setActionLocked(false)
     setActionStatus("idle")
@@ -279,7 +287,12 @@ export function ReviewRoom(props: ReviewRoomProps) {
     setFakeProgress(0)
     setScriptPolling(false)
     setVideoPolling(false)
-  }, [])
+    // Restore the tab user was on before the action
+    if (tabBeforeAction) {
+      setActiveTab(tabBeforeAction)
+      setTabBeforeAction(null)
+    }
+  }, [tabBeforeAction])
 
   // ── Step Review: Load Bible JSON ──
   useEffect(() => {
@@ -398,8 +411,8 @@ export function ReviewRoom(props: ReviewRoomProps) {
   }, [isStepReview, props])
 
   /** Derive the backend status string from the active tab.
-   *  All approve/redo calls go to unified /webhook/05-redo.
-   *  n8n's Normalize_Entrance routes by action field. */
+   *  Bible (S3_Bible_Check) -> /webhook/04-review-action
+   *  VO (S5_Script_Check) / Preview (S8_Render) -> /webhook/05-redo */
   const currentPhaseStatus = activeTab === "voiceover" ? "S5_Script_Check"
     : activeTab === "preview" ? "S8_Render"
     : "S3_Bible_Check"
@@ -446,7 +459,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
       console.log("[v0] VO writeback patchedRaw keys:", Object.keys(patchedRaw))
 
-      // VO approve -> unified /webhook/05-redo { action: "approve" }
+      // VO edit+approve -> writeback to R2 then POST /webhook/05-redo
       await reviewEditContinue(info.jobRecordId, info.lockToken, scriptR2Key, patchedRaw, "S5_Script_Check")
       setActionStatus("success")
       setActionMessage("Approved! Switching to Video Preview")
@@ -464,15 +477,17 @@ export function ReviewRoom(props: ReviewRoomProps) {
   /** After Approve or Save&Continue succeeds, switch to Voice Over tab and start polling */
   const startVoiceOverPolling = useCallback(() => {
     console.log("[v0] Switching to Voice Over tab and starting script polling")
+    setTabBeforeAction(activeTab) // remember where user was
     setActiveTab("voiceover")
     setScriptPolling(true)
     setScriptData(null)
     setScriptError(null)
-  }, [])
+  }, [activeTab])
 
   /** After VO Approve/SaveAndContinue succeeds, switch to Final Preview tab and start video polling */
   const startVideoPolling = useCallback(() => {
     console.log("[v0] Switching to Final Preview tab and starting video polling")
+    setTabBeforeAction(activeTab) // remember where user was
     setActiveTab("preview")
     setVideoPolling(true)
     setVideoParts([])
@@ -487,7 +502,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
     // GLOBAL LOCK: disable all buttons immediately before any network call
     startActionLock("Approving and continuing pipeline...")
     try {
-      // Route approve to correct webhook based on current phase status
+      // Route: Bible->04-review-action, VO/Preview->05-redo
       await reviewApprove(info.jobRecordId, info.lockToken, currentPhaseStatus)
       setActionStatus("success")
       // Notify parent to update card status
@@ -551,7 +566,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
       }
 
       console.log("[v0] Writeback patchedRaw keys:", Object.keys(patchedRaw))
-      // Bible approve -> unified /webhook/05-redo { action: "approve" }
+      // Bible edit+approve -> writeback to R2 then POST /webhook/04-review-action
       await reviewEditContinue(jobRecordId, lockToken, bibleR2Key, patchedRaw, "S3_Bible_Check")
       setOriginalBible(structuredClone(bible))
       setEditMode(false)

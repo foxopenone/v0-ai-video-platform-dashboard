@@ -387,23 +387,22 @@ export async function fetchScriptFromR2(r2Key: string): Promise<ScriptJSON> {
 // ── Approve / Redo — per V56 spec ──────────────────────────────
 
 /**
- * UNIFIED Approve/Redo routing.
- * ALL actions go to the single n8n entrypoint: /webhook/05-redo
- * The `action` field in the payload tells n8n's Normalize_Entrance how to route:
- *   - { action: "approve" }                  -> approve current phase
- *   - { action: "redo" }                     -> redo current phase
- *   - { action: "redo", Part_Index: "2" }    -> redo a specific video part
+ * Status-based Approve routing:
+ *   S3_Bible_Check  -> POST /webhook/04-review-action  { action: "approve" }
+ *   S5_Script_Check -> POST /webhook/05-redo           { action: "approve" }
+ *   Others          -> POST /webhook/05-redo           { action: "approve" }
  */
-const UNIFIED_ENDPOINT = "05-redo"
-
 export async function reviewApprove(
   jobRecordId: string,
   lockToken: string,
-  _currentStatus: string,
+  currentStatus: string,
 ) {
-  console.log(`[v0] reviewApprove -> POST /${UNIFIED_ENDPOINT}  { action: "approve" }`)
+  // Bible phase -> 04, everything else -> 05
+  const endpoint = currentStatus === "S3_Bible_Check" ? "04-review-action" : "05-redo"
 
-  const res = await fetch(`${N8N_BASE}/${UNIFIED_ENDPOINT}`, {
+  console.log(`[v0] reviewApprove -> POST /${endpoint}  { action: "approve", status: ${currentStatus} }`)
+
+  const res = await fetch(`${N8N_BASE}/${endpoint}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -414,17 +413,25 @@ export async function reviewApprove(
   })
   if (!res.ok) {
     const errBody = await res.text().catch(() => "")
-    throw new Error(`Approve failed (${UNIFIED_ENDPOINT}): ${res.status} ${errBody}`)
+    throw new Error(`Approve failed (${endpoint}): ${res.status} ${errBody}`)
   }
   return res.json()
 }
 
+/**
+ * Status-based Redo routing:
+ *   S3_Bible_Check  -> POST /webhook/04-review-action  { action: "redo" }
+ *   S5_Script_Check -> POST /webhook/05-redo           { action: "redo" }
+ *   S8_Render       -> POST /webhook/05-redo           { action: "redo", Part_Index }
+ */
 export async function reviewRedo(
   jobRecordId: string,
   lockToken: string,
-  _currentStatus: string,
+  currentStatus: string,
   partIndex?: number,
 ) {
+  const endpoint = currentStatus === "S3_Bible_Check" ? "04-review-action" : "05-redo"
+
   const body: Record<string, unknown> = {
     Job_Record_ID: jobRecordId,
     Lock_Token: lockToken,
@@ -436,16 +443,16 @@ export async function reviewRedo(
     body.Part_Index = String(partIndex)
   }
 
-  console.log(`[v0] reviewRedo -> POST /${UNIFIED_ENDPOINT}`, JSON.stringify(body))
+  console.log(`[v0] reviewRedo -> POST /${endpoint}`, JSON.stringify(body))
 
-  const res = await fetch(`${N8N_BASE}/${UNIFIED_ENDPOINT}`, {
+  const res = await fetch(`${N8N_BASE}/${endpoint}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
     const errBody = await res.text().catch(() => "")
-    throw new Error(`Redo failed (${UNIFIED_ENDPOINT}): ${res.status} ${errBody}`)
+    throw new Error(`Redo failed (${endpoint}): ${res.status} ${errBody}`)
   }
   return res.json()
 }
