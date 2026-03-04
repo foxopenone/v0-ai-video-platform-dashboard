@@ -209,6 +209,8 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const [tabBeforeAction, setTabBeforeAction] = useState<string | null>(null)
   // Voice Over (Script) state for step_review
   type ReviewTab = "bible" | "voiceover" | "preview"
+  // Track which phases have been approved (once approved, Edit/Redo are disabled)
+  const [approvedPhases, setApprovedPhases] = useState<Set<ReviewTab>>(new Set())
   const [activeTab, setActiveTab] = useState<ReviewTab>("bible")
   const [scriptPolling, setScriptPolling] = useState(false)
   const [scriptData, setScriptData] = useState<ScriptJSON | null>(null)
@@ -239,35 +241,50 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const [episodes, setEpisodes] = useState<Episode[]>([])
   const [playingEp, setPlayingEp] = useState(false)
 
-  // ── Fake Progress: animate from 0 to ~90% over 5 minutes, then auto-stop ──
+  // ── Estimate timeout based on episode count & current phase ──
+  // Bible/VO: base 30s + 10s per episode. Video: 40s per episode (concurrent).
+  // Fallback: 90s if episode count unknown.
+  const episodeCount = bible?.episodes?.length || scriptData?.parts?.length || 0
+  const estimateTimeoutMs = useCallback(() => {
+    const epCount = Math.max(episodeCount, 1)
+    if (activeTab === "preview" || videoPolling) {
+      // Video rendering: 40s per episode, but concurrent, so just 40s + small buffer
+      return (40 + epCount * 5) * 1000
+    }
+    // Bible / Voice Over phases: 30s base + 10s per episode
+    return (30 + epCount * 10) * 1000
+  }, [episodeCount, activeTab, videoPolling])
+
+  // ── Fake Progress: animate from 0 to ~95% over estimated time, then auto-stop ──
   useEffect(() => {
     if (!actionLocked || !lockStartTime) { setFakeProgress(0); return }
-    const TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
+    const TIMEOUT_MS = Math.max(estimateTimeoutMs(), 30_000) // at least 30s
+    const HARD_LIMIT = 5 * 60 * 1000 // hard cap at 5 minutes
     const interval = setInterval(() => {
       const elapsed = Date.now() - lockStartTime
-      if (elapsed >= TIMEOUT_MS) {
-        // Auto-stop after 5 minutes, restore pre-action tab
+      if (elapsed >= HARD_LIMIT) {
+        // Hard stop after 5 minutes, restore pre-action tab
         clearInterval(interval)
         setActionLocked(false)
         setActionStatus("error")
-        setActionMessage("Timed out after 5 minutes. Please check task status or try again.")
+        setActionMessage("Timed out. Please check task status or try again.")
         setLockStartTime(null)
         setFakeProgress(0)
         setScriptPolling(false)
         setVideoPolling(false)
-        if (tabBeforeAction) {
-          setActiveTab(tabBeforeAction)
-          setTabBeforeAction(null)
+        if (tabBeforeAction && !approvedPhases.has(tabBeforeAction as ReviewTab)) {
+          setActiveTab(tabBeforeAction as ReviewTab)
         }
+        setTabBeforeAction(null)
         return
       }
-      // Ease-out curve: fast at start, slows toward 92%
-      const ratio = elapsed / TIMEOUT_MS
-      const pct = Math.min(92, Math.round(ratio * 120 * (1 - ratio * 0.4)))
+      // Ease-out curve against estimated time (caps at 95%)
+      const ratio = Math.min(elapsed / TIMEOUT_MS, 1)
+      const pct = Math.min(95, Math.round(ratio * 120 * (1 - ratio * 0.3)))
       setFakeProgress(pct)
     }, 500)
     return () => clearInterval(interval)
-  }, [actionLocked, lockStartTime, tabBeforeAction])
+  }, [actionLocked, lockStartTime, tabBeforeAction, estimateTimeoutMs, approvedPhases])
 
   // Helper: start the action lock with timestamp
   const startActionLock = useCallback((msg: string) => {
@@ -279,6 +296,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
   }, [])
 
   // Stop handler: cancel the waiting state, return to pre-action state
+  // But if the previous tab was already approved, stay on current tab
   const handleStop = useCallback(() => {
     setActionLocked(false)
     setActionStatus("idle")
@@ -287,12 +305,12 @@ export function ReviewRoom(props: ReviewRoomProps) {
     setFakeProgress(0)
     setScriptPolling(false)
     setVideoPolling(false)
-    // Restore the tab user was on before the action
-    if (tabBeforeAction) {
-      setActiveTab(tabBeforeAction)
-      setTabBeforeAction(null)
+    // Only go back if the previous tab hasn't been approved yet
+    if (tabBeforeAction && !approvedPhases.has(tabBeforeAction as ReviewTab)) {
+      setActiveTab(tabBeforeAction as ReviewTab)
     }
-  }, [tabBeforeAction])
+    setTabBeforeAction(null)
+  }, [tabBeforeAction, approvedPhases])
 
   // ── Step Review: Load Bible JSON ──
   useEffect(() => {
@@ -301,6 +319,16 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
     console.log("[v0] 1. Airtable Status:", currentStatus)
     console.log("[v0] 2. Bible_R2_Key:", bibleR2Key)
+
+    // Initialize approved phases based on current status
+    // If we're at S5 or later, bible was already approved
+    // If we're at S8 or later, both bible and VO were already approved
+    if (/^S[5-9]|^S5_Script/i.test(currentStatus)) {
+      setApprovedPhases((prev) => new Set(prev).add("bible"))
+    }
+    if (/^S[8-9]|^S8_Render/i.test(currentStatus)) {
+      setApprovedPhases((prev) => { const s = new Set(prev); s.add("bible"); s.add("voiceover"); return s })
+    }
 
     // Always load bible (it's the base data)
     setBibleLoading(true)
@@ -462,6 +490,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
       // VO edit+approve -> writeback to R2 then POST /webhook/05-redo
       await reviewEditContinue(info.jobRecordId, info.lockToken, scriptR2Key, patchedRaw, "S5_Script_Check")
       setActionStatus("success")
+      setApprovedPhases((prev) => new Set(prev).add("voiceover"))
       setActionMessage("Approved! Switching to Video Preview")
       startVideoPolling()
       // actionLocked stays TRUE until video data arrives
@@ -505,6 +534,8 @@ export function ReviewRoom(props: ReviewRoomProps) {
       // Route: Bible->04-review-action, VO/Preview->05-redo
       await reviewApprove(info.jobRecordId, info.lockToken, currentPhaseStatus)
       setActionStatus("success")
+      // Mark current phase as approved
+      setApprovedPhases((prev) => new Set(prev).add(activeTab))
       // Notify parent to update card status
       if (isStepReview && (props as StepReviewProps).onApproved) {
         (props as StepReviewProps).onApproved!()
@@ -571,6 +602,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
       setOriginalBible(structuredClone(bible))
       setEditMode(false)
       setActionStatus("success")
+      setApprovedPhases((prev) => new Set(prev).add("bible"))
       setActionMessage("Approved! Switching to Voice Over")
       startVoiceOverPolling()
       // actionLocked stays TRUE until VO data arrives
@@ -1170,7 +1202,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
               <p className="max-w-xs text-center text-xs text-muted-foreground">
                 {actionStatus === "submitting"
                   ? "Sending request to backend..."
-                  : "Waiting for AI pipeline. Do NOT close this page."}
+                  : `Estimated ~${Math.round(estimateTimeoutMs() / 1000)}s. Do NOT close this page.`}
               </p>
               {/* Fake progress bar with percentage */}
               <div className="w-full">
@@ -1205,7 +1237,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
             <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
             <span className="font-medium text-foreground">{projectTitle || "Step Review"}</span>
             <Badge variant="outline" className="ml-2 border-[var(--brand-pink)]/30 bg-[var(--brand-pink)]/10 text-[10px] text-[var(--brand-pink)]">
-              Phase 1: Bible Review
+              {activeTab === "preview" ? "Phase 3: Final Preview" : activeTab === "voiceover" ? "Phase 2: Voice Over" : "Phase 1: Bible Review"}
             </Badge>
           </div>
           <button
@@ -1251,8 +1283,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
           {/* RIGHT: Story Summary + Actions */}
           <div className="flex w-3/5 flex-col">
-            {/* Phase tabs */}
-            <div className="flex shrink-0 items-center gap-1 border-b border-border/20 px-5 py-3">
+            {/* Phase step tabs with checkmarks and connectors */}
+            <div className="flex shrink-0 items-center gap-0 border-b border-border/20 px-5 py-3">
+              {/* Step 1: Story Bible */}
               <button
                 onClick={() => setActiveTab("bible")}
                 className={cn(
@@ -1260,29 +1293,57 @@ export function ReviewRoom(props: ReviewRoomProps) {
                   activeTab === "bible" ? "bg-secondary/60 text-foreground" : "text-muted-foreground hover:text-foreground/70"
                 )}
               >
-                <FileText className="h-3.5 w-3.5" />
+                {approvedPhases.has("bible") ? (
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                ) : (
+                  <FileText className="h-3.5 w-3.5" />
+                )}
                 Story Bible
+                {approvedPhases.has("bible") && activeTab !== "bible" && (
+                  <span className="ml-1 text-[9px] text-emerald-400/70">Done</span>
+                )}
               </button>
-              <div className="mx-2 h-px w-6 bg-border/30" />
+
+              {/* Connector 1->2 */}
+              <div className={cn(
+                "mx-1.5 h-px w-6 transition-colors",
+                approvedPhases.has("bible") ? "bg-emerald-500/40" : "bg-border/30"
+              )} />
+
+              {/* Step 2: Voice Over */}
               <button
-                onClick={() => { if (scriptData || scriptPolling || scriptError) setActiveTab("voiceover") }}
+                onClick={() => { if (scriptData || scriptPolling || scriptError || approvedPhases.has("bible")) setActiveTab("voiceover") }}
                 className={cn(
                   "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
                   activeTab === "voiceover" ? "bg-secondary/60 text-foreground" : "text-muted-foreground hover:text-foreground/70",
-                  !scriptData && !scriptPolling && !scriptError && "cursor-not-allowed opacity-50"
+                  !scriptData && !scriptPolling && !scriptError && !approvedPhases.has("bible") && "cursor-not-allowed opacity-50"
                 )}
               >
-                <Mic className="h-3.5 w-3.5" />
+                {approvedPhases.has("voiceover") ? (
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                ) : (
+                  <Mic className="h-3.5 w-3.5" />
+                )}
                 Voice Over
                 {scriptPolling && <Loader2 className="ml-1 h-3 w-3 animate-spin text-[var(--brand-pink)]" />}
+                {approvedPhases.has("voiceover") && activeTab !== "voiceover" && (
+                  <span className="ml-1 text-[9px] text-emerald-400/70">Done</span>
+                )}
               </button>
-              <div className="mx-2 h-px w-6 bg-border/30" />
+
+              {/* Connector 2->3 */}
+              <div className={cn(
+                "mx-1.5 h-px w-6 transition-colors",
+                approvedPhases.has("voiceover") ? "bg-emerald-500/40" : "bg-border/30"
+              )} />
+
+              {/* Step 3: Final Preview */}
               <button
-                onClick={() => { if (videoParts.length > 0 || videoPolling || videoError) setActiveTab("preview") }}
+                onClick={() => { if (videoParts.length > 0 || videoPolling || videoError || approvedPhases.has("voiceover")) setActiveTab("preview") }}
                 className={cn(
                   "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
                   activeTab === "preview" ? "bg-secondary/60 text-foreground" : "text-muted-foreground hover:text-foreground/70",
-                  !videoParts.length && !videoPolling && !videoError && "cursor-not-allowed opacity-50"
+                  !videoParts.length && !videoPolling && !videoError && !approvedPhases.has("voiceover") && "cursor-not-allowed opacity-50"
                 )}
               >
                 <Film className="h-3.5 w-3.5" />
@@ -1301,10 +1362,12 @@ export function ReviewRoom(props: ReviewRoomProps) {
                       <h3 className="text-sm font-semibold text-foreground">
                         Story Summary
                         {!editMode && (
-                          <span className="ml-2 text-[10px] font-normal text-amber-400">Pending Confirmation</span>
+                          approvedPhases.has("bible")
+                            ? <span className="ml-2 text-[10px] font-normal text-emerald-400">Approved</span>
+                            : <span className="ml-2 text-[10px] font-normal text-amber-400">Pending Confirmation</span>
                         )}
                       </h3>
-                      {!editMode && (
+                      {!editMode && !approvedPhases.has("bible") && (
                         <button
                           onClick={() => setEditMode(true)}
                           className="flex items-center gap-1 text-[10px] text-[var(--brand-pink)] transition-colors hover:text-[var(--brand-pink)]/70"
@@ -1650,6 +1713,21 @@ export function ReviewRoom(props: ReviewRoomProps) {
                         Save & Continue
                       </button>
                     </div>
+                  ) : approvedPhases.has("bible") ? (
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-xs font-semibold text-emerald-400">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Approved
+                      </span>
+                      <button disabled className="flex items-center gap-1.5 rounded-lg border border-border/20 bg-secondary/10 px-4 py-2.5 text-xs font-medium text-muted-foreground/40 cursor-not-allowed">
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Redo
+                      </button>
+                      <button disabled className="flex items-center gap-1.5 rounded-lg border border-border/20 bg-secondary/10 px-4 py-2.5 text-xs font-medium text-muted-foreground/40 cursor-not-allowed">
+                        <Edit3 className="h-3.5 w-3.5" />
+                        Edit
+                      </button>
+                    </div>
                   ) : (
                     <div className="flex items-center gap-2">
                       <button
@@ -1723,6 +1801,21 @@ export function ReviewRoom(props: ReviewRoomProps) {
                               <CheckCircle2 className="h-3.5 w-3.5" />
                             )}
                             Save & Continue
+                          </button>
+                        </>
+                      ) : approvedPhases.has("voiceover") ? (
+                        <>
+                          <span className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-xs font-semibold text-emerald-400">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            Approved
+                          </span>
+                          <button disabled className="flex items-center gap-1.5 rounded-lg border border-border/20 bg-secondary/10 px-4 py-2.5 text-xs font-medium text-muted-foreground/40 cursor-not-allowed">
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            Redo
+                          </button>
+                          <button disabled className="flex items-center gap-1.5 rounded-lg border border-border/20 bg-secondary/10 px-4 py-2.5 text-xs font-medium text-muted-foreground/40 cursor-not-allowed">
+                            <Edit3 className="h-3.5 w-3.5" />
+                            Edit
                           </button>
                         </>
                       ) : (
