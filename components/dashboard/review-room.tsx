@@ -230,20 +230,6 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const [videoRenderProgress, setVideoRenderProgress] = useState(0) // 0-95 fake progress for video rendering
   const [videoRenderStartTime, setVideoRenderStartTime] = useState<number | null>(null)
   const [videoStopped, setVideoStopped] = useState(false) // true after user clicks Stop
-  // ── Video rendering progress: animate progress when videoPolling is active ──
-  useEffect(() => {
-    if (!videoPolling || !videoRenderStartTime) {
-      return
-    }
-    const ESTIMATED_MS = Math.max((episodeCount || 3) * 40_000, 60_000) // 40s per episode min 60s
-    const interval = setInterval(() => {
-      const elapsed = Date.now() - videoRenderStartTime
-      const ratio = Math.min(elapsed / ESTIMATED_MS, 1)
-      const pct = Math.min(92, Math.round(ratio * 120 * (1 - ratio * 0.3)))
-      setVideoRenderProgress(pct)
-    }, 400)
-    return () => clearInterval(interval)
-  }, [videoPolling, videoRenderStartTime, episodeCount])
 
   // Auto-select first video part with a URL when videos arrive
   useEffect(() => {
@@ -272,6 +258,20 @@ export function ReviewRoom(props: ReviewRoomProps) {
   // Bible/VO: base 30s + 10s per episode. Video: 40s per episode (concurrent).
   // Fallback: 90s if episode count unknown.
   const episodeCount = bible?.episodes?.length || scriptData?.parts?.length || 0
+
+  // ── Video rendering progress: animate from 0→~92% while videoPolling is active ──
+  useEffect(() => {
+    if (!videoPolling || !videoRenderStartTime) return
+    const ESTIMATED_MS = Math.max((episodeCount || 3) * 40_000, 60_000)
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - videoRenderStartTime
+      const ratio = Math.min(elapsed / ESTIMATED_MS, 1)
+      const pct = Math.min(92, Math.round(ratio * 120 * (1 - ratio * 0.3)))
+      setVideoRenderProgress(pct)
+    }, 400)
+    return () => clearInterval(interval)
+  }, [videoPolling, videoRenderStartTime, episodeCount])
+
   const estimateTimeoutMs = useCallback(() => {
     const epCount = Math.max(episodeCount, 1)
     if (activeTab === "preview" || videoPolling) {
@@ -1079,13 +1079,13 @@ export function ReviewRoom(props: ReviewRoomProps) {
     const { projectTitle, jobRecordId } = props as ProgressProps
 
     const STAGE_LABELS: Record<string, { label: string; pct: number }> = {
-      S1_Ingestion: { label: "Ingesting source files...", pct: 10 },
-      S2_Brain: { label: "AI is analyzing content...", pct: 30 },
-      S3_Bible: { label: "Bible ready for review", pct: 45 },
-      S3_Bible_Check: { label: "Bible ready for review", pct: 45 },
+      S1_Ingestion: { label: "Ingesting source files...", pct: 15 },
+      S2_Brain: { label: "AI is analyzing content...", pct: 50 },
+      S3_Bible: { label: "Bible ready! Opening review...", pct: 100 },
+      S3_Bible_Check: { label: "Bible ready! Opening review...", pct: 100 },
       S4_Script: { label: "Generating scripts...", pct: 50 },
-      S5_Script: { label: "Scripts ready for review", pct: 65 },
-      S5_Script_Check: { label: "Scripts ready for review", pct: 65 },
+      S5_Script: { label: "Scripts ready! Opening review...", pct: 100 },
+      S5_Script_Check: { label: "Scripts ready! Opening review...", pct: 100 },
       S6_VO: { label: "Generating voice over...", pct: 75 },
       S7_Render: { label: "Rendering video...", pct: 85 },
       S8_Render: { label: "Final rendering in progress...", pct: 90 },
@@ -1133,31 +1133,37 @@ export function ReviewRoom(props: ReviewRoomProps) {
               </div>
             ) : (
               <>
-            {progressPolling && <Loader2 className="h-10 w-10 animate-spin text-[var(--brand-pink)]" />}
-            {!progressPolling && <CheckCircle2 className="h-10 w-10 text-emerald-400" />}
+            {info.pct >= 100 ? (
+              <CheckCircle2 className="h-10 w-10 text-emerald-400" />
+            ) : progressPolling ? (
+              <Loader2 className="h-10 w-10 animate-spin text-[var(--brand-pink)]" />
+            ) : (
+              <CheckCircle2 className="h-10 w-10 text-emerald-400" />
+            )}
 
             <div className="text-center">
               <p className="text-lg font-semibold text-foreground">{info.label}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Status: {progressStatus}
-              </p>
-              <p className="mt-0.5 text-[10px] text-muted-foreground/50">
-                Record: {jobRecordId}
-              </p>
             </div>
 
             {/* Progress bar */}
             <div className="w-full">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] text-muted-foreground">
+                  {info.pct >= 100 ? "Ready" : "Processing..."}
+                </span>
+                <span className="text-xs font-semibold tabular-nums text-foreground">{info.pct}%</span>
+              </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-secondary/30">
                 <div
                   className="h-full rounded-full transition-all duration-700"
                   style={{
                     width: `${info.pct}%`,
-                    background: "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
+                    background: info.pct >= 100
+                      ? "rgb(52 211 153)"
+                      : "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
                   }}
                 />
               </div>
-              <p className="mt-1 text-right text-[10px] text-muted-foreground">{info.pct}%</p>
             </div>
 
             {/* S8 special message */}
@@ -1171,7 +1177,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
             )}
 
             <p className="text-[10px] text-muted-foreground/50">
-              {progressPolling ? "Auto-refreshing every few seconds..." : "Done"}
+              {info.pct >= 100 ? "Opening review..." : progressPolling ? "Auto-refreshing every few seconds..." : "Done"}
             </p>
             <div className="flex items-center gap-2">
               <button
@@ -1180,18 +1186,20 @@ export function ReviewRoom(props: ReviewRoomProps) {
               >
                 Back to Home
               </button>
-              <button
-                onClick={() => {
-                  setProgressPolling(false)
-                  const fn = (props as ProgressProps).onStop
-                  if (fn) fn()
-                  else onClose()
-                }}
-                className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20"
-              >
-                <StopCircle className="h-3.5 w-3.5" />
-                Stop
-              </button>
+              {info.pct < 100 && (
+                <button
+                  onClick={() => {
+                    setProgressPolling(false)
+                    const fn = (props as ProgressProps).onStop
+                    if (fn) fn()
+                    else onClose()
+                  }}
+                  className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20"
+                >
+                  <StopCircle className="h-3.5 w-3.5" />
+                  Stop
+                </button>
+              )}
             </div>
               </>
             )}
