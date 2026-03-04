@@ -1512,8 +1512,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
                       </div>
                     </div>
 
-                    {/* Stop / Resume buttons */}
+                    {/* Action buttons: always show at least one way to close/stop */}
                     <div className="flex items-center gap-2">
+                      {/* Stop button when actively rendering */}
                       {videoPolling && !videoStopped && (
                         <button
                           onClick={handleStop}
@@ -1523,6 +1524,14 @@ export function ReviewRoom(props: ReviewRoomProps) {
                           Stop Rendering
                         </button>
                       )}
+                      {/* Close / Back to Home - always visible as escape hatch */}
+                      <button
+                        onClick={onClose}
+                        className="flex items-center gap-1.5 rounded-lg border border-border/30 px-4 py-2 text-xs text-muted-foreground transition-colors hover:bg-secondary/30 hover:text-foreground"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                        Close
+                      </button>
                       {allDone && (
                         <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-400">
                           <CheckCircle2 className="h-3.5 w-3.5" />
