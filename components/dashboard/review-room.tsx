@@ -227,6 +227,24 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const [videoParts, setVideoParts] = useState<VideoPart[]>([])
   const [videoError, setVideoError] = useState<string | null>(null)
   const [selectedVideoPartId, setSelectedVideoPartId] = useState<string | null>(null)
+  const [videoRenderProgress, setVideoRenderProgress] = useState(0) // 0-95 fake progress for video rendering
+  const [videoRenderStartTime, setVideoRenderStartTime] = useState<number | null>(null)
+  const [videoStopped, setVideoStopped] = useState(false) // true after user clicks Stop
+  // ── Video rendering progress: animate progress when videoPolling is active ──
+  useEffect(() => {
+    if (!videoPolling || !videoRenderStartTime) {
+      return
+    }
+    const ESTIMATED_MS = Math.max((episodeCount || 3) * 40_000, 60_000) // 40s per episode min 60s
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - videoRenderStartTime
+      const ratio = Math.min(elapsed / ESTIMATED_MS, 1)
+      const pct = Math.min(92, Math.round(ratio * 120 * (1 - ratio * 0.3)))
+      setVideoRenderProgress(pct)
+    }, 400)
+    return () => clearInterval(interval)
+  }, [videoPolling, videoRenderStartTime, episodeCount])
+
   // Auto-select first video part with a URL when videos arrive
   useEffect(() => {
     if (videoParts.length > 0 && !selectedVideoPartId) {
@@ -304,22 +322,37 @@ export function ReviewRoom(props: ReviewRoomProps) {
     setFakeProgress(0)
   }, [])
 
-  // Stop handler: cancel the waiting state, return to pre-action state
-  // But if the previous tab was already approved, stay on current tab
+  // Stop handler: cancel the waiting state
+  // For video preview: stay on preview tab, show "stopped" state
+  // For other tabs: go back if previous tab not approved
   const handleStop = useCallback(() => {
-    setActionLocked(false)
-    setActionStatus("idle")
-    setActionMessage("")
-    setLockStartTime(null)
-    setFakeProgress(0)
+    // Stop all polling
     setScriptPolling(false)
     setVideoPolling(false)
-    // Only go back if the previous tab hasn't been approved yet
-    if (tabBeforeAction && !approvedPhases.has(tabBeforeAction as ReviewTab)) {
-      setActiveTab(tabBeforeAction as ReviewTab)
+    setVideoRenderStartTime(null)
+
+    if (activeTab === "preview") {
+      // Stay on preview tab, show stopped state
+      setVideoStopped(true)
+      setActionLocked(false)
+      setActionStatus("idle")
+      setActionMessage("")
+      setLockStartTime(null)
+      setFakeProgress(0)
+      setTabBeforeAction(null)
+    } else {
+      setActionLocked(false)
+      setActionStatus("idle")
+      setActionMessage("")
+      setLockStartTime(null)
+      setFakeProgress(0)
+      // Only go back if the previous tab hasn't been approved yet
+      if (tabBeforeAction && !approvedPhases.has(tabBeforeAction as ReviewTab)) {
+        setActiveTab(tabBeforeAction as ReviewTab)
+      }
+      setTabBeforeAction(null)
     }
-    setTabBeforeAction(null)
-  }, [tabBeforeAction, approvedPhases])
+  }, [tabBeforeAction, approvedPhases, activeTab])
 
   // ── Step Review: Load Bible JSON ──
   useEffect(() => {
@@ -359,6 +392,8 @@ export function ReviewRoom(props: ReviewRoomProps) {
       console.log("[v0] Status is S8/S9 -- auto-switching to Final Preview tab")
       setActiveTab("preview")
       setVideoPolling(true)
+      setVideoRenderStartTime(Date.now())
+      setVideoRenderProgress(0)
       // Also try to load script data in background (for VO tab browsing)
       fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}`)
         .then((r) => r.ok ? r.json() : Promise.reject(new Error(`API ${r.status}`)))
@@ -527,10 +562,20 @@ export function ReviewRoom(props: ReviewRoomProps) {
     console.log("[v0] Switching to Final Preview tab and starting video polling")
     setTabBeforeAction(activeTab) // remember where user was
     setActiveTab("preview")
+    // Clear the global lock -- preview tab has its own progress UI
+    setActionLocked(false)
+    setActionStatus("idle")
+    setActionMessage("")
+    setLockStartTime(null)
+    setFakeProgress(0)
+    // Start video-specific state
     setVideoPolling(true)
     setVideoParts([])
     setVideoError(null)
     setSelectedVideoPartId(null)
+    setVideoRenderProgress(0)
+    setVideoRenderStartTime(Date.now())
+    setVideoStopped(false)
     setEditMode(false) // lock all edits
   }, [activeTab])
 
@@ -856,11 +901,13 @@ export function ReviewRoom(props: ReviewRoomProps) {
           const anyRedoing = videoParts.some((vp) => vp.redoing)
           if (allReady && !anyRedoing) {
             // If status is S9_Done, stop polling entirely
-            if (job.Status === "S9_Done") {
-              console.log("[v0] All videos done, status S9_Done. Stopping video poller.")
-              stopped = true
-              setVideoPolling(false)
-            }
+      if (job.Status === "S9_Done") {
+        console.log("[v0] All videos done, status S9_Done. Stopping video poller.")
+        stopped = true
+        setVideoPolling(false)
+        setVideoRenderStartTime(null)
+        setVideoRenderProgress(100)
+      }
             // Otherwise keep polling for status updates
           }
         }
@@ -1201,8 +1248,8 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
     return (
       <div className="fixed inset-0 z-50 flex flex-col bg-background">
-        {/* ===== GLOBAL ACTION LOCK OVERLAY ===== */}
-        {actionLocked && (
+        {/* ===== GLOBAL ACTION LOCK OVERLAY (hidden on preview tab - preview has its own UI) ===== */}
+        {actionLocked && activeTab !== "preview" && (
           <div className="absolute inset-0 z-[60] flex items-center justify-center bg-background/80 backdrop-blur-sm">
             <div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-2xl border border-border/20 bg-card px-10 py-8 shadow-2xl">
               <Loader2 className="h-10 w-10 animate-spin text-[var(--brand-pink)]" />
@@ -1375,15 +1422,16 @@ export function ReviewRoom(props: ReviewRoomProps) {
               const totalParts = Math.max(videoParts.length, episodeCount, 1)
               const allDone = videoParts.length > 0 && videoParts.every((vp) => !!vp.url && !vp.redoing)
               const overallPct = videoParts.length === 0
-                ? fakeProgress
+                ? videoRenderProgress
                 : Math.round((readyCount / totalParts) * 100)
+              const skeletonCount = Math.max(episodeCount, 3)
 
               return (
                 <div className="flex flex-1 overflow-hidden">
-                  {/* ── LEFT PANEL: Video Player + Progress ── */}
-                  <div className="flex flex-1 flex-col p-4">
-                    {/* Video player */}
-                    <div className="relative flex flex-1 items-center justify-center rounded-xl bg-black/60 overflow-hidden min-h-[320px]">
+                  {/* ── LEFT: Video Player + Progress + Stop ── */}
+                  <div className="flex flex-1 flex-col p-4 gap-3">
+                    {/* Video player / placeholder */}
+                    <div className="relative flex flex-1 items-center justify-center rounded-xl border border-border/10 bg-black/60 overflow-hidden min-h-[320px]">
                       {selectedVp?.url && !selectedVp.redoing ? (
                         <video
                           key={selectedVp.url}
@@ -1395,47 +1443,70 @@ export function ReviewRoom(props: ReviewRoomProps) {
                         >
                           Your browser does not support the video tag.
                         </video>
-                      ) : (
-                        <div className="flex flex-col items-center gap-4 px-8 py-20">
-                          <Loader2 className="h-10 w-10 animate-spin text-[var(--brand-pink)]" />
-                          <p className="text-center text-sm font-medium text-foreground/80">
-                            {selectedVp?.redoing ? "Re-rendering this part..." : "Waiting for video rendering..."}
-                          </p>
+                      ) : videoStopped ? (
+                        <div className="flex flex-col items-center gap-4 px-8">
+                          <StopCircle className="h-12 w-12 text-red-400/60" />
+                          <p className="text-sm font-medium text-foreground/80">Rendering stopped</p>
                           <p className="max-w-xs text-center text-xs text-muted-foreground">
-                            Videos appear per-part as they finish. Select a ready part from the list on the right.
+                            {videoParts.length > 0
+                              ? `${readyCount} of ${totalParts} parts were completed before stopping.`
+                              : "No video parts were completed."}
+                          </p>
+                          <button
+                            onClick={() => { setVideoStopped(false); setVideoRenderStartTime(Date.now()); setVideoRenderProgress(0); setVideoPolling(true) }}
+                            className="flex items-center gap-1.5 rounded-lg border border-[var(--brand-pink)]/30 bg-[var(--brand-pink)]/10 px-4 py-2 text-xs font-medium text-[var(--brand-pink)] transition-colors hover:bg-[var(--brand-pink)]/20"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            Resume Rendering
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-4 px-8">
+                          <div className="relative h-16 w-16">
+                            <div className="absolute inset-0 rounded-full border-2 border-[var(--brand-pink)]/20" />
+                            <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-[var(--brand-pink)]" />
+                            <Film className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 text-[var(--brand-pink)]/60" />
+                          </div>
+                          <p className="text-sm font-medium text-foreground/80">Rendering videos...</p>
+                          <p className="max-w-xs text-center text-xs text-muted-foreground">
+                            Each part renders independently. Select a completed part from the right panel to preview it here.
                           </p>
                         </div>
                       )}
                     </div>
 
                     {/* Overall progress bar */}
-                    <div className="mt-3">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] text-muted-foreground">
-                          {allDone
-                            ? `All ${videoParts.length} parts rendered`
-                            : videoParts.length > 0
-                              ? `${readyCount} / ${totalParts} parts ready`
-                              : "Rendering in progress..."}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs text-muted-foreground">
+                          {videoStopped
+                            ? "Stopped"
+                            : allDone
+                              ? `All ${videoParts.length} parts rendered`
+                              : videoParts.length > 0
+                                ? `${readyCount} of ${totalParts} parts ready`
+                                : "Rendering in progress..."}
                         </span>
-                        <span className="text-[10px] font-medium text-muted-foreground">{overallPct}%</span>
+                        <span className="text-xs font-semibold tabular-nums text-foreground">{overallPct}%</span>
                       </div>
-                      <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-secondary/30">
+                      <div className="relative h-2 w-full overflow-hidden rounded-full bg-secondary/30">
                         <div
-                          className="h-full rounded-full transition-all duration-700"
+                          className="h-full rounded-full transition-all duration-700 ease-out"
                           style={{
                             width: `${overallPct}%`,
-                            background: allDone
-                              ? "rgb(52 211 153)"
-                              : "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
+                            background: videoStopped
+                              ? "rgb(248 113 113)"
+                              : allDone
+                                ? "rgb(52 211 153)"
+                                : "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
                           }}
                         />
                       </div>
                     </div>
 
-                    {/* Stop button */}
-                    {(videoPolling || !allDone) && !videoError && (
-                      <div className="mt-2 flex items-center gap-2">
+                    {/* Stop / Resume buttons */}
+                    <div className="flex items-center gap-2">
+                      {videoPolling && !videoStopped && (
                         <button
                           onClick={handleStop}
                           className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20"
@@ -1443,23 +1514,35 @@ export function ReviewRoom(props: ReviewRoomProps) {
                           <StopCircle className="h-3.5 w-3.5" />
                           Stop Rendering
                         </button>
-                      </div>
-                    )}
+                      )}
+                      {allDone && (
+                        <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-400">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          All parts rendered
+                        </span>
+                      )}
+                    </div>
                   </div>
 
-                  {/* ── RIGHT PANEL: Parts List ── */}
-                  <div className="flex w-80 flex-shrink-0 flex-col border-l border-border/20 bg-secondary/5">
-                    {/* Header */}
+                  {/* ── RIGHT: Video Parts List ── */}
+                  <div className="flex w-[340px] flex-shrink-0 flex-col border-l border-border/20">
+                    {/* Panel header */}
                     <div className="flex items-center justify-between border-b border-border/15 px-4 py-3">
-                      <h3 className="text-xs font-semibold text-foreground">
-                        Video Parts
+                      <div className="flex items-center gap-2">
+                        <Film className="h-3.5 w-3.5 text-muted-foreground" />
+                        <h3 className="text-sm font-semibold text-foreground">Video Parts</h3>
                         {videoParts.length > 0 && (
-                          <span className="ml-1.5 text-muted-foreground">({readyCount}/{totalParts})</span>
+                          <span className="rounded-full bg-secondary/30 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            {readyCount}/{totalParts} ready
+                          </span>
                         )}
-                      </h3>
-                      {videoPolling && (
-                        <span className="flex items-center gap-1 rounded-full bg-[var(--brand-pink)]/10 px-2 py-0.5 text-[9px] text-[var(--brand-pink)]">
-                          <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                      </div>
+                      {videoPolling && !videoStopped && (
+                        <span className="flex items-center gap-1.5 rounded-full bg-[var(--brand-pink)]/10 px-2.5 py-1 text-[10px] font-medium text-[var(--brand-pink)]">
+                          <span className="relative flex h-2 w-2">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--brand-pink)] opacity-75" />
+                            <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--brand-pink)]" />
+                          </span>
                           Rendering
                         </span>
                       )}
@@ -1467,12 +1550,12 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
                     {/* Error banner */}
                     {videoError && (
-                      <div className="mx-3 mt-3 flex flex-col items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-3">
-                        <AlertCircle className="h-5 w-5 text-red-400" />
-                        <p className="text-center text-[10px] text-red-400">{videoError}</p>
+                      <div className="mx-3 mt-3 flex items-center gap-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2.5">
+                        <AlertCircle className="h-4 w-4 shrink-0 text-red-400" />
+                        <p className="flex-1 text-[11px] text-red-400">{videoError}</p>
                         <button
-                          onClick={() => { setVideoError(null); setVideoPolling(true) }}
-                          className="flex items-center gap-1 rounded-md border border-border/30 bg-secondary/20 px-3 py-1.5 text-[10px] font-medium text-foreground transition-colors hover:bg-secondary/40"
+                          onClick={() => { setVideoError(null); setVideoStopped(false); setVideoRenderStartTime(Date.now()); setVideoRenderProgress(0); setVideoPolling(true) }}
+                          className="flex shrink-0 items-center gap-1 rounded-md bg-red-500/20 px-2 py-1 text-[10px] font-medium text-red-300 hover:bg-red-500/30"
                         >
                           <RotateCcw className="h-3 w-3" />
                           Retry
@@ -1481,122 +1564,141 @@ export function ReviewRoom(props: ReviewRoomProps) {
                     )}
 
                     {/* Scrollable parts list */}
-                    <ScrollArea className="flex-1 px-3 py-3">
+                    <ScrollArea className="flex-1 p-3">
                       <div className="flex flex-col gap-2">
-                        {/* Skeleton placeholders when no parts yet */}
-                        {videoParts.length === 0 && !videoError && (
-                          Array.from({ length: Math.max(episodeCount, 3) }).map((_, i) => (
-                            <div key={i} className="rounded-lg border border-border/10 bg-secondary/10 px-3 py-3">
-                              <div className="flex items-center gap-3">
-                                <div className="flex h-9 w-9 items-center justify-center rounded-md bg-secondary/20">
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground/30" />
-                                </div>
-                                <div className="flex-1">
-                                  <div className="h-3 w-16 rounded bg-secondary/20 animate-pulse" />
-                                  <div className="mt-2 h-1.5 w-full rounded-full bg-secondary/15">
-                                    <div className="h-full rounded-full bg-[var(--brand-pink)]/20 animate-pulse" style={{ width: `${20 + i * 10}%` }} />
+                        {/* Skeleton cards (before any parts arrive) */}
+                        {videoParts.length === 0 && !videoError && !videoStopped &&
+                          Array.from({ length: skeletonCount }).map((_, i) => {
+                            const skeletonPct = Math.min(videoRenderProgress + i * 3, 90)
+                            return (
+                              <div key={i} className="rounded-lg border border-border/15 bg-secondary/10 p-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary/25">
+                                    <Loader2 className="h-4 w-4 animate-spin text-[var(--brand-pink)]/50" />
                                   </div>
-                                  <p className="mt-1 text-[8px] text-muted-foreground/40">Waiting...</p>
+                                  <div className="flex-1">
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span className="text-xs font-semibold text-foreground/60">Part {i + 1}</span>
+                                      <span className="text-[9px] font-medium text-muted-foreground/50">Rendering</span>
+                                    </div>
+                                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary/25">
+                                      <div
+                                        className="h-full rounded-full transition-all duration-1000 ease-out"
+                                        style={{
+                                          width: `${skeletonPct}%`,
+                                          background: "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
+                                          opacity: 0.5,
+                                        }}
+                                      />
+                                    </div>
+                                    <span className="mt-0.5 block text-[9px] tabular-nums text-muted-foreground/40">{skeletonPct}%</span>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ))
-                        )}
+                            )
+                          })
+                        }
 
                         {/* Real part cards */}
                         {videoParts.map((vp) => {
                           const isSelected = vp.part === selectedVideoPartId
                           const hasUrl = !!vp.url && !vp.redoing
-                          const partPct = vp.approved ? 100 : hasUrl ? 100 : vp.redoing ? 30 : 50
+                          const partPct = vp.approved ? 100 : hasUrl ? 100 : vp.redoing ? 35 : 60
 
                           return (
                             <div
                               key={vp.part}
                               onClick={() => { if (hasUrl) setSelectedVideoPartId(vp.part) }}
                               className={cn(
-                                "cursor-pointer rounded-lg border px-3 py-3 transition-all",
+                                "rounded-lg border p-3 transition-all",
                                 isSelected
-                                  ? "border-[var(--brand-pink)]/50 bg-[var(--brand-pink)]/8 shadow-sm shadow-[var(--brand-pink)]/10"
-                                  : "border-border/15 bg-secondary/8 hover:bg-secondary/20",
-                                !hasUrl && "cursor-default"
+                                  ? "border-[var(--brand-pink)]/40 bg-[var(--brand-pink)]/8 ring-1 ring-[var(--brand-pink)]/20"
+                                  : "border-border/15 bg-secondary/8 hover:bg-secondary/15",
+                                hasUrl ? "cursor-pointer" : "cursor-default"
                               )}
                             >
                               <div className="flex items-center gap-3">
                                 {/* Status icon */}
                                 <div className={cn(
-                                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-md",
+                                  "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
                                   vp.approved ? "bg-emerald-500/15" : hasUrl ? "bg-[var(--brand-pink)]/10" : "bg-secondary/20"
                                 )}>
                                   {vp.redoing ? (
-                                    <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
+                                    <Loader2 className="h-4.5 w-4.5 animate-spin text-amber-400" />
                                   ) : vp.approved ? (
-                                    <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                                    <CheckCircle2 className="h-4.5 w-4.5 text-emerald-400" />
                                   ) : hasUrl ? (
-                                    <Play className="h-4 w-4 text-[var(--brand-pink)]" />
+                                    <Play className="h-4.5 w-4.5 text-[var(--brand-pink)]" />
                                   ) : (
-                                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground/40" />
+                                    <Loader2 className="h-4.5 w-4.5 animate-spin text-muted-foreground/50" />
                                   )}
                                 </div>
 
-                                {/* Part details */}
+                                {/* Part info */}
                                 <div className="flex-1 min-w-0">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-[11px] font-semibold text-foreground/90">Part {vp.part}</span>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-xs font-semibold text-foreground">Part {vp.part}</span>
                                     <span className={cn(
-                                      "text-[8px] font-bold uppercase",
-                                      vp.approved ? "text-emerald-400" : vp.redoing ? "text-amber-400" : hasUrl ? "text-[var(--brand-pink)]" : "text-muted-foreground/50"
+                                      "rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase",
+                                      vp.approved
+                                        ? "bg-emerald-500/15 text-emerald-400"
+                                        : vp.redoing
+                                          ? "bg-amber-500/15 text-amber-400"
+                                          : hasUrl
+                                            ? "bg-[var(--brand-pink)]/10 text-[var(--brand-pink)]"
+                                            : "bg-secondary/20 text-muted-foreground/60"
                                     )}>
                                       {vp.approved ? "Approved" : vp.redoing ? "Redoing" : hasUrl ? "Ready" : "Rendering"}
                                     </span>
                                   </div>
 
                                   {/* Per-part progress bar */}
-                                  <div className="mt-1.5">
-                                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary/20">
-                                      <div
-                                        className="h-full rounded-full transition-all duration-500"
-                                        style={{
-                                          width: `${partPct}%`,
-                                          background: vp.approved
-                                            ? "rgb(52 211 153)"
-                                            : vp.redoing
-                                              ? "rgb(251 191 36)"
-                                              : hasUrl
-                                                ? "var(--brand-pink)"
-                                                : "rgba(var(--brand-pink-rgb, 236 72 153), 0.3)",
-                                        }}
-                                      />
-                                    </div>
+                                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary/25">
+                                    <div
+                                      className="h-full rounded-full transition-all duration-500 ease-out"
+                                      style={{
+                                        width: `${partPct}%`,
+                                        background: vp.approved
+                                          ? "rgb(52 211 153)"
+                                          : vp.redoing
+                                            ? "rgb(251 191 36)"
+                                            : hasUrl
+                                              ? "var(--brand-pink)"
+                                              : "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
+                                        opacity: hasUrl || vp.approved ? 1 : 0.4,
+                                      }}
+                                    />
                                   </div>
+                                  <span className="mt-0.5 block text-[9px] tabular-nums text-muted-foreground/60">{partPct}%</span>
                                 </div>
                               </div>
 
-                              {/* Per-part action buttons (only for ready/approved parts) */}
+                              {/* Per-part action buttons */}
                               {hasUrl && (
-                                <div className="mt-2 flex items-center gap-1.5 pl-12" onClick={(e) => e.stopPropagation()}>
+                                <div className="mt-2.5 flex items-center gap-2 pl-[52px]" onClick={(e) => e.stopPropagation()}>
                                   {!vp.approved ? (
                                     <>
                                       <button
                                         onClick={() => handleVideoPartRedo(vp.part)}
-                                        className="flex items-center gap-1 rounded-md border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-[10px] font-medium text-amber-400 transition-colors hover:bg-amber-500/20"
+                                        className="flex items-center gap-1.5 rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-1.5 text-[10px] font-medium text-amber-400 transition-colors hover:bg-amber-500/20"
                                       >
-                                        <RotateCcw className="h-2.5 w-2.5" />
+                                        <RotateCcw className="h-3 w-3" />
                                         Redo
                                       </button>
                                       <button
                                         onClick={() => handleVideoPartApprove(vp.part)}
-                                        className="flex items-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20"
+                                        className="flex items-center gap-1.5 rounded-md border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20"
                                       >
-                                        <CheckCircle2 className="h-2.5 w-2.5" />
+                                        <CheckCircle2 className="h-3 w-3" />
                                         Approve
                                       </button>
                                     </>
                                   ) : (
                                     <button
                                       onClick={() => handleVideoDownload(vp.url, vp.part)}
-                                      className="flex items-center gap-1 rounded-md border border-border/25 bg-secondary/15 px-2.5 py-1 text-[10px] font-medium text-foreground/70 transition-colors hover:bg-secondary/30"
+                                      className="flex items-center gap-1.5 rounded-md border border-border/25 bg-secondary/15 px-3 py-1.5 text-[10px] font-medium text-foreground/70 transition-colors hover:bg-secondary/30"
                                     >
-                                      <Download className="h-2.5 w-2.5" />
+                                      <Download className="h-3 w-3" />
                                       Download
                                     </button>
                                   )}
