@@ -1885,6 +1885,27 @@ export function ReviewRoom(props: ReviewRoomProps) {
                     </div>
                   )}
 
+                  {/* Empty state: no data, not polling, no error */}
+                  {!scriptPolling && !scriptData && !scriptError && (
+                    <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-border/20 bg-secondary/10 px-6 py-16">
+                      <Mic className="h-10 w-10 text-muted-foreground/30" />
+                      <p className="text-center text-sm font-medium text-foreground/70">
+                        No voice over content available
+                      </p>
+                      <p className="text-center text-xs text-muted-foreground">
+                        The voice over was not generated or was stopped. Click below to start generation.
+                      </p>
+                      <button
+                        onClick={handleRedo}
+                        disabled={actionLocked}
+                        className="flex items-center gap-1.5 rounded-lg border border-[var(--brand-pink)]/30 bg-[var(--brand-pink)]/10 px-5 py-2.5 text-xs font-medium text-[var(--brand-pink)] transition-colors hover:bg-[var(--brand-pink)]/20 disabled:opacity-50"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Generate Voice Over
+                      </button>
+                    </div>
+                  )}
+
                   {/* Script content — parts / timeline */}
                   {scriptData && scriptData.parts.length > 0 && (
                     <>
@@ -2172,7 +2193,26 @@ export function ReviewRoom(props: ReviewRoomProps) {
                       <RotateCcw className="h-3.5 w-3.5" />
                       Retry
                     </button>
-                  ) : null}
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <p className="text-xs text-muted-foreground">Voice over content not loaded.</p>
+                      <button
+                        onClick={handleRedo}
+                        disabled={actionLocked}
+                        className="flex items-center gap-1.5 rounded-lg border border-[var(--brand-pink)]/30 bg-[var(--brand-pink)]/10 px-4 py-2.5 text-xs font-medium text-[var(--brand-pink)] transition-colors hover:bg-[var(--brand-pink)]/20 disabled:opacity-50"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Regenerate Voice Over
+                      </button>
+                      <button
+                        onClick={onClose}
+                        className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                        Close
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
