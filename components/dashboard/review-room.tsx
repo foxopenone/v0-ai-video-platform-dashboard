@@ -1483,59 +1483,61 @@ export function ReviewRoom(props: ReviewRoomProps) {
                       )}
                     </div>
 
-                    {/* Overall progress bar */}
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-xs text-muted-foreground">
-                          {videoStopped
-                            ? "Stopped"
-                            : allDone
-                              ? `All ${videoParts.length} parts rendered`
-                              : videoParts.length > 0
-                                ? `${readyCount} of ${totalParts} parts ready`
-                                : "Rendering in progress..."}
-                        </span>
-                        <span className="text-xs font-semibold tabular-nums text-foreground">{overallPct}%</span>
+                    {/* Bottom bar: progress + action buttons (always visible, never pushed off-screen) */}
+                    <div className="shrink-0 flex flex-col gap-2 border-t border-border/15 pt-3">
+                      {/* Progress row */}
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[11px] text-muted-foreground">
+                              {videoStopped
+                                ? "Stopped"
+                                : allDone
+                                  ? `All ${videoParts.length} parts rendered`
+                                  : videoParts.length > 0
+                                    ? `${readyCount} of ${totalParts} parts ready`
+                                    : "Rendering in progress..."}
+                            </span>
+                            <span className="text-xs font-semibold tabular-nums text-foreground">{overallPct}%</span>
+                          </div>
+                          <div className="relative h-2 w-full overflow-hidden rounded-full bg-secondary/30">
+                            <div
+                              className="h-full rounded-full transition-all duration-700 ease-out"
+                              style={{
+                                width: `${overallPct}%`,
+                                background: videoStopped
+                                  ? "rgb(248 113 113)"
+                                  : allDone
+                                    ? "rgb(52 211 153)"
+                                    : "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
+                              }}
+                            />
+                          </div>
+                        </div>
+                        {/* Inline action buttons */}
+                        <div className="flex shrink-0 items-center gap-2">
+                          {videoPolling && !videoStopped && (
+                            <button
+                              onClick={handleStop}
+                              className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-[11px] font-medium text-red-400 transition-colors hover:bg-red-500/20"
+                            >
+                              <StopCircle className="h-3 w-3" />
+                              Stop
+                            </button>
+                          )}
+                          <button
+                            onClick={onClose}
+                            className="flex items-center gap-1.5 rounded-lg border border-border/30 px-3 py-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-secondary/30 hover:text-foreground"
+                          >
+                            <X className="h-3 w-3" />
+                            Close
+                          </button>
+                        </div>
                       </div>
-                      <div className="relative h-2 w-full overflow-hidden rounded-full bg-secondary/30">
-                        <div
-                          className="h-full rounded-full transition-all duration-700 ease-out"
-                          style={{
-                            width: `${overallPct}%`,
-                            background: videoStopped
-                              ? "rgb(248 113 113)"
-                              : allDone
-                                ? "rgb(52 211 153)"
-                                : "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Action buttons: always show at least one way to close/stop */}
-                    <div className="flex items-center gap-2">
-                      {/* Stop button when actively rendering */}
-                      {videoPolling && !videoStopped && (
-                        <button
-                          onClick={handleStop}
-                          className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20"
-                        >
-                          <StopCircle className="h-3.5 w-3.5" />
-                          Stop Rendering
-                        </button>
-                      )}
-                      {/* Close / Back to Home - always visible as escape hatch */}
-                      <button
-                        onClick={onClose}
-                        className="flex items-center gap-1.5 rounded-lg border border-border/30 px-4 py-2 text-xs text-muted-foreground transition-colors hover:bg-secondary/30 hover:text-foreground"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                        Close
-                      </button>
                       {allDone && (
-                        <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-400">
+                        <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-400">
                           <CheckCircle2 className="h-3.5 w-3.5" />
-                          All parts rendered
+                          All parts rendered successfully
                         </span>
                       )}
                     </div>
