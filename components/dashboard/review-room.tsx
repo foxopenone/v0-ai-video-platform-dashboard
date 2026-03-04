@@ -1569,16 +1569,33 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
                     {/* Error banner */}
                     {videoError && (
-                      <div className="mx-3 mt-3 flex items-center gap-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2.5">
-                        <AlertCircle className="h-4 w-4 shrink-0 text-red-400" />
-                        <p className="flex-1 text-[11px] text-red-400">{videoError}</p>
-                        <button
-                          onClick={() => { setVideoError(null); setVideoStopped(false); setVideoRenderStartTime(Date.now()); setVideoRenderProgress(0); setVideoPolling(true) }}
-                          className="flex shrink-0 items-center gap-1 rounded-md bg-red-500/20 px-2 py-1 text-[10px] font-medium text-red-300 hover:bg-red-500/30"
-                        >
-                          <RotateCcw className="h-3 w-3" />
-                          Retry
-                        </button>
+                      <div className="mx-3 mt-3 flex flex-col gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2.5">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+                          <p className="flex-1 text-[11px] text-red-400">{videoError}</p>
+                          <button
+                            onClick={() => setVideoError(null)}
+                            className="shrink-0 rounded p-0.5 text-red-400/60 transition-colors hover:bg-red-500/20 hover:text-red-400"
+                            aria-label="Dismiss error"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-2 pl-6">
+                          <button
+                            onClick={() => { setVideoError(null); setVideoStopped(false); setVideoRenderStartTime(Date.now()); setVideoRenderProgress(0); setVideoPolling(true) }}
+                            className="flex items-center gap-1 rounded-md bg-red-500/20 px-2 py-1 text-[10px] font-medium text-red-300 hover:bg-red-500/30"
+                          >
+                            <RotateCcw className="h-3 w-3" />
+                            Retry
+                          </button>
+                          <button
+                            onClick={() => { setVideoError(null) }}
+                            className="flex items-center gap-1 rounded-md bg-secondary/20 px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-secondary/30"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
                       </div>
                     )}
 
@@ -1847,10 +1864,24 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
                   {/* Error state */}
                   {scriptError && (
-                    <div className="flex flex-col items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-10">
+                    <div className="relative flex flex-col items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-8">
+                      <button
+                        onClick={() => setScriptError(null)}
+                        className="absolute right-3 top-3 rounded-md p-1 text-red-400/60 transition-colors hover:bg-red-500/20 hover:text-red-400"
+                        aria-label="Dismiss error"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
                       <AlertCircle className="h-8 w-8 text-red-400" />
                       <p className="text-center text-sm font-semibold text-red-400">Generation Failed</p>
                       <p className="text-center text-xs text-red-400/70">{scriptError}</p>
+                      <button
+                        onClick={() => { setScriptError(null); setScriptPolling(true) }}
+                        className="mt-1 flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/15 px-4 py-2 text-xs font-medium text-red-300 transition-colors hover:bg-red-500/25"
+                      >
+                        <RotateCcw className="h-3 w-3" />
+                        Retry
+                      </button>
                     </div>
                   )}
 
@@ -1946,7 +1977,16 @@ export function ReviewRoom(props: ReviewRoomProps) {
                   {actionStatus === "submitting" && <Loader2 className="h-3 w-3 animate-spin" />}
                   {actionStatus === "success" && <CheckCircle2 className="h-3 w-3" />}
                   {actionStatus === "error" && <AlertCircle className="h-3 w-3" />}
-                  {actionMessage}
+                  <span className="flex-1">{actionMessage}</span>
+                  {(actionStatus === "error" || actionStatus === "success") && (
+                    <button
+                      onClick={() => { setActionStatus("idle"); setActionMessage("") }}
+                      className="shrink-0 rounded p-0.5 transition-colors hover:bg-foreground/10"
+                      aria-label="Dismiss"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
                 </div>
               </div>
             )}
