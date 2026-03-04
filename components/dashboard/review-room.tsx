@@ -686,6 +686,28 @@ export function ReviewRoom(props: ReviewRoomProps) {
     }
   }, [getCallbackInfo, currentPhaseStatus, actionLocked])
 
+  /** Retry: call the backend redo API then restart polling so the UI picks up new data */
+  const handleRetry = useCallback(async () => {
+    if (actionLocked) return
+    const info = getCallbackInfo()
+    if (!info) return
+    startActionLock("Retrying generation...")
+    setScriptError(null)
+    try {
+      await reviewRedo(info.jobRecordId, info.lockToken, currentPhaseStatus)
+      // Backend accepted -- restart polling to pick up new data
+      setScriptData(null)
+      setScriptPolling(true)
+      setActionStatus("idle")
+      setActionMessage("")
+      setActionLocked(false)
+    } catch (err) {
+      setActionStatus("error")
+      setActionMessage(err instanceof Error ? err.message : "Retry failed")
+      setActionLocked(false)
+    }
+  }, [getCallbackInfo, currentPhaseStatus, actionLocked])
+
   // ── Final Preview: Per-Part Approve (frontend-only, mark done) ──
   const handleVideoPartApprove = useCallback((partId: string) => {
     setVideoParts((prev) =>
@@ -1876,8 +1898,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
                       <p className="text-center text-sm font-semibold text-red-400">Generation Failed</p>
                       <p className="text-center text-xs text-red-400/70">{scriptError}</p>
                       <button
-                        onClick={() => { setScriptError(null); setScriptPolling(true) }}
-                        className="mt-1 flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/15 px-4 py-2 text-xs font-medium text-red-300 transition-colors hover:bg-red-500/25"
+                        onClick={handleRetry}
+                        disabled={actionLocked}
+                        className="mt-1 flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/15 px-4 py-2 text-xs font-medium text-red-300 transition-colors hover:bg-red-500/25 disabled:opacity-50"
                       >
                         <RotateCcw className="h-3 w-3" />
                         Retry
@@ -1897,8 +1920,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
                       </p>
                       <div className="flex items-center gap-3 pt-2">
                         <button
-                          onClick={() => setScriptPolling(true)}
-                          className="flex items-center gap-1.5 rounded-lg border border-[var(--brand-pink)]/40 bg-[var(--brand-pink)]/10 px-5 py-2.5 text-sm font-medium text-[var(--brand-pink)] transition-colors hover:bg-[var(--brand-pink)]/20"
+                          onClick={handleRetry}
+                          disabled={actionLocked}
+                          className="flex items-center gap-1.5 rounded-lg border border-[var(--brand-pink)]/40 bg-[var(--brand-pink)]/10 px-5 py-2.5 text-sm font-medium text-[var(--brand-pink)] transition-colors hover:bg-[var(--brand-pink)]/20 disabled:opacity-50"
                         >
                           <RotateCcw className="h-4 w-4" />
                           Retry
@@ -2195,8 +2219,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
                     </>
                   ) : scriptError ? (
                     <button
-                      onClick={() => { setScriptError(null); setScriptPolling(true); }}
-                      className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40"
+                      onClick={handleRetry}
+                      disabled={actionLocked}
+                      className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40 disabled:opacity-50"
                     >
                       <RotateCcw className="h-3.5 w-3.5" />
                       Retry
@@ -2204,8 +2229,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
                   ) : (
                     <div className="flex items-center gap-3">
                       <button
-                        onClick={() => setScriptPolling(true)}
-                        className="flex items-center gap-1.5 rounded-lg border border-[var(--brand-pink)]/30 bg-[var(--brand-pink)]/10 px-4 py-2.5 text-xs font-medium text-[var(--brand-pink)] transition-colors hover:bg-[var(--brand-pink)]/20"
+                        onClick={handleRetry}
+                        disabled={actionLocked}
+                        className="flex items-center gap-1.5 rounded-lg border border-[var(--brand-pink)]/30 bg-[var(--brand-pink)]/10 px-4 py-2.5 text-xs font-medium text-[var(--brand-pink)] transition-colors hover:bg-[var(--brand-pink)]/20 disabled:opacity-50"
                       >
                         <RotateCcw className="h-3.5 w-3.5" />
                         Retry
