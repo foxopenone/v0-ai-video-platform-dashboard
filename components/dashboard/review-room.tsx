@@ -708,6 +708,31 @@ export function ReviewRoom(props: ReviewRoomProps) {
     }
   }, [getCallbackInfo, currentPhaseStatus, actionLocked])
 
+  /** Retry video: call the backend redo API then restart video polling */
+  const handleRetryVideo = useCallback(async () => {
+    if (actionLocked) return
+    const info = getCallbackInfo()
+    if (!info) return
+    startActionLock("Retrying video render...")
+    setVideoError(null)
+    try {
+      await reviewRedo(info.jobRecordId, info.lockToken, "S8_Render")
+      // Backend accepted -- restart video polling to pick up new render
+      setVideoParts([])
+      setVideoStopped(false)
+      setVideoRenderStartTime(Date.now())
+      setVideoRenderProgress(0)
+      setVideoPolling(true)
+      setActionStatus("idle")
+      setActionMessage("")
+      setActionLocked(false)
+    } catch (err) {
+      setActionStatus("error")
+      setActionMessage(err instanceof Error ? err.message : "Retry failed")
+      setActionLocked(false)
+    }
+  }, [getCallbackInfo, actionLocked])
+
   // ── Final Preview: Per-Part Approve (frontend-only, mark done) ──
   const handleVideoPartApprove = useCallback((partId: string) => {
     setVideoParts((prev) =>
@@ -1483,11 +1508,12 @@ export function ReviewRoom(props: ReviewRoomProps) {
                               : "No video parts were completed."}
                           </p>
                           <button
-                            onClick={() => { setVideoStopped(false); setVideoRenderStartTime(Date.now()); setVideoRenderProgress(0); setVideoPolling(true) }}
-                            className="flex items-center gap-1.5 rounded-lg border border-[var(--brand-pink)]/30 bg-[var(--brand-pink)]/10 px-4 py-2 text-xs font-medium text-[var(--brand-pink)] transition-colors hover:bg-[var(--brand-pink)]/20"
+                            onClick={handleRetryVideo}
+                            disabled={actionLocked}
+                            className="flex items-center gap-1.5 rounded-lg border border-[var(--brand-pink)]/30 bg-[var(--brand-pink)]/10 px-4 py-2 text-xs font-medium text-[var(--brand-pink)] transition-colors hover:bg-[var(--brand-pink)]/20 disabled:opacity-50"
                           >
                             <RotateCcw className="h-3.5 w-3.5" />
-                            Resume Rendering
+                            Retry Rendering
                           </button>
                         </div>
                       ) : (
@@ -1605,8 +1631,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
                         </div>
                         <div className="flex items-center gap-2 pl-6">
                           <button
-                            onClick={() => { setVideoError(null); setVideoStopped(false); setVideoRenderStartTime(Date.now()); setVideoRenderProgress(0); setVideoPolling(true) }}
-                            className="flex items-center gap-1 rounded-md bg-red-500/20 px-2 py-1 text-[10px] font-medium text-red-300 hover:bg-red-500/30"
+                            onClick={handleRetryVideo}
+                            disabled={actionLocked}
+                            className="flex items-center gap-1 rounded-md bg-red-500/20 px-2 py-1 text-[10px] font-medium text-red-300 hover:bg-red-500/30 disabled:opacity-50"
                           >
                             <RotateCcw className="h-3 w-3" />
                             Retry
