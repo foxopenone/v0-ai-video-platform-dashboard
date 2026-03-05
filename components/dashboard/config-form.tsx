@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client"
 import {
   Mic, Music, Rocket, CheckCircle2,
   Monitor, Globe2, Eye, Palette, Sparkles, Anchor,
-  ChevronDown, Wand2
+  ChevronDown, Wand2, LayoutGrid
 } from "lucide-react"
 import {
   Popover,
@@ -174,6 +174,7 @@ export function ConfigForm({
   const [selectedVoiceName, setSelectedVoiceName] = useState<string | null>(null)
   const [selectedBgm, setSelectedBgm] = useState<string | null>(null)
   const [selectedBgmName, setSelectedBgmName] = useState<string | null>(null)
+  const [targetParts, setTargetParts] = useState<number>(3)
 
   // Restore saved preferences after mount (avoids SSR hydration mismatch)
   useEffect(() => {
@@ -190,6 +191,8 @@ export function ConfigForm({
       if (b) setSelectedBgm(JSON.parse(b))
       const bn = localStorage.getItem("cfg_bgmName")
       if (bn) setSelectedBgmName(JSON.parse(bn))
+      const tp = localStorage.getItem("cfg_targetParts")
+      if (tp) { const n = JSON.parse(tp); if (n >= 1 && n <= 10) setTargetParts(n) }
     } catch {}
   }, [])
 
@@ -204,8 +207,9 @@ export function ConfigForm({
       localStorage.setItem("cfg_voiceName", JSON.stringify(selectedVoiceName))
       localStorage.setItem("cfg_bgm", JSON.stringify(selectedBgm))
       localStorage.setItem("cfg_bgmName", JSON.stringify(selectedBgmName))
+      localStorage.setItem("cfg_targetParts", JSON.stringify(targetParts))
     } catch {}
-  }, [mode, params, selectedVoice, selectedVoiceName, selectedBgm, selectedBgmName])
+  }, [mode, params, selectedVoice, selectedVoiceName, selectedBgm, selectedBgmName, targetParts])
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -259,6 +263,7 @@ export function ConfigForm({
       Voice_Select: selectedVoice || "default_voice",
       BGM_Select: selectedBgm || "default_bgm",
       Work_Mode: mode === "full_auto" ? "Full_Auto" : "Step_Review",
+      Target_Parts: targetParts,
     }
 
     try {
@@ -517,6 +522,31 @@ export function ConfigForm({
             onChange={(val) => setParams((prev) => ({ ...prev, [p.key]: val }))}
           />
         ))}
+        {/* Target Parts - number input tile */}
+        <div
+          className={cn(
+            "flex items-center gap-2 rounded-md border px-2.5 py-2",
+            "border-[var(--brand-pink)]/20 bg-[var(--brand-pink)]/5"
+          )}
+        >
+          <LayoutGrid className="h-3.5 w-3.5 shrink-0 text-[var(--brand-pink)]" />
+          <div className="flex-1 overflow-hidden">
+            <p className="text-[9px] font-medium uppercase tracking-wider text-foreground/90">Target Parts</p>
+            <input
+              type="number"
+              min={1}
+              max={10}
+              value={targetParts}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10)
+                if (!isNaN(v) && v >= 1 && v <= 10) setTargetParts(v)
+                else if (e.target.value === "") setTargetParts(1)
+              }}
+              className="w-full bg-transparent text-[11px] font-medium text-foreground outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            />
+          </div>
+          <span className="shrink-0 text-[9px] text-muted-foreground/50">1-10</span>
+        </div>
       </div>
 
       {/* Audio Slots - expanded cards with waveform hint */}
