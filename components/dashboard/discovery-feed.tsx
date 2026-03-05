@@ -14,6 +14,13 @@ interface FeedItem {
   aspect: string
 }
 
+export interface PostedItem {
+  id: string
+  title: string
+  author: string
+  videoParts: Array<{ part: string; url: string }>
+}
+
 function formatCount(num: number): string {
   if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`
   if (num >= 1000) return `${(num / 1000).toFixed(1)}K`
@@ -91,7 +98,50 @@ function FeedCard({ item, index }: { item: FeedItem; index: number }) {
   )
 }
 
-export function DiscoveryFeed() {
+function PostedFeedCard({ item }: { item: PostedItem }) {
+  const firstVideo = item.videoParts.find((vp) => !!vp.url)
+
+  return (
+    <div className="group overflow-hidden rounded-xl border border-[var(--brand-pink)]/30 bg-card ring-1 ring-inset ring-[var(--brand-pink)]/5 transition-all hover:border-[var(--brand-pink)]/50">
+      <div className="relative flex aspect-[9/16] items-center justify-center overflow-hidden bg-black/80">
+        {firstVideo?.url ? (
+          <video
+            src={firstVideo.url}
+            muted
+            playsInline
+            preload="metadata"
+            className="h-full w-full object-cover"
+            onMouseEnter={(e) => { (e.target as HTMLVideoElement).play().catch(() => {}) }}
+            onMouseLeave={(e) => { const v = e.target as HTMLVideoElement; v.pause(); v.currentTime = 0 }}
+          />
+        ) : (
+          <Play className="h-8 w-8 text-muted-foreground/40" />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent pointer-events-none" />
+        <div className="absolute left-2 top-2">
+          <span className="rounded-full bg-[var(--brand-pink)]/20 px-2 py-0.5 text-[9px] font-bold uppercase text-[var(--brand-pink)] backdrop-blur-sm">
+            Your Post
+          </span>
+        </div>
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-background/95 via-background/60 to-transparent px-2.5 pb-2 pt-8">
+          <p className="text-[11px] font-medium leading-snug text-foreground drop-shadow-lg">
+            {item.title}
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center justify-between px-2.5 py-1.5">
+        <div className="flex-1 overflow-hidden">
+          <p className="truncate text-[10px] text-muted-foreground">{item.author}</p>
+          <p className="mt-0.5 text-[9px] text-[var(--brand-pink)]/70">
+            {item.videoParts.length} part{item.videoParts.length !== 1 ? "s" : ""}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function DiscoveryFeed({ postedItems = [] }: { postedItems?: PostedItem[] }) {
   const [items, setItems] = useState<FeedItem[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -125,6 +175,9 @@ export function DiscoveryFeed() {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+          {postedItems.map((item) => (
+            <PostedFeedCard key={`posted-${item.id}`} item={item} />
+          ))}
           {items.map((item, i) => (
             <FeedCard key={item.id} item={item} index={i} />
           ))}

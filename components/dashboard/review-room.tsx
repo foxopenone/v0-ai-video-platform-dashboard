@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import {
   X, ChevronRight, Loader2, Play, Pause, RotateCcw,
   CheckCircle2, Download, Lock, FileText, Mic, Film,
-  Edit3, Plus, Trash2, User, AlertCircle, StopCircle
+  Edit3, Plus, Trash2, User, AlertCircle, StopCircle, Send
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -59,6 +59,7 @@ interface StepReviewProps {
   onApproved?: () => void
   onDelete?: () => void
   onStop?: () => void
+  onPost?: (jobRecordId: string, videoParts: Array<{ part: string; url: string }>) => void
 }
 
 // ---------- Progress Props (real project, not yet in review status) ----------
@@ -230,6 +231,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const [videoRenderProgress, setVideoRenderProgress] = useState(0) // 0-95 fake progress for video rendering
   const [videoRenderStartTime, setVideoRenderStartTime] = useState<number | null>(null)
   const [videoStopped, setVideoStopped] = useState(false) // true after user clicks Stop
+  const [isCompleted, setIsCompleted] = useState(false) // true when project is S9_Done (read-only)
 
   // Auto-select first video part with a URL when videos arrive
   useEffect(() => {
@@ -368,7 +370,10 @@ export function ReviewRoom(props: ReviewRoomProps) {
     if (/^S[5-9]|^S5_Script/i.test(currentStatus)) {
       setApprovedPhases((prev) => new Set(prev).add("bible"))
     }
-    if (/^S[8-9]|^S8_Render/i.test(currentStatus)) {
+    if (/^S9_Done/i.test(currentStatus)) {
+      setApprovedPhases(new Set(["bible", "voiceover", "preview"]))
+      setIsCompleted(true)
+    } else if (/^S[8-9]|^S8_Render/i.test(currentStatus)) {
       setApprovedPhases((prev) => { const s = new Set(prev); s.add("bible"); s.add("voiceover"); return s })
     }
 
@@ -391,9 +396,34 @@ export function ReviewRoom(props: ReviewRoomProps) {
     if (/^S8_Render|^S9/i.test(currentStatus)) {
       console.log("[v0] Status is S8/S9 -- auto-switching to Final Preview tab")
       setActiveTab("preview")
-      setVideoPolling(true)
-      setVideoRenderStartTime(Date.now())
-      setVideoRenderProgress(0)
+      if (/^S9_Done/i.test(currentStatus)) {
+        // S9_Done: videos are already rendered, just fetch them once (no polling)
+        console.log("[v0] S9_Done -- loading final videos without polling")
+        fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}`)
+          .then((r) => r.ok ? r.json() : Promise.reject(new Error(`API ${r.status}`)))
+          .then((job: Record<string, unknown>) => {
+            let finalVideos: Array<{ part: string; url: string }> = []
+            if (job.Final_Video) {
+              try {
+                finalVideos = typeof job.Final_Video === "string"
+                  ? JSON.parse(job.Final_Video as string)
+                  : job.Final_Video as Array<{ part: string; url: string }>
+              } catch { /* ignore parse errors */ }
+            }
+            if (finalVideos.length > 0) {
+              setVideoParts(finalVideos.map((fv) => ({
+                part: String(fv.part), url: fv.url, approved: true, redoing: false,
+              })))
+              setVideoRenderProgress(100)
+            }
+          })
+          .catch((err: Error) => setVideoError(err.message))
+      } else {
+        // S8_Render: still rendering, start polling
+        setVideoPolling(true)
+        setVideoRenderStartTime(Date.now())
+        setVideoRenderProgress(0)
+      }
       // Also try to load script data in background (for VO tab browsing)
       fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}`)
         .then((r) => r.ok ? r.json() : Promise.reject(new Error(`API ${r.status}`)))
@@ -1348,8 +1378,13 @@ export function ReviewRoom(props: ReviewRoomProps) {
             </button>
             <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
             <span className="font-medium text-foreground">{projectTitle || "Step Review"}</span>
-            <Badge variant="outline" className="ml-2 border-[var(--brand-pink)]/30 bg-[var(--brand-pink)]/10 text-[10px] text-[var(--brand-pink)]">
-              {activeTab === "preview" ? "Phase 3: Final Preview" : activeTab === "voiceover" ? "Phase 2: Voice Over" : "Phase 1: Bible Review"}
+            <Badge variant="outline" className={cn(
+              "ml-2 text-[10px]",
+              isCompleted
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                : "border-[var(--brand-pink)]/30 bg-[var(--brand-pink)]/10 text-[var(--brand-pink)]"
+            )}>
+              {isCompleted ? "Completed" : activeTab === "preview" ? "Phase 3: Final Preview" : activeTab === "voiceover" ? "Phase 2: Voice Over" : "Phase 1: Bible Review"}
             </Badge>
           </div>
           <button
@@ -1457,15 +1492,22 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
               {/* Step 3: Final Preview */}
               <button
-                onClick={() => { if (videoParts.length > 0 || videoPolling || videoError || approvedPhases.has("voiceover")) setActiveTab("preview") }}
+                onClick={() => { if (videoParts.length > 0 || videoPolling || videoError || approvedPhases.has("voiceover") || isCompleted) setActiveTab("preview") }}
                 className={cn(
                   "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
                   activeTab === "preview" ? "bg-secondary/60 text-foreground" : "text-muted-foreground hover:text-foreground/70",
-                  !videoParts.length && !videoPolling && !videoError && !approvedPhases.has("voiceover") && "cursor-not-allowed opacity-50"
+                  !videoParts.length && !videoPolling && !videoError && !approvedPhases.has("voiceover") && !isCompleted && "cursor-not-allowed opacity-50"
                 )}
               >
-                <Film className="h-3.5 w-3.5" />
+                {approvedPhases.has("preview") ? (
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                ) : (
+                  <Film className="h-3.5 w-3.5" />
+                )}
                 Final Preview
+                {approvedPhases.has("preview") && activeTab !== "preview" && (
+                  <span className="ml-1 text-[9px] text-emerald-400/70">Done</span>
+                )}
                 {videoPolling && <Loader2 className="ml-1 h-3 w-3 animate-spin text-[var(--brand-pink)]" />}
               </button>
             </div>
@@ -1564,6 +1606,18 @@ export function ReviewRoom(props: ReviewRoomProps) {
                         </div>
                         {/* Inline action buttons */}
                         <div className="flex shrink-0 items-center gap-2">
+                          {isCompleted && isStepReview && (
+                            <button
+                              onClick={() => {
+                                const { jobRecordId } = props as StepReviewProps
+                                ;(props as StepReviewProps).onPost?.(jobRecordId, videoParts.map((vp) => ({ part: vp.part, url: vp.url })))
+                              }}
+                              className="flex items-center gap-1.5 rounded-lg border border-[var(--brand-pink)]/40 bg-[var(--brand-pink)]/15 px-4 py-1.5 text-[11px] font-semibold text-[var(--brand-pink)] transition-colors hover:bg-[var(--brand-pink)]/25"
+                            >
+                              <Send className="h-3 w-3" />
+                              Post to Discovery
+                            </button>
+                          )}
                           {videoPolling && !videoStopped && (
                             <button
                               onClick={handleStop}
@@ -1604,7 +1658,12 @@ export function ReviewRoom(props: ReviewRoomProps) {
                           </span>
                         )}
                       </div>
-                      {videoPolling && !videoStopped && (
+                      {isCompleted ? (
+                        <span className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-medium text-emerald-400">
+                          <CheckCircle2 className="h-3 w-3" />
+                          Completed
+                        </span>
+                      ) : videoPolling && !videoStopped ? (
                         <span className="flex items-center gap-1.5 rounded-full bg-[var(--brand-pink)]/10 px-2.5 py-1 text-[10px] font-medium text-[var(--brand-pink)]">
                           <span className="relative flex h-2 w-2">
                             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--brand-pink)] opacity-75" />
@@ -1612,7 +1671,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                           </span>
                           Rendering
                         </span>
-                      )}
+                      ) : null}
                     </div>
 
                     {/* Error banner */}
@@ -1761,7 +1820,15 @@ export function ReviewRoom(props: ReviewRoomProps) {
                               {/* Per-part action buttons */}
                               {hasUrl && (
                                 <div className="mt-2.5 flex items-center gap-2 pl-[52px]" onClick={(e) => e.stopPropagation()}>
-                                  {!vp.approved ? (
+                                  {isCompleted || vp.approved ? (
+                                    <button
+                                      onClick={() => handleVideoDownload(vp.url, vp.part)}
+                                      className="flex items-center gap-1.5 rounded-md border border-border/25 bg-secondary/15 px-3 py-1.5 text-[10px] font-medium text-foreground/70 transition-colors hover:bg-secondary/30"
+                                    >
+                                      <Download className="h-3 w-3" />
+                                      Download
+                                    </button>
+                                  ) : (
                                     <>
                                       <button
                                         onClick={() => handleVideoPartRedo(vp.part)}
@@ -1778,14 +1845,6 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                         Approve
                                       </button>
                                     </>
-                                  ) : (
-                                    <button
-                                      onClick={() => handleVideoDownload(vp.url, vp.part)}
-                                      className="flex items-center gap-1.5 rounded-md border border-border/25 bg-secondary/15 px-3 py-1.5 text-[10px] font-medium text-foreground/70 transition-colors hover:bg-secondary/30"
-                                    >
-                                      <Download className="h-3 w-3" />
-                                      Download
-                                    </button>
                                   )}
                                 </div>
                               )}
@@ -2073,6 +2132,22 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
             {/* Action Bar (hidden on preview tab - preview has its own controls) */}
             <div className={cn("shrink-0 border-t border-border/20 px-5 py-3", activeTab === "preview" && "hidden")}>
+              {/* ---- Completed: read-only, just show close ---- */}
+              {isCompleted ? (
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-400">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    All phases completed
+                  </span>
+                  <button
+                    onClick={onClose}
+                    className="flex items-center gap-1.5 rounded-lg border border-border/30 px-4 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary/30 hover:text-foreground"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Close
+                  </button>
+                </div>
+              ) : <>
               {/* ---- Bible Tab Actions ---- */}
               {activeTab === "bible" && (
                 <>
@@ -2275,6 +2350,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                 </div>
               )}
 
+              </>}
               {/* ---- Final Preview Tab Actions ---- */}
               {activeTab === "preview" && (
                 <div className="flex items-center gap-2">

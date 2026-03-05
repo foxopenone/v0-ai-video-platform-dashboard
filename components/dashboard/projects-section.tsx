@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils"
 interface Project {
   id: string
   title: string
-  status: "processing" | "pending_review" | "approved" | "completed"
+  status: "processing" | "pending_review" | "approved" | "completed" | "posted"
   progress: number
   date: string
   thumbnail: string | null
@@ -58,6 +58,13 @@ const STATUS_CONFIG = {
       "border-[hsl(var(--success))]/30 bg-[hsl(var(--success))]/10 text-[hsl(var(--success))]",
     iconClass: "",
   },
+  posted: {
+    label: "Posted",
+    icon: Send,
+    className:
+      "border-[var(--brand-pink)]/30 bg-[var(--brand-pink)]/10 text-[var(--brand-pink)]",
+    iconClass: "",
+  },
 }
 
 // Deterministic gradient per project index
@@ -73,11 +80,12 @@ const GRADIENTS = [
 interface ProjectsSectionProps {
   onProjectClick?: (projectId: string) => void | Promise<void>
   onProjectDelete?: (projectId: string) => void
+  onProjectPost?: (projectId: string) => void
   insertedProjects?: Project[]
   hiddenProjectIds?: string[]
 }
 
-export function ProjectsSection({ onProjectClick, onProjectDelete, insertedProjects = [], hiddenProjectIds = [] }: ProjectsSectionProps) {
+export function ProjectsSection({ onProjectClick, onProjectDelete, onProjectPost, insertedProjects = [], hiddenProjectIds = [] }: ProjectsSectionProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -189,7 +197,7 @@ export function ProjectsSection({ onProjectClick, onProjectDelete, insertedProje
                     {/* Post to Discovery button (only for completed) */}
                     {project.status === "completed" && (
                       <button
-                        onClick={(e) => { e.stopPropagation() }}
+                        onClick={(e) => { e.stopPropagation(); onProjectPost?.(project.id) }}
                         className="absolute right-1.5 top-9 z-50 flex h-6 w-6 items-center justify-center rounded-full bg-background/70 border border-border/30 opacity-0 transition-all group-hover:opacity-100 hover:bg-[var(--brand-pink)]/20 hover:border-[var(--brand-pink)]/40"
                         aria-label="Post to Discovery"
                         title="Post to Discovery"

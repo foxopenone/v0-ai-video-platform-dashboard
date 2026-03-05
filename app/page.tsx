@@ -12,6 +12,13 @@ export default function Page() {
   const [stepReviewData, setStepReviewData] = useState<StepReviewData | null>(null)
   const [progressData, setProgressData] = useState<{ jobRecordId: string; projectTitle: string } | null>(null)
   const [insertedProjects, setInsertedProjects] = useState<InsertedProject[]>([])
+  // Posted items for Discovery feed
+  const [postedItems, setPostedItems] = useState<Array<{ id: string; title: string; author: string; videoParts: Array<{ part: string; url: string }> }>>(() => {
+    try {
+      const saved = localStorage.getItem("postedItems")
+      return saved ? JSON.parse(saved) : []
+    } catch { return [] }
+  })
   // Track hidden/deleted project IDs (array for React state diffing)
   const [hiddenProjectIds, setHiddenProjectIds] = useState<string[]>(() => {
     try {
@@ -212,6 +219,32 @@ export default function Page() {
           setStepReviewData(null)
           if (window.history.state?.reviewOpen) window.history.back()
         }}
+        onPost={(jobRecordId, videoParts) => {
+          const project = insertedProjects.find((p) => p.airtableRecordId === jobRecordId)
+          const item = {
+            id: jobRecordId,
+            title: project?.title || stepReviewData?.projectTitle || "Untitled",
+            author: "You",
+            videoParts,
+          }
+          setPostedItems((prev) => {
+            if (prev.some((p) => p.id === jobRecordId)) return prev
+            const next = [item, ...prev]
+            localStorage.setItem("postedItems", JSON.stringify(next))
+            return next
+          })
+          // Update project status to "posted"
+          setInsertedProjects((prev) =>
+            prev.map((p) =>
+              p.airtableRecordId === jobRecordId
+                ? { ...p, status: "posted" as InsertedProject["status"] }
+                : p
+            )
+          )
+          // Close review room after posting
+          setStepReviewData(null)
+          if (window.history.state?.reviewOpen) window.history.back()
+        }}
       />
     )
   }
@@ -271,8 +304,8 @@ export default function Page() {
             const recordId = inserted?.airtableRecordId
             if (!recordId) return
 
-            // For pending_review / approved cards, try quick fetch to jump directly to review
-            if (inserted.status === "pending_review" || inserted.status === "approved") {
+            // For pending_review / approved / completed / posted cards, try quick fetch to jump directly to review
+            if (inserted.status === "pending_review" || inserted.status === "approved" || inserted.status === "completed" || inserted.status === "posted") {
               try {
                 const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(recordId)}`)
                 if (res.ok) {
@@ -296,10 +329,48 @@ export default function Page() {
             // Open progress mode for processing cards or if quick fetch failed
             setProgressData({ jobRecordId: recordId, projectTitle: inserted.title })
           }}
+          onProjectPost={(projectId) => {
+            const project = insertedProjects.find((p) => p.id === projectId)
+            if (!project?.airtableRecordId) return
+            const recordId = project.airtableRecordId
+            // Fetch videos from backend then post
+            fetch(`/api/job-status?record_id=${encodeURIComponent(recordId)}`)
+              .then((r) => r.ok ? r.json() : Promise.reject(new Error(`API ${r.status}`)))
+              .then((job: Record<string, unknown>) => {
+                let finalVideos: Array<{ part: string; url: string }> = []
+                if (job.Final_Video) {
+                  try {
+                    finalVideos = typeof job.Final_Video === "string"
+                      ? JSON.parse(job.Final_Video as string)
+                      : job.Final_Video as Array<{ part: string; url: string }>
+                  } catch { /* ignore */ }
+                }
+                const item = {
+                  id: recordId,
+                  title: project.title,
+                  author: "You",
+                  videoParts: finalVideos,
+                }
+                setPostedItems((prev) => {
+                  if (prev.some((p) => p.id === recordId)) return prev
+                  const next = [item, ...prev]
+                  localStorage.setItem("postedItems", JSON.stringify(next))
+                  return next
+                })
+                setInsertedProjects((prev) =>
+                  prev.map((p) =>
+                    p.id === projectId
+                      ? { ...p, status: "posted" as InsertedProject["status"] }
+                      : p
+                  )
+                )
+              })
+              .catch((err: Error) => console.error("[v0] Failed to post project:", err))
+          }}
           insertedProjects={insertedProjects}
         />
         <div className="my-5 h-px bg-border/20" />
-        <DiscoveryFeed />
+        <DiscoveryFeed postedItems={postedItems} />
         <div className="my-5 h-px bg-border/20" />
         {/* Pricing Section */}
         <section id="pricing" className="scroll-mt-16 py-6">
