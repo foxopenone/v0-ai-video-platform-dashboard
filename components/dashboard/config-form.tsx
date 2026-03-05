@@ -535,17 +535,27 @@ export function ConfigForm({
             <input
               type="number"
               min={1}
-              max={10}
               value={targetParts}
               onChange={(e) => {
                 const v = parseInt(e.target.value, 10)
-                if (!isNaN(v) && v >= 1 && v <= 10) setTargetParts(v)
+                if (!isNaN(v) && v >= 1) setTargetParts(v)
                 else if (e.target.value === "") setTargetParts(1)
               }}
               className="w-full bg-transparent text-[11px] font-medium text-foreground outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
           </div>
-          <span className="shrink-0 text-[9px] text-muted-foreground/50">1-10</span>
+          <select
+            value={targetParts <= 10 ? targetParts : ""}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10)
+              if (!isNaN(v)) setTargetParts(v)
+            }}
+            className="shrink-0 cursor-pointer rounded bg-transparent px-1 py-0.5 text-[9px] text-muted-foreground/70 outline-none transition-colors hover:text-foreground [&>option]:bg-[hsl(var(--background))] [&>option]:text-foreground"
+          >
+            {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+              <option key={n} value={n}>{n}</option>
+            ))}
+          </select>
         </div>
       </div>
 
