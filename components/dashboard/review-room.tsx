@@ -1606,6 +1606,15 @@ export function ReviewRoom(props: ReviewRoomProps) {
                         </div>
                         {/* Inline action buttons */}
                         <div className="flex shrink-0 items-center gap-2">
+                          {isCompleted && videoParts.some((vp) => vp.url) && (
+                            <button
+                              onClick={() => videoParts.forEach((vp) => { if (vp.url) handleVideoDownload(vp.url, vp.part) })}
+                              className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/15 px-4 py-1.5 text-[11px] font-medium text-foreground/80 transition-colors hover:bg-secondary/30"
+                            >
+                              <Download className="h-3 w-3" />
+                              Download
+                            </button>
+                          )}
                           {isCompleted && isStepReview && (
                             <button
                               onClick={() => {
@@ -2139,13 +2148,24 @@ export function ReviewRoom(props: ReviewRoomProps) {
                     <CheckCircle2 className="h-3.5 w-3.5" />
                     All phases completed
                   </span>
-                  <button
-                    onClick={onClose}
-                    className="flex items-center gap-1.5 rounded-lg border border-border/30 px-4 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary/30 hover:text-foreground"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                    Close
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {videoParts.some((vp) => vp.url) && (
+                      <button
+                        onClick={() => videoParts.forEach((vp) => { if (vp.url) handleVideoDownload(vp.url, vp.part) })}
+                        className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/15 px-4 py-2.5 text-xs font-medium text-foreground/80 transition-colors hover:bg-secondary/30"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        Download
+                      </button>
+                    )}
+                    <button
+                      onClick={onClose}
+                      className="flex items-center gap-1.5 rounded-lg border border-border/30 px-4 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary/30 hover:text-foreground"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                      Close
+                    </button>
+                  </div>
                 </div>
               ) : <>
               {/* ---- Bible Tab Actions ---- */}
