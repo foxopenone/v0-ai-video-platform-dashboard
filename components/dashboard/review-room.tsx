@@ -55,6 +55,7 @@ interface StepReviewProps {
   bibleR2Key: string
   currentStatus: string // e.g. "S3_Bible_Check" | "S5_Script_Check" | "S8_Render" | "S9_Done"
   projectTitle?: string
+  workMode?: "Full_Auto" | "Step_Review" // Controls whether approval buttons are enabled
   onClose: () => void
   onApproved?: () => void
   onDelete?: () => void
@@ -71,8 +72,8 @@ interface ProgressProps {
   onDelete?: () => void
   onStop?: () => void
   /** Called when status reaches a Check state -- parent should switch to step_review */
-  onReviewReady?: (data: { lockToken: string; bibleR2Key: string; currentStatus: string }) => void
-  }
+  onReviewReady?: (data: { lockToken: string; bibleR2Key: string; currentStatus: string; workMode?: "Full_Auto" | "Step_Review" }) => void
+}
 
 // ---------- Legacy Props ----------
 interface LegacyProps {
@@ -232,6 +233,14 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const [videoRenderStartTime, setVideoRenderStartTime] = useState<number | null>(null)
   const [videoStopped, setVideoStopped] = useState(false) // true after user clicks Stop
   const [isCompleted, setIsCompleted] = useState(false) // true when project is S9_Done (read-only)
+  // Work mode: "Full_Auto" disables all approval buttons; "Step_Review" enables them
+  const [workMode, setWorkMode] = useState<"Full_Auto" | "Step_Review">(
+    isStepReview ? ((props as StepReviewProps).workMode || "Step_Review") : "Step_Review"
+  )
+  // Helper: true if Full_Auto mode (all approval actions should be blocked)
+  const isFullAuto = workMode === "Full_Auto"
+  // Helper: true if status is in auto-flow phase (no human intervention needed)
+  const isAutoFlowPhase = /^S[1246]|S4_Visuals|S6_Audio|S7_Render/.test(currentStatus)
 
   // Auto-select first video part with a URL when videos arrive
   useEffect(() => {
@@ -611,6 +620,11 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
   const handleApprove = useCallback(async () => {
     if (actionLocked) return // hard debounce
+    // BLOCK if Full_Auto mode -- no manual approval allowed
+    if (workMode === "Full_Auto") {
+      console.warn("[v0] handleApprove blocked: Work_Mode is Full_Auto")
+      return
+    }
     const info = getCallbackInfo()
     if (!info) return
     // GLOBAL LOCK: disable all buttons immediately before any network call
@@ -639,10 +653,15 @@ export function ReviewRoom(props: ReviewRoomProps) {
       setActionMessage(err instanceof Error ? err.message : "Approve failed")
       setActionLocked(false) // unlock on error so user can retry
     }
-  }, [getCallbackInfo, startVoiceOverPolling, startVideoPolling, activeTab, actionLocked, currentPhaseStatus])
+  }, [getCallbackInfo, startVoiceOverPolling, startVideoPolling, activeTab, actionLocked, currentPhaseStatus, workMode])
 
   const handleSaveAndContinue = useCallback(async () => {
     if (actionLocked) return // hard debounce
+    // BLOCK if Full_Auto mode
+    if (workMode === "Full_Auto") {
+      console.warn("[v0] handleSaveAndContinue blocked: Work_Mode is Full_Auto")
+      return
+    }
     const info = getCallbackInfo()
     if (!info || !bible) return
     const { jobRecordId, lockToken, bibleR2Key } = info
@@ -696,10 +715,15 @@ export function ReviewRoom(props: ReviewRoomProps) {
       setActionMessage(err instanceof Error ? err.message : "Save & Continue failed")
       setActionLocked(false) // unlock on error
     }
-  }, [getCallbackInfo, bible, actionLocked])
+  }, [getCallbackInfo, bible, actionLocked, workMode])
 
   const handleRedo = useCallback(async () => {
     if (actionLocked) return // hard debounce
+    // BLOCK if Full_Auto mode
+    if (workMode === "Full_Auto") {
+      console.warn("[v0] handleRedo blocked: Work_Mode is Full_Auto")
+      return
+    }
     const info = getCallbackInfo()
     if (!info) return
     // GLOBAL LOCK immediately
@@ -714,11 +738,16 @@ export function ReviewRoom(props: ReviewRoomProps) {
       setActionMessage(err instanceof Error ? err.message : "Redo failed")
       setActionLocked(false) // unlock on error
     }
-  }, [getCallbackInfo, currentPhaseStatus, actionLocked])
+  }, [getCallbackInfo, currentPhaseStatus, actionLocked, workMode])
 
   /** Retry: call the backend redo API then restart polling so the UI picks up new data */
   const handleRetry = useCallback(async () => {
     if (actionLocked) return
+    // BLOCK if Full_Auto mode
+    if (workMode === "Full_Auto") {
+      console.warn("[v0] handleRetry blocked: Work_Mode is Full_Auto")
+      return
+    }
     const info = getCallbackInfo()
     if (!info) return
     startActionLock("Retrying generation...")
@@ -736,11 +765,16 @@ export function ReviewRoom(props: ReviewRoomProps) {
       setActionMessage(err instanceof Error ? err.message : "Retry failed")
       setActionLocked(false)
     }
-  }, [getCallbackInfo, currentPhaseStatus, actionLocked])
+  }, [getCallbackInfo, currentPhaseStatus, actionLocked, workMode])
 
   /** Retry video: call the backend redo API then restart video polling */
   const handleRetryVideo = useCallback(async () => {
     if (actionLocked) return
+    // BLOCK if Full_Auto mode
+    if (workMode === "Full_Auto") {
+      console.warn("[v0] handleRetryVideo blocked: Work_Mode is Full_Auto")
+      return
+    }
     const info = getCallbackInfo()
     if (!info) return
     startActionLock("Retrying video render...")
@@ -772,6 +806,11 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
   // ── Final Preview: Per-Part Redo (POST /webhook/05-redo with Part_Index) ──
   const handleVideoPartRedo = useCallback(async (partId: string) => {
+    // BLOCK if Full_Auto mode
+    if (workMode === "Full_Auto") {
+      console.warn("[v0] handleVideoPartRedo blocked: Work_Mode is Full_Auto")
+      return
+    }
     const info = getCallbackInfo()
     if (!info) return
     // Mark this part as redoing
@@ -791,7 +830,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
       setActionStatus("error")
       setActionMessage(err instanceof Error ? err.message : "Redo failed for Part " + partId)
     }
-  }, [getCallbackInfo])
+  }, [getCallbackInfo, workMode])
 
   // ── Final Preview: Per-Part Download ──
   const handleVideoDownload = useCallback((url: string, partId: string) => {
@@ -840,7 +879,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
         }
         failCount = 0
         const job = await res.json()
-        console.log(`[v0] Script poll | Status: ${job.Status} | Script_R2_Key: ${job.Script_R2_Key || "null"}`)
+        console.log(`[v0] Script poll | Status: ${job.Status} | Script_R2_Key: ${job.Script_R2_Key || "null"} | Work_Mode: ${job.Work_Mode || "null"}`)
+        // Update workMode from backend (in case it changed or was not passed initially)
+        if (job.Work_Mode) setWorkMode(job.Work_Mode as "Full_Auto" | "Step_Review")
 
         // Check for error/failed
         if (["Error", "Failed"].includes(job.Status)) {
@@ -918,7 +959,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
         }
         failCount = 0
         const job = await res.json()
-        console.log(`[v0] Video poll | Status: ${job.Status} | Final_Video: ${job.Final_Video ? "present" : "null"}`)
+        console.log(`[v0] Video poll | Status: ${job.Status} | Final_Video: ${job.Final_Video ? "present" : "null"} | Work_Mode: ${job.Work_Mode || "null"}`)
+        // Update workMode from backend
+        if (job.Work_Mode) setWorkMode(job.Work_Mode as "Full_Auto" | "Step_Review")
 
         // Check for error/failed
         if (["Error", "Failed"].includes(job.Status)) {
@@ -1118,10 +1161,10 @@ export function ReviewRoom(props: ReviewRoomProps) {
         // Strategy: if Bible_R2_Key exists, transition to step_review.
         // ReviewRoom auto-detects S5_Script_Check and fetches script separately.
         if (job.Bible_R2_Key) {
-          console.log("[v0] TRANSITIONING to step_review! Status:", job.Status, "Bible_R2_Key:", job.Bible_R2_Key)
-          stopped = true
-          setProgressPolling(false)
-          onReviewReady?.({ lockToken: job.Lock_Token || "", bibleR2Key: job.Bible_R2_Key, currentStatus: job.Status })
+      console.log("[v0] TRANSITIONING to step_review! Status:", job.Status, "Bible_R2_Key:", job.Bible_R2_Key, "Work_Mode:", job.Work_Mode)
+      stopped = true
+      setProgressPolling(false)
+      onReviewReady?.({ lockToken: job.Lock_Token || "", bibleR2Key: job.Bible_R2_Key, currentStatus: job.Status, workMode: job.Work_Mode || "Step_Review" })
           return
         }
 
@@ -1551,8 +1594,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
                           </p>
                           <button
                             onClick={handleRetryVideo}
-                            disabled={actionLocked}
-                            className="flex items-center gap-1.5 rounded-lg border border-[var(--brand-pink)]/30 bg-[var(--brand-pink)]/10 px-4 py-2 text-xs font-medium text-[var(--brand-pink)] transition-colors hover:bg-[var(--brand-pink)]/20 disabled:opacity-50"
+                            disabled={actionLocked || isFullAuto || isAutoFlowPhase}
+                            title={isFullAuto ? "Disabled in Full Auto mode" : undefined}
+                            className="flex items-center gap-1.5 rounded-lg border border-[var(--brand-pink)]/30 bg-[var(--brand-pink)]/10 px-4 py-2 text-xs font-medium text-[var(--brand-pink)] transition-colors hover:bg-[var(--brand-pink)]/20 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <RotateCcw className="h-3.5 w-3.5" />
                             Retry Rendering
@@ -1700,8 +1744,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
                         <div className="flex items-center gap-2 pl-6">
                           <button
                             onClick={handleRetryVideo}
-                            disabled={actionLocked}
-                            className="flex items-center gap-1 rounded-md bg-red-500/20 px-2 py-1 text-[10px] font-medium text-red-300 hover:bg-red-500/30 disabled:opacity-50"
+                            disabled={actionLocked || isFullAuto || isAutoFlowPhase}
+                            title={isFullAuto ? "Disabled in Full Auto mode" : undefined}
+                            className="flex items-center gap-1 rounded-md bg-red-500/20 px-2 py-1 text-[10px] font-medium text-red-300 hover:bg-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <RotateCcw className="h-3 w-3" />
                             Retry
@@ -1843,7 +1888,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                     <>
                                       <button
                                         onClick={() => handleVideoPartRedo(vp.part)}
-                                        className="flex items-center gap-1.5 rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-1.5 text-[10px] font-medium text-amber-400 transition-colors hover:bg-amber-500/20"
+                                        disabled={isFullAuto || isAutoFlowPhase}
+                                        title={isFullAuto ? "Disabled in Full Auto mode" : undefined}
+                                        className="flex items-center gap-1.5 rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-1.5 text-[10px] font-medium text-amber-400 transition-colors hover:bg-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
                                       >
                                         <RotateCcw className="h-3 w-3" />
                                         Redo
@@ -2222,24 +2269,27 @@ export function ReviewRoom(props: ReviewRoomProps) {
                       </button>
                       <button
                         onClick={handleRedo}
-                        disabled={actionLocked}
-                        className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/20 disabled:opacity-50"
+                        disabled={actionLocked || isFullAuto || isAutoFlowPhase}
+                        title={isFullAuto ? "Disabled in Full Auto mode" : undefined}
+                        className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <RotateCcw className="h-3.5 w-3.5" />
                         Redo
                       </button>
                       <button
                         onClick={() => setEditMode(true)}
-                        disabled={actionLocked}
-                        className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40 disabled:opacity-50"
+                        disabled={actionLocked || isFullAuto || isAutoFlowPhase}
+                        title={isFullAuto ? "Disabled in Full Auto mode" : undefined}
+                        className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Edit3 className="h-3.5 w-3.5" />
                         Edit
                       </button>
                       <button
                         onClick={handleApprove}
-                        disabled={actionLocked}
-                        className="brand-gradient flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-xs font-semibold text-[#fff] transition-opacity hover:opacity-90 disabled:opacity-50"
+                        disabled={actionLocked || isFullAuto || isAutoFlowPhase}
+                        title={isFullAuto ? "Disabled in Full Auto mode" : undefined}
+                        className="brand-gradient flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-xs font-semibold text-[#fff] transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {actionLocked ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -2312,24 +2362,27 @@ export function ReviewRoom(props: ReviewRoomProps) {
                           </button>
                           <button
                             onClick={handleRedo}
-                            disabled={actionLocked}
-                            className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/20 disabled:opacity-50"
+                            disabled={actionLocked || isFullAuto || isAutoFlowPhase}
+                            title={isFullAuto ? "Disabled in Full Auto mode" : undefined}
+                            className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <RotateCcw className="h-3.5 w-3.5" />
                             Redo
                           </button>
                           <button
                             onClick={() => setEditMode(true)}
-                            disabled={actionLocked}
-                            className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40 disabled:opacity-50"
+                            disabled={actionLocked || isFullAuto || isAutoFlowPhase}
+                            title={isFullAuto ? "Disabled in Full Auto mode" : undefined}
+                            className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <Edit3 className="h-3.5 w-3.5" />
                             Edit
                           </button>
                           <button
                             onClick={handleApprove}
-                            disabled={actionLocked}
-                            className="brand-gradient flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-xs font-semibold text-[#fff] transition-opacity hover:opacity-90 disabled:opacity-50"
+                            disabled={actionLocked || isFullAuto || isAutoFlowPhase}
+                            title={isFullAuto ? "Disabled in Full Auto mode" : undefined}
+                            className="brand-gradient flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-xs font-semibold text-[#fff] transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {actionLocked ? (
                               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -2344,8 +2397,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
                   ) : scriptError ? (
                     <button
                       onClick={handleRetry}
-                      disabled={actionLocked}
-                      className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40 disabled:opacity-50"
+                      disabled={actionLocked || isFullAuto || isAutoFlowPhase}
+                      title={isFullAuto ? "Disabled in Full Auto mode" : undefined}
+                      className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/20 px-4 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/40 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <RotateCcw className="h-3.5 w-3.5" />
                       Retry
@@ -2354,8 +2408,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
                     <div className="flex items-center gap-3">
                       <button
                         onClick={handleRetry}
-                        disabled={actionLocked}
-                        className="flex items-center gap-1.5 rounded-lg border border-[var(--brand-pink)]/30 bg-[var(--brand-pink)]/10 px-4 py-2.5 text-xs font-medium text-[var(--brand-pink)] transition-colors hover:bg-[var(--brand-pink)]/20 disabled:opacity-50"
+                        disabled={actionLocked || isFullAuto || isAutoFlowPhase}
+                        title={isFullAuto ? "Disabled in Full Auto mode" : undefined}
+                        className="flex items-center gap-1.5 rounded-lg border border-[var(--brand-pink)]/30 bg-[var(--brand-pink)]/10 px-4 py-2.5 text-xs font-medium text-[var(--brand-pink)] transition-colors hover:bg-[var(--brand-pink)]/20 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <RotateCcw className="h-3.5 w-3.5" />
                         Retry

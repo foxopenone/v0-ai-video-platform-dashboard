@@ -194,6 +194,7 @@ export default function Page() {
         bibleR2Key={stepReviewData.bibleR2Key}
         currentStatus={stepReviewData.currentStatus || "S3_Bible_Check"}
         projectTitle={stepReviewData.projectTitle}
+        workMode={stepReviewData.workMode}
         onClose={() => {
           setStepReviewData(null)
           if (window.history.state?.reviewOpen) window.history.back()
@@ -280,6 +281,7 @@ export default function Page() {
             bibleR2Key: data.bibleR2Key,
             currentStatus: data.currentStatus,
             projectTitle: progressData.projectTitle,
+            workMode: data.workMode || "Step_Review",
           })
           setProgressData(null)
         }}
@@ -319,6 +321,7 @@ export default function Page() {
                       bibleR2Key: bibleKey,
                       currentStatus: job.Status,
                       projectTitle: inserted.title,
+                      workMode: job.Work_Mode || "Step_Review",
                     })
                     return
                   }

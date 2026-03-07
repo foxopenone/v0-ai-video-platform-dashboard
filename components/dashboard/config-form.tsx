@@ -137,6 +137,7 @@ export interface StepReviewData {
   currentStatus?: string
   projectTitle: string
   frontendJobId?: string
+  workMode?: "Full_Auto" | "Step_Review"
 }
 
 interface ConfigFormProps {
@@ -445,6 +446,7 @@ export function ConfigForm({
                   currentStatus: job.Status,
                   projectTitle,
                   frontendJobId: jobId,
+                  workMode: job.Work_Mode || "Step_Review",
                 })
               }
             } else {
