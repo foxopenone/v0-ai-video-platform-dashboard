@@ -240,7 +240,8 @@ export function ReviewRoom(props: ReviewRoomProps) {
   // Helper: true if Full_Auto mode (all approval actions should be blocked)
   const isFullAuto = workMode === "Full_Auto"
   // Helper: true if status is in auto-flow phase (no human intervention needed)
-  const isAutoFlowPhase = /^S[1246]|S4_Visuals|S6_Audio|S7_Render/.test(currentStatus)
+  const currentStatusStr = isStepReview ? (props as StepReviewProps).currentStatus : ""
+  const isAutoFlowPhase = /^S[1246]|S4_Visuals|S6_Audio|S7_Render/.test(currentStatusStr)
 
   // Auto-select first video part with a URL when videos arrive
   useEffect(() => {
