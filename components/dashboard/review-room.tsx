@@ -1808,7 +1808,10 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                   {/* Per-part progress bar */}
                                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary/25">
                                     <div
-                                      className="h-full rounded-full transition-all duration-500 ease-out"
+                                      className={cn(
+                                        "h-full rounded-full transition-all duration-500 ease-out",
+                                        !hasUrl && !vp.approved && !vp.redoing && "animate-progress-shimmer"
+                                      )}
                                       style={{
                                         width: `${partPct}%`,
                                         background: vp.approved
@@ -1818,7 +1821,6 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                             : hasUrl
                                               ? "var(--brand-pink)"
                                               : "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
-                                        opacity: hasUrl || vp.approved ? 1 : 0.4,
                                       }}
                                     />
                                   </div>

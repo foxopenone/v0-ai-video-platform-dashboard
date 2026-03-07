@@ -97,3 +97,23 @@
   50% { left: 100%; }
   100% { left: -33%; }
 }
+
+@keyframes progress-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+.animate-progress-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.animate-progress-shimmer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  animation: progress-shimmer 1.5s ease-in-out infinite;
+}
