@@ -1170,6 +1170,34 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const [progressError, setProgressError] = useState<string | null>(null)
   const [progressCompleted, setProgressCompleted] = useState(false)
   const [progressVideoParts, setProgressVideoParts] = useState<Array<{ part: string; url: string }>>([])
+  const [animatedPct, setAnimatedPct] = useState(0) // Smoothly animated percentage for progress bar
+
+  // Animate progress bar percentage smoothly
+  useEffect(() => {
+    if (!isProgress || !progressPolling) return
+    const STAGE_PCT: Record<string, number> = {
+      "Loading...": 2,
+      S1_Ingestion: 8, S1_Upload: 5,
+      S2_Preproc: 15, S2_Brain: 30,
+      S3_Bible: 45, S3_Bible_Check: 50,
+      S4_Script: 55, S4_Visuals: 60,
+      S5_Script: 65, S5_Script_Check: 70,
+      S6_VO: 75, S6_Audio: 80,
+      S7_Render: 85, S8_Render: 92,
+      S9_Done: 100,
+    }
+    const targetPct = STAGE_PCT[progressStatus] ?? 5
+    // Animate towards target
+    const interval = setInterval(() => {
+      setAnimatedPct((prev) => {
+        if (prev >= targetPct) return targetPct
+        // Increment by 0.5-1% each tick for smooth animation
+        const step = Math.max(0.5, (targetPct - prev) * 0.08)
+        return Math.min(prev + step, targetPct)
+      })
+    }, 100)
+    return () => clearInterval(interval)
+  }, [isProgress, progressPolling, progressStatus])
 
   useEffect(() => {
     if (!isProgress) return
@@ -1260,19 +1288,23 @@ export function ReviewRoom(props: ReviewRoomProps) {
   if (isProgress) {
     const { projectTitle, jobRecordId } = props as ProgressProps
 
-    const STAGE_LABELS: Record<string, { label: string; pct: number }> = {
-      S1_Ingestion: { label: "Ingesting source files...", pct: 15 },
-      S2_Brain: { label: "AI is analyzing content...", pct: 50 },
-      S3_Bible: { label: "Bible ready! Opening review...", pct: 100 },
-      S3_Bible_Check: { label: "Bible ready! Opening review...", pct: 100 },
-      S4_Script: { label: "Generating scripts...", pct: 50 },
-      S5_Script: { label: "Scripts ready! Opening review...", pct: 100 },
-      S5_Script_Check: { label: "Scripts ready! Opening review...", pct: 100 },
-      S6_VO: { label: "Generating voice over...", pct: 75 },
-      S7_Render: { label: "Rendering video...", pct: 85 },
-      S8_Render: { label: "Final rendering in progress...", pct: 90 },
-      S9_Done: { label: "Complete!", pct: 100 },
-    }
+  const STAGE_LABELS: Record<string, { label: string; pct: number }> = {
+    S1_Ingestion: { label: "Ingesting source files...", pct: 8 },
+    S1_Upload: { label: "Uploading to cloud...", pct: 5 },
+    S2_Preproc: { label: "Preprocessing media...", pct: 15 },
+    S2_Brain: { label: "AI is analyzing content...", pct: 30 },
+    S3_Bible: { label: "Generating story bible...", pct: 45 },
+    S3_Bible_Check: { label: "Bible ready! Opening review...", pct: 50 },
+    S4_Script: { label: "Generating scripts...", pct: 55 },
+    S4_Visuals: { label: "Creating visual assets...", pct: 60 },
+    S5_Script: { label: "Finalizing scripts...", pct: 65 },
+    S5_Script_Check: { label: "Scripts ready! Opening review...", pct: 70 },
+    S6_VO: { label: "Generating voice over...", pct: 75 },
+    S6_Audio: { label: "Processing audio...", pct: 80 },
+    S7_Render: { label: "Rendering video...", pct: 85 },
+    S8_Render: { label: "Final rendering in progress...", pct: 92 },
+    S9_Done: { label: "Complete!", pct: 100 },
+  }
 
     const info = STAGE_LABELS[progressStatus] || { label: progressStatus, pct: 0 }
 
@@ -1401,16 +1433,16 @@ export function ReviewRoom(props: ReviewRoomProps) {
             <div className="w-full">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[10px] text-muted-foreground">Processing...</span>
-                <span className="text-xs font-semibold tabular-nums text-foreground">{info.pct}%</span>
+                <span className="text-xs font-semibold tabular-nums text-foreground">{Math.round(animatedPct)}%</span>
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-secondary/30">
                 <div
                   className={cn(
-                    "h-full rounded-full transition-all duration-700",
+                    "h-full rounded-full transition-[width] duration-300 ease-out",
                     progressPolling && "animate-progress-shimmer"
                   )}
                   style={{
-                    width: `${Math.max(info.pct, 5)}%`,
+                    width: `${Math.max(animatedPct, 3)}%`,
                     background: "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
                   }}
                 />
