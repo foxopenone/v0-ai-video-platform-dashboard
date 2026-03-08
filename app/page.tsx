@@ -7,6 +7,7 @@ import { ProjectsSection } from "@/components/dashboard/projects-section"
 import { DiscoveryFeed } from "@/components/dashboard/discovery-feed"
 import { ReviewRoom } from "@/components/dashboard/review-room"
 import type { InsertedProject, StepReviewData } from "@/components/dashboard/config-form"
+import { stopJob } from "@/lib/mock-api"
 
 export default function Page() {
   const [stepReviewData, setStepReviewData] = useState<StepReviewData | null>(null)
@@ -216,10 +217,22 @@ export default function Page() {
             )
           )
         }}
-        onStop={() => {
-          setStepReviewData(null)
-          if (window.history.state?.reviewOpen) window.history.back()
-        }}
+onStop={async () => {
+  // Stop job in backend
+  if (stepReviewData?.jobRecordId) {
+    await stopJob(stepReviewData.jobRecordId)
+    // Update local project status
+    setInsertedProjects((prev) =>
+      prev.map((p) =>
+        p.airtableRecordId === stepReviewData.jobRecordId
+          ? { ...p, status: "stopped" as InsertedProject["status"] }
+          : p
+      )
+    )
+  }
+  setStepReviewData(null)
+  if (window.history.state?.reviewOpen) window.history.back()
+  }}
         onPost={(jobRecordId, videoParts) => {
           const project = insertedProjects.find((p) => p.airtableRecordId === jobRecordId)
           const item = {
@@ -269,10 +282,22 @@ export default function Page() {
           )
           setProgressData(null)
         }}
-        onStop={() => {
-          setProgressData(null)
-          if (window.history.state?.reviewOpen) window.history.back()
-        }}
+onStop={async () => {
+  // Stop job in backend
+  if (progressData?.jobRecordId) {
+    await stopJob(progressData.jobRecordId)
+    // Update local project status
+    setInsertedProjects((prev) =>
+      prev.map((p) =>
+        p.airtableRecordId === progressData.jobRecordId
+          ? { ...p, status: "stopped" as InsertedProject["status"] }
+          : p
+      )
+    )
+  }
+  setProgressData(null)
+  if (window.history.state?.reviewOpen) window.history.back()
+  }}
         onPost={(jobRecordId, videoParts) => {
           const project = insertedProjects.find((p) => p.airtableRecordId === jobRecordId)
           const item = {

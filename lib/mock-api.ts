@@ -510,6 +510,44 @@ export async function downloadEpisode(episodeId: string) {
   return triggerWebhook("download/episode", { episodeId })
 }
 
+/**
+ * Stop a running job by updating its status to "Stopped" in Airtable
+ */
+export async function stopJob(jobRecordId: string): Promise<{ success: boolean }> {
+  const airtableToken = process.env.NEXT_PUBLIC_AIRTABLE_TOKEN || process.env.AIRTABLE_TOKEN
+  const baseId = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID || "appJFy7BarX1GpBOs"
+  const tableId = "tblFrameData"
+
+  if (!airtableToken) {
+    console.warn("[stopJob] No Airtable token, skipping API call")
+    return { success: true }
+  }
+
+  try {
+    const res = await fetch(
+      `https://api.airtable.com/v0/${baseId}/${tableId}/${jobRecordId}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${airtableToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fields: { Status: "Stopped" },
+        }),
+      }
+    )
+    if (!res.ok) {
+      console.error("[stopJob] Airtable update failed:", res.status)
+      return { success: false }
+    }
+    return { success: true }
+  } catch (err) {
+    console.error("[stopJob] Error:", err)
+    return { success: false }
+  }
+}
+
 export async function fetchDiscoveryFeed() {
   await new Promise((resolve) => setTimeout(resolve, 500))
   return [

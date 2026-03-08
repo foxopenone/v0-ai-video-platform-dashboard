@@ -120,7 +120,7 @@ function ParamTile({ label, value, icon: Icon, options, onChange }: TileProps) {
 export interface InsertedProject {
   id: string
   title: string
-  status: "processing" | "pending_review" | "approved" | "completed" | "posted"
+  status: "processing" | "pending_review" | "approved" | "completed" | "posted" | "stopped"
   progress: number
   date: string
   thumbnail: null

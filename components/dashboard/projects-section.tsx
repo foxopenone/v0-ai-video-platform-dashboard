@@ -2,17 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import {
-  Loader2,
-  Eye,
-  CheckCircle2,
-  Clock,
-  Film,
-  ChevronLeft,
-  ChevronRight,
-  Play,
-  Trash2,
-  Send,
-  ShieldCheck,
+  Loader2, Eye, CheckCircle2, Film, Calendar, Send, ShieldCheck, Trash2, StopCircle
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { fetchProjects } from "@/lib/mock-api"
@@ -21,7 +11,7 @@ import { cn } from "@/lib/utils"
 interface Project {
   id: string
   title: string
-  status: "processing" | "pending_review" | "approved" | "completed" | "posted"
+  status: "processing" | "pending_review" | "approved" | "completed" | "posted" | "stopped"
   progress: number
   date: string
   thumbnail: string | null
@@ -63,6 +53,13 @@ const STATUS_CONFIG = {
     icon: Send,
     className:
       "border-[var(--brand-pink)]/30 bg-[var(--brand-pink)]/10 text-[var(--brand-pink)]",
+    iconClass: "",
+  },
+  stopped: {
+    label: "Stopped",
+    icon: StopCircle,
+    className:
+      "border-red-500/30 bg-red-500/10 text-red-400",
     iconClass: "",
   },
 }
