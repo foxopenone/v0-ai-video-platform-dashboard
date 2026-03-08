@@ -267,6 +267,7 @@ export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, use
 
   const hasFiles = files.length > 0
   const completeCount = files.filter((f) => f.status === "complete").length
+  const isUploading = files.some((f) => f.status === "uploading" || f.status === "queued")
 
   return (
     <div className="flex h-full flex-col">
@@ -290,17 +291,30 @@ export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, use
       <div
         onDragOver={(e) => {
           e.preventDefault()
-          setIsDragOver(true)
+          if (!isUploading) setIsDragOver(true)
         }}
         onDragLeave={() => setIsDragOver(false)}
-        onDrop={handleDrop}
-        onClick={() => inputRef.current?.click()}
+        onDrop={(e) => {
+          if (isUploading) {
+            e.preventDefault()
+            return
+          }
+          handleDrop(e)
+        }}
+        onClick={() => {
+          // Prevent opening file dialog while uploads are in progress
+          if (isUploading) return
+          inputRef.current?.click()
+        }}
         className={cn(
-          "group relative flex cursor-pointer flex-col overflow-hidden rounded-lg border border-dashed transition-all",
+          "group relative flex flex-col overflow-hidden rounded-lg border border-dashed transition-all",
           hasFiles ? "shrink-0" : "flex-1",
+          isUploading
+            ? "cursor-wait border-border/30 opacity-70"
+            : "cursor-pointer hover:border-[var(--brand-pink)]/30 hover:bg-secondary/10",
           isDragOver
             ? "border-[var(--brand-pink)] bg-[var(--brand-pink)]/5"
-            : "border-border/40 hover:border-[var(--brand-pink)]/30 hover:bg-secondary/10",
+            : "border-border/40",
           files.length >= 15 && "pointer-events-none opacity-40"
         )}
       >
@@ -329,11 +343,22 @@ export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, use
         {/* Compact drop trigger when files already added */}
         {hasFiles && (
           <div className="flex items-center justify-center gap-2 px-4 py-3">
-            <Upload className="h-3.5 w-3.5 text-muted-foreground transition-colors group-hover:text-[var(--brand-pink)]" />
-            <span className="text-[11px] font-medium text-foreground/70">
-              Drop more or click to add
-            </span>
-            <div className="hidden h-6 w-[14px] shrink-0 rounded border border-dashed border-muted-foreground/20 sm:block" />
+            {isUploading ? (
+              <>
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--brand-pink)]/30 border-t-[var(--brand-pink)]" />
+                <span className="text-[11px] font-medium text-muted-foreground">
+                  Uploading... please wait
+                </span>
+              </>
+            ) : (
+              <>
+                <Upload className="h-3.5 w-3.5 text-muted-foreground transition-colors group-hover:text-[var(--brand-pink)]" />
+                <span className="text-[11px] font-medium text-foreground/70">
+                  Drop more or click to add
+                </span>
+                <div className="hidden h-6 w-[14px] shrink-0 rounded border border-dashed border-muted-foreground/20 sm:block" />
+              </>
+            )}
           </div>
         )}
 
