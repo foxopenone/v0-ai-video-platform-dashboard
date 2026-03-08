@@ -108,6 +108,7 @@ function FilmStripItem({
               ? "border-destructive/30 bg-destructive/5"
               : "border-border/30 bg-secondary/30"
         )}
+        title={file.status === "error" && file.errorMsg ? file.errorMsg : undefined}
       >
         {isUploading && (
           <div
