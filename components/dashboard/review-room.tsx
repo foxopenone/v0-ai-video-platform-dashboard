@@ -372,19 +372,32 @@ export function ReviewRoom(props: ReviewRoomProps) {
     if (!isStepReview) return
     const { bibleR2Key, jobRecordId, currentStatus } = props as StepReviewProps
 
-    console.log("[v0] 1. Airtable Status:", currentStatus)
+    console.log("[v0] 1. Airtable Status:", currentStatus, "type:", typeof currentStatus)
     console.log("[v0] 2. Bible_R2_Key:", bibleR2Key)
+
+    // Normalize status for comparison
+    const statusStr = String(currentStatus || "").trim()
+    console.log("[v0] Normalized status:", statusStr, "S9 test:", statusStr.includes("S9"), "Done test:", statusStr.includes("Done"))
 
     // Initialize approved phases based on current status
     // If we're at S5 or later, bible was already approved
     // If we're at S8 or later, both bible and VO were already approved
-    if (/^S[5-9]|^S5_Script/i.test(currentStatus)) {
+    const isBibleApproved = /S[5-9]|S5_Script|S8_Render|S9/i.test(statusStr)
+    const isVoApproved = /S[8-9]|S8_Render|S9/i.test(statusStr)
+    const isDone = /S9_Done|S9/i.test(statusStr)
+    
+    console.log("[v0] Phase checks: Bible approved:", isBibleApproved, "VO approved:", isVoApproved, "Done:", isDone)
+    
+    if (isBibleApproved) {
+      console.log("[v0] Setting bible as approved")
       setApprovedPhases((prev) => new Set(prev).add("bible"))
     }
-    if (/^S9_Done/i.test(currentStatus)) {
+    if (isDone) {
+      console.log("[v0] Setting ALL phases as approved and isCompleted=true")
       setApprovedPhases(new Set(["bible", "voiceover", "preview"]))
       setIsCompleted(true)
-    } else if (/^S[8-9]|^S8_Render/i.test(currentStatus)) {
+    } else if (isVoApproved) {
+      console.log("[v0] Setting bible + voiceover as approved")
       setApprovedPhases((prev) => { const s = new Set(prev); s.add("bible"); s.add("voiceover"); return s })
     }
 
@@ -404,10 +417,10 @@ export function ReviewRoom(props: ReviewRoomProps) {
       .finally(() => setBibleLoading(false))
 
     // If status is S8_Render or S9, auto-switch to Final Preview tab
-    if (/^S8_Render|^S9/i.test(currentStatus)) {
+    if (/S8_Render|S8|S9/i.test(statusStr)) {
       console.log("[v0] Status is S8/S9 -- auto-switching to Final Preview tab")
       setActiveTab("preview")
-      if (/^S9_Done/i.test(currentStatus)) {
+      if (isDone) {
         // S9_Done: videos are already rendered, just fetch them once (no polling)
         console.log("[v0] S9_Done -- loading final videos without polling")
         fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}`)
@@ -449,7 +462,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
     }
 
     // If status is already S5_Script_Check, auto-switch to Voice Over tab
-    if (/^S5_Script/i.test(currentStatus)) {
+    if (/S5_Script|S5/i.test(statusStr) && !isVoApproved) {
       console.log("[v0] Status is S5_Script -- auto-switching to Voice Over tab")
       setActiveTab("voiceover")
       // Fetch the script using job-status to get Script_R2_Key
@@ -473,7 +486,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
           setScriptError(err.message)
         })
     }
-  }, [isStepReview, isStepReview ? (props as StepReviewProps).bibleR2Key : null])
+  }, [isStepReview, isStepReview ? (props as StepReviewProps).bibleR2Key : null, isStepReview ? (props as StepReviewProps).currentStatus : null])
 
   // ── Step Review: Edit Handlers ──
   const updateStorySummary = useCallback((value: string) => {
@@ -2276,6 +2289,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
             )}
 
             {/* Action Bar (hidden on preview tab - preview has its own controls) */}
+            {console.log("[v0] Render action bar | isCompleted:", isCompleted, "approvedPhases:", [...approvedPhases], "activeTab:", activeTab)}
             <div className={cn("shrink-0 border-t border-border/20 px-5 py-3", activeTab === "preview" && "hidden")}>
               {/* ---- Completed: read-only, just show close ---- */}
               {isCompleted ? (
