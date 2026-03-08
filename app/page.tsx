@@ -336,11 +336,9 @@ export default function Page() {
                 const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(recordId)}`)
                 if (res.ok) {
                   const job = await res.json()
-                  console.log("[v0] Click on project - API Status:", job.Status, "Bible_R2_Key:", job.Bible_R2_Key)
                   // Always use Bible_R2_Key for bible loading; Script_R2_Key is fetched separately by ReviewRoom
                   const bibleKey = job.Bible_R2_Key
                   if (bibleKey) {
-                    console.log("[v0] Opening ReviewRoom with currentStatus:", job.Status)
                     setStepReviewData({
                       jobRecordId: recordId,
                       lockToken: job.Lock_Token || "",

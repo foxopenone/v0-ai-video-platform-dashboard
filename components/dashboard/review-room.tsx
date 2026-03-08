@@ -372,12 +372,8 @@ export function ReviewRoom(props: ReviewRoomProps) {
     if (!isStepReview) return
     const { bibleR2Key, jobRecordId, currentStatus } = props as StepReviewProps
 
-    console.log("[v0] 1. Airtable Status:", currentStatus, "type:", typeof currentStatus)
-    console.log("[v0] 2. Bible_R2_Key:", bibleR2Key)
-
     // Normalize status for comparison
     const statusStr = String(currentStatus || "").trim()
-    console.log("[v0] Normalized status:", statusStr, "S9 test:", statusStr.includes("S9"), "Done test:", statusStr.includes("Done"))
 
     // Initialize approved phases based on current status
     // If we're at S5 or later, bible was already approved
@@ -386,18 +382,13 @@ export function ReviewRoom(props: ReviewRoomProps) {
     const isVoApproved = /S[8-9]|S8_Render|S9/i.test(statusStr)
     const isDone = /S9_Done|S9/i.test(statusStr)
     
-    console.log("[v0] Phase checks: Bible approved:", isBibleApproved, "VO approved:", isVoApproved, "Done:", isDone)
-    
     if (isBibleApproved) {
-      console.log("[v0] Setting bible as approved")
       setApprovedPhases((prev) => new Set(prev).add("bible"))
     }
     if (isDone) {
-      console.log("[v0] Setting ALL phases as approved and isCompleted=true")
       setApprovedPhases(new Set(["bible", "voiceover", "preview"]))
       setIsCompleted(true)
     } else if (isVoApproved) {
-      console.log("[v0] Setting bible + voiceover as approved")
       setApprovedPhases((prev) => { const s = new Set(prev); s.add("bible"); s.add("voiceover"); return s })
     }
 
@@ -418,7 +409,6 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
     // If status is S8_Render or S9, auto-switch to Final Preview tab
     if (/S8_Render|S8|S9/i.test(statusStr)) {
-      console.log("[v0] Status is S8/S9 -- auto-switching to Final Preview tab")
       setActiveTab("preview")
       if (isDone) {
         // S9_Done: videos are already rendered, just fetch them once (no polling)
@@ -463,7 +453,6 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
     // If status is already S5_Script_Check, auto-switch to Voice Over tab
     if (/S5_Script|S5/i.test(statusStr) && !isVoApproved) {
-      console.log("[v0] Status is S5_Script -- auto-switching to Voice Over tab")
       setActiveTab("voiceover")
       // Fetch the script using job-status to get Script_R2_Key
       fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}`)
@@ -519,6 +508,46 @@ export function ReviewRoom(props: ReviewRoomProps) {
           { name: "New Character", role: "supporting", description: "Description..." },
         ],
       }
+    })
+  }, [])
+
+  const updateEpisode = useCallback((index: number, field: string, value: string | string[]) => {
+    setBible((prev) => {
+      if (!prev) return prev
+      const eps = [...prev.episodes]
+      eps[index] = { ...eps[index], [field]: value }
+      return { ...prev, episodes: eps }
+    })
+  }, [])
+
+  const updateEpisodeVisualAnchor = useCallback((epIndex: number, anchorIndex: number, value: string) => {
+    setBible((prev) => {
+      if (!prev) return prev
+      const eps = [...prev.episodes]
+      const anchors = [...(eps[epIndex].visual_anchors || [])]
+      anchors[anchorIndex] = value
+      eps[epIndex] = { ...eps[epIndex], visual_anchors: anchors }
+      return { ...prev, episodes: eps }
+    })
+  }, [])
+
+  const addVisualAnchor = useCallback((epIndex: number) => {
+    setBible((prev) => {
+      if (!prev) return prev
+      const eps = [...prev.episodes]
+      const anchors = [...(eps[epIndex].visual_anchors || []), "00:00:00 - New visual anchor"]
+      eps[epIndex] = { ...eps[epIndex], visual_anchors: anchors }
+      return { ...prev, episodes: eps }
+    })
+  }, [])
+
+  const removeVisualAnchor = useCallback((epIndex: number, anchorIndex: number) => {
+    setBible((prev) => {
+      if (!prev) return prev
+      const eps = [...prev.episodes]
+      const anchors = (eps[epIndex].visual_anchors || []).filter((_, i) => i !== anchorIndex)
+      eps[epIndex] = { ...eps[epIndex], visual_anchors: anchors }
+      return { ...prev, episodes: eps }
     })
   }, [])
 
@@ -2057,30 +2086,76 @@ export function ReviewRoom(props: ReviewRoomProps) {
                     )}
                   </div>
 
-                  {/* Episodes preview */}
+                  {/* Episodes */}
                   {bible.episodes && bible.episodes.length > 0 && (
                     <div>
                       <h3 className="mb-2 text-sm font-semibold text-foreground">
                         Episodes ({bible.episodes.length})
                       </h3>
-                      <div className="flex flex-col gap-2">
+                      <div className="flex flex-col gap-3">
                         {bible.episodes.map((ep, i) => (
-                          <div key={i} className="rounded-lg border border-border/20 bg-secondary/10 px-4 py-3">
-                            <div className="mb-1.5 flex items-center gap-2">
+                          <div key={i} className={cn(
+                            "rounded-lg border px-4 py-3",
+                            editMode ? "border-[var(--brand-pink)]/20 bg-secondary/5" : "border-border/20 bg-secondary/10"
+                          )}>
+                            <div className="mb-2 flex items-center gap-2">
                               <span className="rounded-md bg-secondary/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-foreground/70">
                                 {ep.key}
                               </span>
-                              {ep.setting && (
+                              {editMode ? (
+                                <input
+                                  value={ep.setting || ""}
+                                  onChange={(e) => updateEpisode(i, "setting", e.target.value)}
+                                  placeholder="Location / Setting"
+                                  className="flex-1 rounded border border-border/30 bg-secondary/20 px-2 py-0.5 text-[10px] text-muted-foreground outline-none focus:border-[var(--brand-pink)]/40"
+                                />
+                              ) : ep.setting && (
                                 <span className="text-[10px] text-muted-foreground">{ep.setting}</span>
                               )}
                             </div>
-                            <p className="text-xs leading-relaxed text-foreground/70">{ep.summary}</p>
-                            {ep.visual_anchors && ep.visual_anchors.length > 0 && (
+                            {editMode ? (
+                              <textarea
+                                value={ep.summary}
+                                onChange={(e) => updateEpisode(i, "summary", e.target.value)}
+                                className="mb-2 min-h-[80px] w-full resize-none rounded border border-border/30 bg-secondary/20 px-3 py-2 text-xs leading-relaxed text-foreground/80 outline-none focus:border-[var(--brand-pink)]/40"
+                              />
+                            ) : (
+                              <p className="text-xs leading-relaxed text-foreground/70">{ep.summary}</p>
+                            )}
+                            {(ep.visual_anchors && ep.visual_anchors.length > 0 || editMode) && (
                               <div className="mt-2 border-t border-border/10 pt-2">
-                                <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">Visual Anchors</span>
-                                <ul className="mt-1 flex flex-col gap-0.5">
-                                  {ep.visual_anchors.map((anchor, j) => (
-                                    <li key={j} className="text-[10px] leading-relaxed text-foreground/50">{anchor}</li>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">Visual Anchors</span>
+                                  {editMode && (
+                                    <button
+                                      onClick={() => addVisualAnchor(i)}
+                                      className="text-[9px] text-[var(--brand-pink)] hover:underline"
+                                    >
+                                      + Add Anchor
+                                    </button>
+                                  )}
+                                </div>
+                                <ul className="mt-1 flex flex-col gap-1">
+                                  {(ep.visual_anchors || []).map((anchor, j) => (
+                                    <li key={j} className="flex items-center gap-1">
+                                      {editMode ? (
+                                        <>
+                                          <input
+                                            value={anchor}
+                                            onChange={(e) => updateEpisodeVisualAnchor(i, j, e.target.value)}
+                                            className="flex-1 rounded border border-border/30 bg-secondary/20 px-2 py-1 text-[10px] leading-relaxed text-foreground/60 outline-none focus:border-[var(--brand-pink)]/40"
+                                          />
+                                          <button
+                                            onClick={() => removeVisualAnchor(i, j)}
+                                            className="text-red-400/60 hover:text-red-400"
+                                          >
+                                            <X className="h-3 w-3" />
+                                          </button>
+                                        </>
+                                      ) : (
+                                        <span className="text-[10px] leading-relaxed text-foreground/50">{anchor}</span>
+                                      )}
+                                    </li>
                                   ))}
                                 </ul>
                               </div>
@@ -2289,7 +2364,6 @@ export function ReviewRoom(props: ReviewRoomProps) {
             )}
 
             {/* Action Bar (hidden on preview tab - preview has its own controls) */}
-            {console.log("[v0] Render action bar | isCompleted:", isCompleted, "approvedPhases:", [...approvedPhases], "activeTab:", activeTab)}
             <div className={cn("shrink-0 border-t border-border/20 px-5 py-3", activeTab === "preview" && "hidden")}>
               {/* ---- Completed: read-only, just show close ---- */}
               {isCompleted ? (
