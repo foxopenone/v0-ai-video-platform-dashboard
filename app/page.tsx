@@ -273,6 +273,30 @@ export default function Page() {
           setProgressData(null)
           if (window.history.state?.reviewOpen) window.history.back()
         }}
+        onPost={(jobRecordId, videoParts) => {
+          const project = insertedProjects.find((p) => p.airtableRecordId === jobRecordId)
+          const item = {
+            id: jobRecordId,
+            title: project?.title || progressData.projectTitle,
+            author: "You",
+            videoParts,
+          }
+          setPostedItems((prev) => {
+            if (prev.some((p) => p.id === jobRecordId)) return prev
+            const next = [item, ...prev]
+            localStorage.setItem("postedItems", JSON.stringify(next))
+            return next
+          })
+          setInsertedProjects((prev) =>
+            prev.map((p) =>
+              p.airtableRecordId === jobRecordId
+                ? { ...p, status: "posted" as InsertedProject["status"] }
+                : p
+            )
+          )
+          setProgressData(null)
+          if (window.history.state?.reviewOpen) window.history.back()
+        }}
         onReviewReady={(data) => {
           // Transition from progress -> step_review
           setStepReviewData({

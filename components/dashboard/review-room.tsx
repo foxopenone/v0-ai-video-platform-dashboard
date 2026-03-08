@@ -71,6 +71,7 @@ interface ProgressProps {
   onClose: () => void
   onDelete?: () => void
   onStop?: () => void
+  onPost?: (jobRecordId: string, videoParts: Array<{ part: string; url: string }>) => void
   /** Called when status reaches a Check state -- parent should switch to step_review */
   onReviewReady?: (data: { lockToken: string; bibleR2Key: string; currentStatus: string; workMode?: "Full_Auto" | "Step_Review" }) => void
 }
@@ -1125,6 +1126,8 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const [progressStatus, setProgressStatus] = useState("Loading...")
   const [progressPolling, setProgressPolling] = useState(true)
   const [progressError, setProgressError] = useState<string | null>(null)
+  const [progressCompleted, setProgressCompleted] = useState(false)
+  const [progressVideoParts, setProgressVideoParts] = useState<Array<{ part: string; url: string }>>([])
 
   useEffect(() => {
     if (!isProgress) return
@@ -1152,10 +1155,26 @@ export function ReviewRoom(props: ReviewRoomProps) {
         console.log(`[v0] Progress poll | Status: ${job.Status} | Bible_R2_Key: ${job.Bible_R2_Key || "null"} | Script_R2_Key: ${job.Script_R2_Key || "null"}`)
         setProgressStatus(job.Status || "Unknown")
 
-        // If done, stop polling
-        if (["S9_Done", "Error", "Failed"].includes(job.Status)) {
+        // If done, stop polling and mark completed
+        if (job.Status === "S9_Done") {
           stopped = true
           setProgressPolling(false)
+          setProgressCompleted(true)
+          // Fetch video parts
+          if (job.Final_Video) {
+            try {
+              const videos = typeof job.Final_Video === "string"
+                ? JSON.parse(job.Final_Video)
+                : job.Final_Video
+              setProgressVideoParts(videos || [])
+            } catch { /* ignore parse errors */ }
+          }
+          return
+        }
+        if (["Error", "Failed"].includes(job.Status)) {
+          stopped = true
+          setProgressPolling(false)
+          setProgressError(`Job ended with status: ${job.Status}`)
           return
         }
 
@@ -1252,36 +1271,105 @@ export function ReviewRoom(props: ReviewRoomProps) {
                   </button>
                 </div>
               </div>
-            ) : (
+            ) : progressCompleted ? (
+              /* ===== COMPLETED STATE ===== */
               <>
-            {info.pct >= 100 ? (
-              <CheckCircle2 className="h-10 w-10 text-emerald-400" />
-            ) : progressPolling ? (
+                <CheckCircle2 className="h-12 w-12 text-emerald-400" />
+                <div className="text-center">
+                  <p className="text-xl font-semibold text-foreground">Complete!</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {progressVideoParts.length} part{progressVideoParts.length !== 1 ? "s" : ""} ready
+                  </p>
+                </div>
+
+                {/* Progress bar - 100% */}
+                <div className="w-full">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] text-emerald-400">Completed</span>
+                    <span className="text-xs font-semibold tabular-nums text-emerald-400">100%</span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-secondary/30">
+                    <div className="h-full w-full rounded-full bg-emerald-400" />
+                  </div>
+                </div>
+
+                {/* Action buttons for completed */}
+                <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                  {progressVideoParts.length > 0 && (
+                    <button
+                      onClick={() => progressVideoParts.forEach((vp) => {
+                        if (vp.url) {
+                          const a = document.createElement("a")
+                          a.href = vp.url
+                          a.download = `part-${vp.part}.mp4`
+                          a.click()
+                        }
+                      })}
+                      className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/15 px-4 py-2.5 text-xs font-medium text-foreground/80 transition-colors hover:bg-secondary/30"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Download
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      const fn = (props as ProgressProps).onPost
+                      if (fn) fn(jobRecordId, progressVideoParts)
+                    }}
+                    className="flex items-center gap-1.5 rounded-lg border border-[var(--brand-pink)]/40 bg-[var(--brand-pink)]/15 px-4 py-2.5 text-xs font-semibold text-[var(--brand-pink)] transition-colors hover:bg-[var(--brand-pink)]/25"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    Post to Discovery
+                  </button>
+                  <button
+                    onClick={() => {
+                      const fn = (props as ProgressProps).onDelete
+                      if (fn) fn()
+                      else onClose()
+                    }}
+                    className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </button>
+                </div>
+
+                <button
+                  onClick={onClose}
+                  className="mt-2 text-xs text-muted-foreground/60 underline-offset-2 hover:underline"
+                >
+                  Back to Home
+                </button>
+              </>
+            ) : (
+              /* ===== PROCESSING STATE ===== */
+              <>
+            {progressPolling ? (
               <Loader2 className="h-10 w-10 animate-spin text-[var(--brand-pink)]" />
             ) : (
               <CheckCircle2 className="h-10 w-10 text-emerald-400" />
             )}
 
             <div className="text-center">
-              <p className="text-lg font-semibold text-foreground">{info.label}</p>
+              <p className="text-lg font-semibold text-foreground">{progressStatus}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{info.label}</p>
             </div>
 
             {/* Progress bar */}
             <div className="w-full">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] text-muted-foreground">
-                  {info.pct >= 100 ? "Ready" : "Processing..."}
-                </span>
+                <span className="text-[10px] text-muted-foreground">Processing...</span>
                 <span className="text-xs font-semibold tabular-nums text-foreground">{info.pct}%</span>
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-secondary/30">
                 <div
-                  className="h-full rounded-full transition-all duration-700"
+                  className={cn(
+                    "h-full rounded-full transition-all duration-700",
+                    progressPolling && "animate-progress-shimmer"
+                  )}
                   style={{
-                    width: `${info.pct}%`,
-                    background: info.pct >= 100
-                      ? "rgb(52 211 153)"
-                      : "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
+                    width: `${Math.max(info.pct, 5)}%`,
+                    background: "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
                   }}
                 />
               </div>
@@ -1298,7 +1386,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
             )}
 
             <p className="text-[10px] text-muted-foreground/50">
-              {info.pct >= 100 ? "Opening review..." : progressPolling ? "Auto-refreshing every few seconds..." : "Done"}
+              {progressPolling ? "Auto-refreshing every few seconds..." : "Done"}
             </p>
             <div className="flex items-center gap-2">
               <button
@@ -1307,20 +1395,18 @@ export function ReviewRoom(props: ReviewRoomProps) {
               >
                 Back to Home
               </button>
-              {info.pct < 100 && (
-                <button
-                  onClick={() => {
-                    setProgressPolling(false)
-                    const fn = (props as ProgressProps).onStop
-                    if (fn) fn()
-                    else onClose()
-                  }}
-                  className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20"
-                >
-                  <StopCircle className="h-3.5 w-3.5" />
-                  Stop
-                </button>
-              )}
+              <button
+                onClick={() => {
+                  setProgressPolling(false)
+                  const fn = (props as ProgressProps).onStop
+                  if (fn) fn()
+                  else onClose()
+                }}
+                className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20"
+              >
+                <StopCircle className="h-3.5 w-3.5" />
+                Stop
+              </button>
             </div>
               </>
             )}
