@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import {
-  Loader2, Eye, CheckCircle2, Film, Calendar, Send, ShieldCheck, Trash2, StopCircle
+  Loader2, Eye, CheckCircle2, Film, Calendar, Send, ShieldCheck, Trash2, StopCircle, ChevronLeft
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { fetchProjects } from "@/lib/mock-api"
