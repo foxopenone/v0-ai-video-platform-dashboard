@@ -1554,7 +1554,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
               <div className="w-full">
                 <div className="relative h-2 w-full overflow-hidden rounded-full bg-[var(--brand-pink)]/20">
                   <div
-                    className="h-full rounded-full transition-all duration-700"
+                    className="h-full rounded-full transition-all duration-700 animate-progress-shimmer"
                     style={{
                       width: `${fakeProgress}%`,
                       background: "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
@@ -1797,7 +1797,10 @@ export function ReviewRoom(props: ReviewRoomProps) {
                           </div>
                           <div className="relative h-2 w-full overflow-hidden rounded-full bg-secondary/30">
                             <div
-                              className="h-full rounded-full transition-all duration-700 ease-out"
+                              className={cn(
+                                "h-full rounded-full transition-all duration-700 ease-out",
+                                !allDone && !videoStopped && "animate-progress-shimmer"
+                              )}
                               style={{
                                 width: `${overallPct}%`,
                                 background: videoStopped
@@ -1942,7 +1945,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                     </div>
                                     <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary/25">
                                       <div
-                                        className="h-full rounded-full transition-all duration-1000 ease-out"
+                                        className="h-full rounded-full transition-all duration-1000 ease-out animate-progress-shimmer"
                                         style={{
                                           width: `${skeletonPct}%`,
                                           background: "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
@@ -2216,7 +2219,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                       <div className="w-48">
                         <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-[var(--brand-pink)]/20">
                           <div
-                            className="h-full rounded-full transition-all duration-700"
+                            className="h-full rounded-full transition-all duration-700 animate-progress-shimmer"
                             style={{
                               width: `${fakeProgress}%`,
                               background: "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
