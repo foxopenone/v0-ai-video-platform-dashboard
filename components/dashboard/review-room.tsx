@@ -377,20 +377,27 @@ export function ReviewRoom(props: ReviewRoomProps) {
     console.log("[v0] ReviewRoom init - currentStatus:", currentStatus, "statusStr:", statusStr)
 
     // Initialize approved phases based on current status
-    // If we're at S4 or later, bible was already approved
-    // If we're at S6 or later, both bible and VO were already approved
-    const isBibleApproved = /S[4-9]|S4_Script|S4_Visuals|S5_Script|S6|S7|S8|S9/i.test(statusStr)
-    const isVoApproved = /S[6-9]|S6_VO|S6_Audio|S7|S8|S9/i.test(statusStr)
+    // Pipeline stages:
+    // S1_Ingestion/S2_Preproc/S2_Brain -> Processing (bible not ready)
+    // S3_Bible/S3_Bible_Check -> Bible ready, waiting for approval
+    // S4_Script/S4_Visuals/S5_Script/S5_Script_Check -> Bible approved, script phase
+    // S6_VO/S6_Audio -> Script approved, VO phase  
+    // S7_Render/S8_Render -> VO approved, rendering
+    // S9_Done -> All done
+    
+    const isBibleApproved = /S[4-9]|S4|S5|S6|S7|S8|S9/i.test(statusStr)
+    const isVoApproved = /S[7-9]|S7|S8|S9/i.test(statusStr)
     const isDone = /S9_Done|S9/i.test(statusStr)
     
-    if (isBibleApproved) {
-      setApprovedPhases((prev) => new Set(prev).add("bible"))
-    }
+    console.log("[v0] Status check:", { statusStr, isBibleApproved, isVoApproved, isDone })
+    
     if (isDone) {
       setApprovedPhases(new Set(["bible", "voiceover", "preview"]))
       setIsCompleted(true)
     } else if (isVoApproved) {
-      setApprovedPhases((prev) => { const s = new Set(prev); s.add("bible"); s.add("voiceover"); return s })
+      setApprovedPhases(new Set(["bible", "voiceover"]))
+    } else if (isBibleApproved) {
+      setApprovedPhases(new Set(["bible"]))
     }
 
     // Always load bible (it's the base data)
