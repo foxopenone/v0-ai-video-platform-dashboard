@@ -374,12 +374,13 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
     // Normalize status for comparison
     const statusStr = String(currentStatus || "").trim()
+    console.log("[v0] ReviewRoom init - currentStatus:", currentStatus, "statusStr:", statusStr)
 
     // Initialize approved phases based on current status
-    // If we're at S5 or later, bible was already approved
-    // If we're at S8 or later, both bible and VO were already approved
-    const isBibleApproved = /S[5-9]|S5_Script|S8_Render|S9/i.test(statusStr)
-    const isVoApproved = /S[8-9]|S8_Render|S9/i.test(statusStr)
+    // If we're at S4 or later, bible was already approved
+    // If we're at S6 or later, both bible and VO were already approved
+    const isBibleApproved = /S[4-9]|S4_Script|S4_Visuals|S5_Script|S6|S7|S8|S9/i.test(statusStr)
+    const isVoApproved = /S[6-9]|S6_VO|S6_Audio|S7|S8|S9/i.test(statusStr)
     const isDone = /S9_Done|S9/i.test(statusStr)
     
     if (isBibleApproved) {
