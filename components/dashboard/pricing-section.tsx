@@ -129,7 +129,7 @@ export function PricingSection({ currentPlan = "free", userCredits = 12 }: Prici
               "relative rounded-2xl p-6 transition-all",
               plan.popular
                 ? "border-2 border-[var(--brand-purple)]"
-                : "border border-dashed border-border bg-secondary/10"
+                : "border border-dashed border-white/20 bg-secondary/10"
             )}
           >
             {plan.popular && (
@@ -186,7 +186,7 @@ export function PricingSection({ currentPlan = "free", userCredits = 12 }: Prici
         ))}
 
         {/* Pay As You Go */}
-        <div className="rounded-2xl border border-dashed border-[var(--brand-pink)]/40 bg-[var(--brand-pink)]/5 p-6">
+        <div className="rounded-2xl border border-dashed border-white/20 bg-secondary/10 p-6">
           <div className="flex items-center gap-2">
             <CreditCard className="h-4 w-4 text-[var(--brand-pink)]" />
             <h3 className="text-sm font-semibold text-foreground">Pay As You Go</h3>
@@ -206,12 +206,17 @@ export function PricingSection({ currentPlan = "free", userCredits = 12 }: Prici
               {CREDIT_AMOUNTS.map((amount) => (
                 <button
                   key={amount}
-                  onClick={() => setSelectedCreditAmount(amount)}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setSelectedCreditAmount(amount)
+                  }}
                   className={cn(
-                    "rounded-lg border py-1.5 text-xs font-medium transition-all",
+                    "cursor-pointer rounded-lg border py-1.5 text-xs font-medium transition-all",
                     selectedCreditAmount === amount
                       ? "border-[var(--brand-pink)] bg-[var(--brand-pink)]/10 text-[var(--brand-pink)]"
-                      : "border-border/40 text-muted-foreground hover:border-[var(--brand-pink)]/40"
+                      : "border-white/20 text-muted-foreground hover:border-[var(--brand-pink)]/40 hover:text-foreground"
                   )}
                 >
                   ${amount}
