@@ -14,6 +14,7 @@ const CREDIT_AMOUNTS = [10, 20, 30, 50, 100]
 export function PricingSection({ currentPlan = "free", userCredits = 12 }: PricingSectionProps) {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null)
   const [selectedCreditAmount, setSelectedCreditAmount] = useState<number>(20)
+  const [selectedPlanId, setSelectedPlanId] = useState<string>("pro") // 默认选中 Pro
 
   // 获取用户当前 plan 对应的 credit 价格
   const getCreditPrice = () => {
@@ -122,14 +123,17 @@ export function PricingSection({ currentPlan = "free", userCredits = 12 }: Prici
       </div>
 
       <div className="grid gap-5 lg:grid-cols-4 md:grid-cols-2">
-        {plans.map((plan) => (
+        {plans.map((plan) => {
+          const isSelected = selectedPlanId === plan.id
+          return (
           <div
             key={plan.id}
+            onClick={() => setSelectedPlanId(plan.id)}
             className={cn(
-              "relative rounded-2xl p-6 transition-all",
-              plan.popular
+              "relative cursor-pointer rounded-2xl p-6 transition-all",
+              isSelected
                 ? "border-2 border-[var(--brand-purple)]"
-                : "border border-dashed border-white/20 bg-secondary/10"
+                : "border border-dashed border-white/20 bg-secondary/10 hover:border-white/40"
             )}
           >
             {plan.popular && (
@@ -183,10 +187,18 @@ export function PricingSection({ currentPlan = "free", userCredits = 12 }: Prici
               )}
             </button>
           </div>
-        ))}
+        )})}
 
         {/* Pay As You Go */}
-        <div className="rounded-2xl border border-dashed border-white/20 bg-secondary/10 p-6">
+        <div 
+          onClick={() => setSelectedPlanId("payg")}
+          className={cn(
+            "cursor-pointer rounded-2xl p-6 transition-all",
+            selectedPlanId === "payg"
+              ? "border-2 border-[var(--brand-purple)]"
+              : "border border-dashed border-white/20 bg-secondary/10 hover:border-white/40"
+          )}
+        >
           <div className="flex items-center gap-2">
             <CreditCard className="h-4 w-4 text-[var(--brand-pink)]" />
             <h3 className="text-sm font-semibold text-foreground">Pay As You Go</h3>
