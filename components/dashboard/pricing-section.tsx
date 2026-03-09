@@ -38,7 +38,7 @@ export function PricingSection({ currentPlan = "free", userCredits = 12 }: Prici
         body.amount = amount
       }
 
-      const res = await fetch("/webhook/stripe-create-checkout", {
+      const res = await fetch("https://n8n-production-8abb.up.railway.app/webhook/stripe-create-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
