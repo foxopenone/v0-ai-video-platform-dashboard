@@ -13,8 +13,7 @@ const CREDIT_AMOUNTS = [10, 20, 30, 50, 100]
 
 export function PricingSection({ currentPlan = "free", userCredits = 12 }: PricingSectionProps) {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null)
-  const [showCreditsModal, setShowCreditsModal] = useState(false)
-  const [selectedCreditAmount, setSelectedCreditAmount] = useState<number | null>(null)
+  const [selectedCreditAmount, setSelectedCreditAmount] = useState<number>(20)
 
   // 获取用户当前 plan 对应的 credit 价格
   const getCreditPrice = () => {
@@ -127,10 +126,10 @@ export function PricingSection({ currentPlan = "free", userCredits = 12 }: Prici
           <div
             key={plan.id}
             className={cn(
-              "relative rounded-2xl border p-6 transition-all",
+              "relative rounded-2xl p-6 transition-all",
               plan.popular
                 ? "border-2 border-[var(--brand-purple)]"
-                : "border-border/40 bg-secondary/10"
+                : "border border-dashed border-border bg-secondary/10"
             )}
           >
             {plan.popular && (
@@ -221,18 +220,9 @@ export function PricingSection({ currentPlan = "free", userCredits = 12 }: Prici
             </div>
           </div>
           <button
-            onClick={() => {
-              if (selectedCreditAmount) {
-                handleCheckout("credits", undefined, selectedCreditAmount)
-              }
-            }}
-            disabled={!selectedCreditAmount || loadingPlan?.startsWith("credits")}
-            className={cn(
-              "mt-4 w-full rounded-lg py-2 text-xs font-bold transition-all",
-              selectedCreditAmount
-                ? "bg-[var(--brand-pink)] text-white hover:opacity-90"
-                : "border border-border/40 text-muted-foreground cursor-not-allowed"
-            )}
+            onClick={() => handleCheckout("credits", undefined, selectedCreditAmount)}
+            disabled={loadingPlan?.startsWith("credits")}
+            className="mt-4 w-full rounded-lg bg-[var(--brand-pink)] py-2 text-xs font-bold text-white transition-all hover:opacity-90 disabled:opacity-50"
           >
             {loadingPlan?.startsWith("credits") ? (
               <Loader2 className="mx-auto h-4 w-4 animate-spin" />
