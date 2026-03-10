@@ -234,6 +234,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const [videoRenderStartTime, setVideoRenderStartTime] = useState<number | null>(null)
   const [videoStopped, setVideoStopped] = useState(false) // true after user clicks Stop
   const [isCompleted, setIsCompleted] = useState(false) // true when project is S9_Done (read-only)
+  const videosLoadedRef = useRef(false) // prevent duplicate video loads
   // Work mode: "Full_Auto" disables all approval buttons; "Step_Review" enables them
   const [workMode, setWorkMode] = useState<"Full_Auto" | "Step_Review">(
     isStepReview ? ((props as StepReviewProps).workMode || "Step_Review") : "Step_Review"
@@ -428,7 +429,8 @@ export function ReviewRoom(props: ReviewRoomProps) {
     }
     
     if (isDone || /S8|S9/i.test(statusStr)) {
-      if (isDone) {
+      if (isDone && !videosLoadedRef.current) {
+        videosLoadedRef.current = true
         // S9_Done: videos are already rendered, just fetch them once (no polling)
         console.log("[v0] S9_Done -- loading final videos without polling")
         fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}`)
@@ -446,16 +448,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
               // Filter out deleted parts from localStorage
               const deletedKey = `deleted_parts_${jobRecordId}`
               const deletedParts: string[] = JSON.parse(localStorage.getItem(deletedKey) || "[]")
-              console.log("[v0] DELETE CHECK - deletedKey:", deletedKey)
-              console.log("[v0] DELETE CHECK - deletedParts from localStorage:", deletedParts)
-              console.log("[v0] DELETE CHECK - finalVideos parts:", finalVideos.map(fv => ({ raw: fv.part, asString: String(fv.part) })))
-              const filteredVideos = finalVideos.filter((fv) => {
-                const partStr = String(fv.part)
-                const isDeleted = deletedParts.includes(partStr)
-                console.log("[v0] DELETE CHECK - part:", partStr, "isDeleted:", isDeleted)
-                return !isDeleted
-              })
-              console.log("[v0] DELETE CHECK - filteredVideos count:", filteredVideos.length)
+              const filteredVideos = finalVideos.filter((fv) => !deletedParts.includes(String(fv.part)))
               setVideoParts(filteredVideos.map((fv) => ({
                 part: String(fv.part), url: fv.url, approved: true, redoing: false,
               })))
@@ -1067,9 +1060,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
           // Filter out deleted parts from localStorage
           const deletedKey = `deleted_parts_${jobRecordId}`
           const deletedParts: string[] = JSON.parse(localStorage.getItem(deletedKey) || "[]")
-          console.log("[v0] Loading videos - deletedKey:", deletedKey, "deletedParts:", deletedParts, "finalVideos parts:", finalVideos.map(fv => fv.part))
           const filteredFinalVideos = finalVideos.filter((fv) => !deletedParts.includes(String(fv.part)))
-          console.log("[v0] After filter:", filteredFinalVideos.length, "videos")
           // Merge with existing state (preserve approved/redoing flags)
           setVideoParts((prev) => {
             return filteredFinalVideos.map((fv) => {
@@ -1097,7 +1088,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
           })
 
           // Check if all parts have URLs (rendering complete)
-          const allReady = finalVideos.every((fv) => !!fv.url)
+          const allReady = filteredFinalVideos.every((fv) => !!fv.url)
           // Check if any part is being re-done
           const anyRedoing = videoParts.some((vp) => vp.redoing)
           if (allReady && !anyRedoing) {
@@ -1267,13 +1258,16 @@ export function ReviewRoom(props: ReviewRoomProps) {
           stopped = true
           setProgressPolling(false)
           setProgressCompleted(true)
-          // Fetch video parts
+          // Fetch video parts (filter deleted)
           if (job.Final_Video) {
             try {
               const videos = typeof job.Final_Video === "string"
                 ? JSON.parse(job.Final_Video)
                 : job.Final_Video
-              setProgressVideoParts(videos || [])
+              const deletedKey = `deleted_parts_${jobRecordId}`
+              const deletedParts: string[] = JSON.parse(localStorage.getItem(deletedKey) || "[]")
+              const filteredVideos = (videos || []).filter((v: { part: string }) => !deletedParts.includes(String(v.part)))
+              setProgressVideoParts(filteredVideos)
             } catch { /* ignore parse errors */ }
           }
           return
@@ -2108,11 +2102,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                               const { jobRecordId } = props as StepReviewProps
                                               const deletedKey = `deleted_parts_${jobRecordId}`
                                               const deletedParts: string[] = JSON.parse(localStorage.getItem(deletedKey) || "[]")
-                                              console.log("[v0] Deleting part:", vp.part, "jobRecordId:", jobRecordId, "deletedKey:", deletedKey)
                                               if (!deletedParts.includes(vp.part)) {
                                                 deletedParts.push(vp.part)
                                                 localStorage.setItem(deletedKey, JSON.stringify(deletedParts))
-                                                console.log("[v0] Saved deleted parts:", deletedParts)
                                               }
                                             }
                                             // Remove from local state and update selection
