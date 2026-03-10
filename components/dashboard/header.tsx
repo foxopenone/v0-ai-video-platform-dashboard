@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
-import { ChevronDown, User, Settings, LogOut, Globe, LogIn } from "lucide-react"
+import { ChevronDown, User, Settings, LogOut, Globe, LogIn, Shield } from "lucide-react"
 import type { User as SupabaseUser } from "@supabase/supabase-js"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -129,6 +129,12 @@ export function Header() {
               <DropdownMenuItem>
                 <Settings className="mr-2 h-3.5 w-3.5" />
                 Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/admin" className="flex items-center">
+                  <Shield className="mr-2 h-3.5 w-3.5" />
+                  Admin Panel
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
