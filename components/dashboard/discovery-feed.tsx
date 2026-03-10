@@ -21,6 +21,12 @@ export interface PostedItem {
   videoParts: Array<{ part: string; url: string }>
 }
 
+interface DiscoveryFeedProps {
+  postedItems?: PostedItem[]
+  onPostClick?: (item: PostedItem) => void
+  onDeletePost?: (itemId: string) => void
+}
+
 function formatCount(num: number): string {
   if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`
   if (num >= 1000) return `${(num / 1000).toFixed(1)}K`
@@ -98,11 +104,22 @@ function FeedCard({ item, index }: { item: FeedItem; index: number }) {
   )
 }
 
-function PostedFeedCard({ item }: { item: PostedItem }) {
+function PostedFeedCard({ 
+  item, 
+  onClick,
+  onDelete 
+}: { 
+  item: PostedItem
+  onClick?: () => void
+  onDelete?: () => void
+}) {
   const firstVideo = item.videoParts.find((vp) => !!vp.url)
 
   return (
-    <div className="group overflow-hidden rounded-xl border border-[var(--brand-pink)]/30 bg-card ring-1 ring-inset ring-[var(--brand-pink)]/5 transition-all hover:border-[var(--brand-pink)]/50">
+    <div 
+      className="group cursor-pointer overflow-hidden rounded-xl border border-[var(--brand-pink)]/30 bg-card ring-1 ring-inset ring-[var(--brand-pink)]/5 transition-all hover:border-[var(--brand-pink)]/50"
+      onClick={onClick}
+    >
       <div className="relative flex aspect-[9/16] items-center justify-center overflow-hidden bg-black/80">
         {firstVideo?.url ? (
           <video
@@ -141,7 +158,7 @@ function PostedFeedCard({ item }: { item: PostedItem }) {
   )
 }
 
-export function DiscoveryFeed({ postedItems = [] }: { postedItems?: PostedItem[] }) {
+export function DiscoveryFeed({ postedItems = [], onPostClick, onDeletePost }: DiscoveryFeedProps) {
   const [items, setItems] = useState<FeedItem[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -176,7 +193,12 @@ export function DiscoveryFeed({ postedItems = [] }: { postedItems?: PostedItem[]
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
           {postedItems.map((item) => (
-            <PostedFeedCard key={`posted-${item.id}`} item={item} />
+            <PostedFeedCard 
+              key={`posted-${item.id}`} 
+              item={item} 
+              onClick={() => onPostClick?.(item)}
+              onDelete={() => onDeletePost?.(item.id)}
+            />
           ))}
           {items.map((item, i) => (
             <FeedCard key={item.id} item={item} index={i} />

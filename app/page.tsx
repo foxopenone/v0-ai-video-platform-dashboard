@@ -423,7 +423,29 @@ onStop={async () => {
           insertedProjects={insertedProjects}
         />
         <div className="my-5 h-px bg-border/20" />
-        <DiscoveryFeed postedItems={postedItems} />
+        <DiscoveryFeed 
+          postedItems={postedItems} 
+          onPostClick={(item) => {
+            // Open video player modal for posted item
+            if (item.videoParts.length > 0 && item.videoParts[0].url) {
+              setStepReviewData({
+                jobRecordId: item.id,
+                bibleR2Key: "",
+                currentStatus: "ALL_DONE",
+                title: item.title,
+              })
+            }
+          }}
+          onDeletePost={(itemId) => {
+            if (confirm("Delete this post from Discovery?")) {
+              setPostedItems((prev) => {
+                const next = prev.filter((p) => p.id !== itemId)
+                localStorage.setItem("postedItems", JSON.stringify(next))
+                return next
+              })
+            }
+          }}
+        />
         <div className="my-5 h-px bg-border/20" />
         {/* Pricing Section */}
         <PricingSection />
