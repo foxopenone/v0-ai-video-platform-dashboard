@@ -64,11 +64,21 @@ export default function AdminPage() {
     { id: "p3", title: "Tutorial Series", status: "S3_Bible_Check", userId: "3", createdAt: "2024-03-13" },
   ])
   
-  // Check if already logged in
+  // Check if already logged in + load posts
   useEffect(() => {
     const auth = localStorage.getItem("admin_auth")
     if (auth === "true") {
       setIsAuthenticated(true)
+    }
+    // Load posts from localStorage
+    const stored = localStorage.getItem("postedItems")
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored)
+        setPosts(parsed.map((p: DiscoveryPost, i: number) => ({ ...p, order: i })))
+      } catch (e) {
+        console.error("Failed to parse postedItems:", e)
+      }
     }
   }, [])
 
@@ -125,19 +135,6 @@ export default function AdminPage() {
       </div>
     )
   }
-
-  // Load posts from localStorage
-  useEffect(() => {
-    const stored = localStorage.getItem("postedItems")
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored)
-        setPosts(parsed.map((p: DiscoveryPost, i: number) => ({ ...p, order: i })))
-      } catch (e) {
-        console.error("Failed to parse postedItems:", e)
-      }
-    }
-  }, [])
 
   // Save posts to localStorage
   const savePosts = (newPosts: DiscoveryPost[]) => {
