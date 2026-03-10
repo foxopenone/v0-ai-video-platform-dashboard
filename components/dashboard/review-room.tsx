@@ -1055,9 +1055,13 @@ export function ReviewRoom(props: ReviewRoomProps) {
           setActionLocked(false)
           setActionStatus("idle")
           setActionMessage("")
+          // Filter out deleted parts from localStorage
+          const deletedKey = `deleted_parts_${jobRecordId}`
+          const deletedParts: string[] = JSON.parse(localStorage.getItem(deletedKey) || "[]")
+          const filteredFinalVideos = finalVideos.filter((fv) => !deletedParts.includes(String(fv.part)))
           // Merge with existing state (preserve approved/redoing flags)
           setVideoParts((prev) => {
-            return finalVideos.map((fv) => {
+            return filteredFinalVideos.map((fv) => {
               const existing = prev.find((p) => p.part === String(fv.part))
               if (existing && existing.redoing && fv.url) {
                 // Redo completed: new URL arrived, clear redoing
