@@ -443,7 +443,11 @@ export function ReviewRoom(props: ReviewRoomProps) {
               } catch { /* ignore parse errors */ }
             }
             if (finalVideos.length > 0) {
-              setVideoParts(finalVideos.map((fv) => ({
+              // Filter out deleted parts from localStorage
+              const deletedKey = `deleted_parts_${jobRecordId}`
+              const deletedParts: string[] = JSON.parse(localStorage.getItem(deletedKey) || "[]")
+              const filteredVideos = finalVideos.filter((fv) => !deletedParts.includes(String(fv.part)))
+              setVideoParts(filteredVideos.map((fv) => ({
                 part: String(fv.part), url: fv.url, approved: true, redoing: false,
               })))
               setVideoRenderProgress(100)
@@ -2084,6 +2088,16 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                         onClick={async () => {
                                           const partNum = vp.part.replace("part_", "")
                                           if (confirm(`Delete Part ${partNum}? This cannot be undone.`)) {
+                                            // Persist deletion to localStorage
+                                            if (isStepReview) {
+                                              const { jobRecordId } = props as StepReviewProps
+                                              const deletedKey = `deleted_parts_${jobRecordId}`
+                                              const deletedParts: string[] = JSON.parse(localStorage.getItem(deletedKey) || "[]")
+                                              if (!deletedParts.includes(vp.part)) {
+                                                deletedParts.push(vp.part)
+                                                localStorage.setItem(deletedKey, JSON.stringify(deletedParts))
+                                              }
+                                            }
                                             // Remove from local state and update selection
                                             setVideoParts((prev) => {
                                               const remaining = prev.filter((p) => p.part !== vp.part)
@@ -2096,19 +2110,6 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                               }
                                               return remaining
                                             })
-                                            // If this is step_review mode, also call the delete API
-                                            if (isStepReview) {
-                                              try {
-                                                const { jobRecordId } = props as StepReviewProps
-                                                await fetch("/api/delete-video-part", {
-                                                  method: "POST",
-                                                  headers: { "Content-Type": "application/json" },
-                                                  body: JSON.stringify({ recordId: jobRecordId, part: vp.part }),
-                                                })
-                                              } catch (err) {
-                                                console.error("Failed to delete video part:", err)
-                                              }
-                                            }
                                           }
                                         }}
                                         className="flex items-center gap-1.5 rounded-md border border-red-500/25 bg-red-500/10 px-3 py-1.5 text-[10px] font-medium text-red-400 transition-colors hover:bg-red-500/20"
