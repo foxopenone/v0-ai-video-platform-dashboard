@@ -189,7 +189,7 @@ export default function Page() {
   if (stepReviewData) {
     return (
       <ReviewRoom
-        key={`review-${stepReviewData.jobRecordId}`}
+        key={`review-${stepReviewData.jobRecordId}-${stepReviewData.currentStatus}`}
         mode="step_review"
         jobRecordId={stepReviewData.jobRecordId}
         lockToken={stepReviewData.lockToken}

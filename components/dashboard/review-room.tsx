@@ -1738,12 +1738,16 @@ export function ReviewRoom(props: ReviewRoomProps) {
             {activeTab === "preview" && (() => {
               const selectedVp = videoParts.find((vp) => vp.part === selectedVideoPartId) || null
               const readyCount = videoParts.filter((vp) => !!vp.url && !vp.redoing).length
-              const totalParts = Math.max(videoParts.length, episodeCount, 1)
-              const allDone = videoParts.length > 0 && videoParts.every((vp) => !!vp.url && !vp.redoing)
-              const overallPct = videoParts.length === 0
-                ? videoRenderProgress
-                : Math.round((readyCount / totalParts) * 100)
-              const skeletonCount = Math.max(episodeCount, 3)
+              // Use actual videoParts count, not episodeCount (episodes != parts)
+              const totalParts = Math.max(videoParts.length, 1)
+              // If isCompleted (ALL_DONE), everything is done
+              const allDone = isCompleted || (videoParts.length > 0 && videoParts.every((vp) => !!vp.url && !vp.redoing))
+              const overallPct = isCompleted 
+                ? 100 
+                : videoParts.length === 0
+                  ? videoRenderProgress
+                  : Math.round((readyCount / totalParts) * 100)
+              const skeletonCount = Math.max(videoParts.length, 2)
 
               return (
                 <div className="flex flex-1 overflow-hidden">
