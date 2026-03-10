@@ -1058,7 +1058,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
           // Filter out deleted parts from localStorage
           const deletedKey = `deleted_parts_${jobRecordId}`
           const deletedParts: string[] = JSON.parse(localStorage.getItem(deletedKey) || "[]")
+          console.log("[v0] Loading videos - deletedKey:", deletedKey, "deletedParts:", deletedParts, "finalVideos parts:", finalVideos.map(fv => fv.part))
           const filteredFinalVideos = finalVideos.filter((fv) => !deletedParts.includes(String(fv.part)))
+          console.log("[v0] After filter:", filteredFinalVideos.length, "videos")
           // Merge with existing state (preserve approved/redoing flags)
           setVideoParts((prev) => {
             return filteredFinalVideos.map((fv) => {
@@ -2097,9 +2099,11 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                               const { jobRecordId } = props as StepReviewProps
                                               const deletedKey = `deleted_parts_${jobRecordId}`
                                               const deletedParts: string[] = JSON.parse(localStorage.getItem(deletedKey) || "[]")
+                                              console.log("[v0] Deleting part:", vp.part, "jobRecordId:", jobRecordId, "deletedKey:", deletedKey)
                                               if (!deletedParts.includes(vp.part)) {
                                                 deletedParts.push(vp.part)
                                                 localStorage.setItem(deletedKey, JSON.stringify(deletedParts))
+                                                console.log("[v0] Saved deleted parts:", deletedParts)
                                               }
                                             }
                                             // Remove from local state and update selection
