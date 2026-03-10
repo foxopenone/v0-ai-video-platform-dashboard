@@ -446,7 +446,16 @@ export function ReviewRoom(props: ReviewRoomProps) {
               // Filter out deleted parts from localStorage
               const deletedKey = `deleted_parts_${jobRecordId}`
               const deletedParts: string[] = JSON.parse(localStorage.getItem(deletedKey) || "[]")
-              const filteredVideos = finalVideos.filter((fv) => !deletedParts.includes(String(fv.part)))
+              console.log("[v0] DELETE CHECK - deletedKey:", deletedKey)
+              console.log("[v0] DELETE CHECK - deletedParts from localStorage:", deletedParts)
+              console.log("[v0] DELETE CHECK - finalVideos parts:", finalVideos.map(fv => ({ raw: fv.part, asString: String(fv.part) })))
+              const filteredVideos = finalVideos.filter((fv) => {
+                const partStr = String(fv.part)
+                const isDeleted = deletedParts.includes(partStr)
+                console.log("[v0] DELETE CHECK - part:", partStr, "isDeleted:", isDeleted)
+                return !isDeleted
+              })
+              console.log("[v0] DELETE CHECK - filteredVideos count:", filteredVideos.length)
               setVideoParts(filteredVideos.map((fv) => ({
                 part: String(fv.part), url: fv.url, approved: true, redoing: false,
               })))
