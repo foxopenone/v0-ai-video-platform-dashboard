@@ -2063,9 +2063,24 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                         Download
                                       </button>
                                       <button
-                                        onClick={() => {
-                                          if (confirm(`Delete Part ${vp.part.replace("part_", "")}?`)) {
-                                            // TODO: Call delete API
+                                        onClick={async () => {
+                                          const partNum = vp.part.replace("part_", "")
+                                          if (confirm(`Delete Part ${partNum}? This cannot be undone.`)) {
+                                            // Remove from local state
+                                            setVideoParts((prev) => prev.filter((p) => p.part !== vp.part))
+                                            // If this is step_review mode, also call the delete API
+                                            if (isStepReview) {
+                                              try {
+                                                const { jobRecordId } = props as StepReviewProps
+                                                await fetch("/api/delete-video-part", {
+                                                  method: "POST",
+                                                  headers: { "Content-Type": "application/json" },
+                                                  body: JSON.stringify({ recordId: jobRecordId, part: vp.part }),
+                                                })
+                                              } catch (err) {
+                                                console.error("Failed to delete video part:", err)
+                                              }
+                                            }
                                           }
                                         }}
                                         className="flex items-center gap-1.5 rounded-md border border-red-500/25 bg-red-500/10 px-3 py-1.5 text-[10px] font-medium text-red-400 transition-colors hover:bg-red-500/20"
