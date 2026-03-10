@@ -3,9 +3,12 @@
 import { useState, useEffect } from "react"
 import { 
   Users, Film, Layout, ChevronUp, ChevronDown, Trash2, Edit2, 
-  Search, RefreshCw, ArrowLeft, CreditCard, Eye, MoreVertical
+  Search, RefreshCw, ArrowLeft, CreditCard, Eye, MoreVertical, Lock
 } from "lucide-react"
 import Link from "next/link"
+
+// Simple password protection - change this password!
+const ADMIN_PASSWORD = "shortee2024"
 
 // Types
 interface DiscoveryPost {
@@ -38,8 +41,73 @@ interface Project {
 type Tab = "discovery" | "users" | "projects"
 
 export default function AdminPage() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [password, setPassword] = useState("")
+  const [loginError, setLoginError] = useState("")
   const [activeTab, setActiveTab] = useState<Tab>("discovery")
   const [searchQuery, setSearchQuery] = useState("")
+  
+  // Check if already logged in
+  useEffect(() => {
+    const auth = localStorage.getItem("admin_auth")
+    if (auth === "true") {
+      setIsAuthenticated(true)
+    }
+  }, [])
+
+  const handleLogin = () => {
+    if (password === ADMIN_PASSWORD) {
+      setIsAuthenticated(true)
+      localStorage.setItem("admin_auth", "true")
+      setLoginError("")
+    } else {
+      setLoginError("Incorrect password")
+    }
+  }
+
+  const handleLogout = () => {
+    setIsAuthenticated(false)
+    localStorage.removeItem("admin_auth")
+  }
+
+  // Login screen
+  if (!isAuthenticated) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="w-full max-w-sm space-y-6 rounded-xl border border-border/50 bg-card p-8">
+          <div className="text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--brand-pink)]/10">
+              <Lock className="h-6 w-6 text-[var(--brand-pink)]" />
+            </div>
+            <h1 className="text-xl font-semibold">Admin Panel</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Enter password to continue</p>
+          </div>
+          <div className="space-y-4">
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+              placeholder="Password"
+              className="w-full rounded-lg border border-border/50 bg-secondary/30 px-4 py-2.5 text-sm outline-none focus:border-[var(--brand-pink)]/50"
+            />
+            {loginError && (
+              <p className="text-xs text-red-400">{loginError}</p>
+            )}
+            <button
+              onClick={handleLogin}
+              className="w-full rounded-lg bg-[var(--brand-pink)] py-2.5 text-sm font-medium text-white transition-colors hover:bg-[var(--brand-pink)]/90"
+            >
+              Login
+            </button>
+          </div>
+          <Link href="/" className="block text-center text-xs text-muted-foreground hover:text-foreground">
+            Back to Home
+          </Link>
+        </div>
+      </div>
+    )
+  }
   
   // Discovery state
   const [posts, setPosts] = useState<DiscoveryPost[]>([])
