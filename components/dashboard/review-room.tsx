@@ -2084,8 +2084,18 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                         onClick={async () => {
                                           const partNum = vp.part.replace("part_", "")
                                           if (confirm(`Delete Part ${partNum}? This cannot be undone.`)) {
-                                            // Remove from local state
-                                            setVideoParts((prev) => prev.filter((p) => p.part !== vp.part))
+                                            // Remove from local state and update selection
+                                            setVideoParts((prev) => {
+                                              const remaining = prev.filter((p) => p.part !== vp.part)
+                                              // If deleted part was selected, switch to another part
+                                              if (selectedVideoPartId === vp.part && remaining.length > 0) {
+                                                const nextPart = remaining.find((p) => !!p.url) || remaining[0]
+                                                if (nextPart) {
+                                                  setSelectedVideoPartId(nextPart.part)
+                                                }
+                                              }
+                                              return remaining
+                                            })
                                             // If this is step_review mode, also call the delete API
                                             if (isStepReview) {
                                               try {
