@@ -1836,15 +1836,6 @@ export function ReviewRoom(props: ReviewRoomProps) {
                         </div>
                         {/* Inline action buttons */}
                         <div className="flex shrink-0 items-center gap-2">
-                          {isCompleted && videoParts.some((vp) => vp.url) && (
-                            <button
-                              onClick={() => videoParts.forEach((vp) => { if (vp.url) handleVideoDownload(vp.url, vp.part) })}
-                              className="flex items-center gap-1.5 rounded-lg border border-border/30 bg-secondary/15 px-4 py-1.5 text-[11px] font-medium text-foreground/80 transition-colors hover:bg-secondary/30"
-                            >
-                              <Download className="h-3 w-3" />
-                              Download
-                            </button>
-                          )}
                           {isCompleted && isStepReview && (
                             <button
                               onClick={() => {
@@ -2061,15 +2052,40 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
                               {/* Per-part action buttons */}
                               {hasUrl && (
-                                <div className="mt-2.5 flex items-center gap-2 pl-[52px]" onClick={(e) => e.stopPropagation()}>
+                                <div className="mt-2.5 flex flex-wrap items-center gap-2 pl-[52px]" onClick={(e) => e.stopPropagation()}>
                                   {isCompleted || vp.approved ? (
-                                    <button
-                                      onClick={() => handleVideoDownload(vp.url, vp.part)}
-                                      className="flex items-center gap-1.5 rounded-md border border-border/25 bg-secondary/15 px-3 py-1.5 text-[10px] font-medium text-foreground/70 transition-colors hover:bg-secondary/30"
-                                    >
-                                      <Download className="h-3 w-3" />
-                                      Download
-                                    </button>
+                                    <>
+                                      <button
+                                        onClick={() => handleVideoDownload(vp.url, vp.part)}
+                                        className="flex items-center gap-1.5 rounded-md border border-border/25 bg-secondary/15 px-3 py-1.5 text-[10px] font-medium text-foreground/70 transition-colors hover:bg-secondary/30"
+                                      >
+                                        <Download className="h-3 w-3" />
+                                        Download
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          if (confirm(`Delete Part ${vp.part.replace("part_", "")}?`)) {
+                                            // TODO: Call delete API
+                                          }
+                                        }}
+                                        className="flex items-center gap-1.5 rounded-md border border-red-500/25 bg-red-500/10 px-3 py-1.5 text-[10px] font-medium text-red-400 transition-colors hover:bg-red-500/20"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                        Delete
+                                      </button>
+                                      {isStepReview && (
+                                        <button
+                                          onClick={() => {
+                                            const { jobRecordId } = props as StepReviewProps
+                                            ;(props as StepReviewProps).onPost?.(jobRecordId, [{ part: vp.part, url: vp.url }])
+                                          }}
+                                          className="flex items-center gap-1.5 rounded-md border border-[var(--brand-pink)]/25 bg-[var(--brand-pink)]/10 px-3 py-1.5 text-[10px] font-medium text-[var(--brand-pink)] transition-colors hover:bg-[var(--brand-pink)]/20"
+                                        >
+                                          <Send className="h-3 w-3" />
+                                          Post
+                                        </button>
+                                      )}
+                                    </>
                                   ) : (
                                     <>
                                       <button
