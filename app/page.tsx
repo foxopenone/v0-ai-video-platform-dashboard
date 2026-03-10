@@ -362,6 +362,7 @@ onStop={async () => {
                 const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(recordId)}`)
                 if (res.ok) {
                   const job = await res.json()
+                  console.log("[v0] Opening project - job.Status:", job.Status, "job:", job)
                   // Always use Bible_R2_Key for bible loading; Script_R2_Key is fetched separately by ReviewRoom
                   const bibleKey = job.Bible_R2_Key
                   if (bibleKey) {

@@ -386,9 +386,11 @@ export function ReviewRoom(props: ReviewRoomProps) {
     // S7_Render/S8_Render -> VO approved, rendering
     // S9_Done -> All done
     
+    console.log("[v0] ReviewRoom init - currentStatus:", currentStatus, "statusStr:", statusStr)
     const isDone = /S9_Done|S9|ALL_DONE|DONE|COMPLETE/i.test(statusStr)
     const isBibleApproved = isDone || /S[4-9]|S4|S5|S6|S7|S8/i.test(statusStr)
     const isVoApproved = isDone || /S[7-9]|S7|S8/i.test(statusStr)
+    console.log("[v0] Status check - isDone:", isDone, "isBibleApproved:", isBibleApproved, "isVoApproved:", isVoApproved)
     
 
     
