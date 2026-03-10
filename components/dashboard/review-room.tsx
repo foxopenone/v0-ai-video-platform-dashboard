@@ -1785,6 +1785,16 @@ export function ReviewRoom(props: ReviewRoomProps) {
                             Retry Rendering
                           </button>
                         </div>
+                      ) : isCompleted && videoParts.length === 0 ? (
+                        <div className="flex flex-col items-center gap-4 px-8">
+                          <div className="relative h-16 w-16 rounded-full border-2 border-border/20 flex items-center justify-center">
+                            <Film className="h-6 w-6 text-muted-foreground/60" />
+                          </div>
+                          <p className="text-sm font-medium text-foreground/80">No videos available</p>
+                          <p className="max-w-xs text-center text-xs text-muted-foreground">
+                            All video parts have been deleted.
+                          </p>
+                        </div>
                       ) : (
                         <div className="flex flex-col items-center gap-4 px-8">
                           <div className="relative h-16 w-16">
@@ -1941,8 +1951,16 @@ export function ReviewRoom(props: ReviewRoomProps) {
                     {/* Scrollable parts list */}
                     <ScrollArea className="flex-1 p-3">
                       <div className="flex flex-col gap-2">
-                        {/* Skeleton cards (before any parts arrive) */}
-                        {videoParts.length === 0 && !videoError && !videoStopped &&
+                        {/* Empty state when completed but all parts deleted */}
+                        {videoParts.length === 0 && isCompleted && (
+                          <div className="flex flex-col items-center justify-center py-8 text-center">
+                            <Film className="h-8 w-8 text-muted-foreground/30 mb-2" />
+                            <p className="text-xs text-muted-foreground">No video parts</p>
+                          </div>
+                        )}
+
+                        {/* Skeleton cards (before any parts arrive, not when completed) */}
+                        {videoParts.length === 0 && !videoError && !videoStopped && !isCompleted &&
                           Array.from({ length: skeletonCount }).map((_, i) => {
                             const skeletonPct = Math.min(videoRenderProgress + i * 3, 90)
                             return (
