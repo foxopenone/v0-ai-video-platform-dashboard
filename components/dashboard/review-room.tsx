@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import {
   X, ChevronRight, Loader2, Play, Pause, RotateCcw,
   CheckCircle2, Download, Lock, FileText, Mic, Film,
