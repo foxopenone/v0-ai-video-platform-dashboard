@@ -47,6 +47,23 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<Tab>("discovery")
   const [searchQuery, setSearchQuery] = useState("")
   
+  // Discovery state - must be before conditional return
+  const [posts, setPosts] = useState<DiscoveryPost[]>([])
+  
+  // Users state (mock for now)
+  const [users] = useState<User[]>([
+    { id: "1", email: "user@example.com", name: "Demo User", plan: "free", credits: 12, createdAt: "2024-01-15" },
+    { id: "2", email: "pro@example.com", name: "Pro User", plan: "pro", credits: 1250, createdAt: "2024-02-20" },
+    { id: "3", email: "basic@example.com", name: "Basic User", plan: "basic", credits: 280, createdAt: "2024-03-10" },
+  ])
+  
+  // Projects state (mock for now)
+  const [projects] = useState<Project[]>([
+    { id: "p1", title: "Episode 1 +4 EP", status: "ALL_DONE", userId: "1", createdAt: "2024-03-15" },
+    { id: "p2", title: "Marketing Video", status: "S5_VO_Check", userId: "2", createdAt: "2024-03-14" },
+    { id: "p3", title: "Tutorial Series", status: "S3_Bible_Check", userId: "3", createdAt: "2024-03-13" },
+  ])
+  
   // Check if already logged in
   useEffect(() => {
     const auth = localStorage.getItem("admin_auth")
@@ -108,23 +125,6 @@ export default function AdminPage() {
       </div>
     )
   }
-  
-  // Discovery state
-  const [posts, setPosts] = useState<DiscoveryPost[]>([])
-  
-  // Users state (mock for now)
-  const [users] = useState<User[]>([
-    { id: "1", email: "user@example.com", name: "Demo User", plan: "free", credits: 12, createdAt: "2024-01-15" },
-    { id: "2", email: "pro@example.com", name: "Pro User", plan: "pro", credits: 1250, createdAt: "2024-02-20" },
-    { id: "3", email: "basic@example.com", name: "Basic User", plan: "basic", credits: 280, createdAt: "2024-03-10" },
-  ])
-  
-  // Projects state (mock for now)
-  const [projects] = useState<Project[]>([
-    { id: "rec1", title: "Episode1 +4 EP", status: "ALL_DONE", userId: "1", userEmail: "user@example.com", createdAt: "2024-03-01" },
-    { id: "rec2", title: "Marketing Video", status: "S5_Script", userId: "2", userEmail: "pro@example.com", createdAt: "2024-03-05" },
-    { id: "rec3", title: "Product Demo", status: "S3_Bible_Check", userId: "3", userEmail: "basic@example.com", createdAt: "2024-03-08" },
-  ])
 
   // Load posts from localStorage
   useEffect(() => {
