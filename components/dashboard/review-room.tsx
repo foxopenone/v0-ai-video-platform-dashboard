@@ -415,9 +415,22 @@ export function ReviewRoom(props: ReviewRoomProps) {
       })
       .finally(() => setBibleLoading(false))
 
-    // If status is S8_Render or S9, auto-switch to Final Preview tab
-    if (/S8_Render|S8|S9/i.test(statusStr)) {
+    // Set initial tab based on current status
+    // S9_Done or S8_Render -> Final Preview
+    // S6_VO/S7_Render -> Voice Over
+    // Otherwise -> Bible
+    if (/S8|S9/i.test(statusStr)) {
+      console.log("[v0] Setting activeTab to preview because status is", statusStr)
       setActiveTab("preview")
+    } else if (/S6|S7/i.test(statusStr)) {
+      console.log("[v0] Setting activeTab to voiceover because status is", statusStr)
+      setActiveTab("voiceover")
+    } else {
+      console.log("[v0] Setting activeTab to bible because status is", statusStr)
+      setActiveTab("bible")
+    }
+    
+    if (/S8|S9/i.test(statusStr)) {
       if (isDone) {
         // S9_Done: videos are already rendered, just fetch them once (no polling)
         console.log("[v0] S9_Done -- loading final videos without polling")
