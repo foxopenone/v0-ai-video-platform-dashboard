@@ -374,7 +374,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
     // Normalize status for comparison
     const statusStr = String(currentStatus || "").trim()
-    console.log("[v0] ReviewRoom init - currentStatus:", currentStatus, "statusStr:", statusStr)
+
 
     // Initialize approved phases based on current status
     // Pipeline stages:
@@ -385,11 +385,11 @@ export function ReviewRoom(props: ReviewRoomProps) {
     // S7_Render/S8_Render -> VO approved, rendering
     // S9_Done -> All done
     
-    const isBibleApproved = /S[4-9]|S4|S5|S6|S7|S8|S9/i.test(statusStr)
-    const isVoApproved = /S[7-9]|S7|S8|S9/i.test(statusStr)
-    const isDone = /S9_Done|S9/i.test(statusStr)
+    const isDone = /S9_Done|S9|ALL_DONE|DONE|COMPLETE/i.test(statusStr)
+    const isBibleApproved = isDone || /S[4-9]|S4|S5|S6|S7|S8/i.test(statusStr)
+    const isVoApproved = isDone || /S[7-9]|S7|S8/i.test(statusStr)
     
-    console.log("[v0] Status check:", { statusStr, isBibleApproved, isVoApproved, isDone })
+
     
     if (isDone) {
       setApprovedPhases(new Set(["bible", "voiceover", "preview"]))
@@ -416,21 +416,18 @@ export function ReviewRoom(props: ReviewRoomProps) {
       .finally(() => setBibleLoading(false))
 
     // Set initial tab based on current status
-    // S9_Done or S8_Render -> Final Preview
+    // S9_Done/ALL_DONE or S8_Render -> Final Preview
     // S6_VO/S7_Render -> Voice Over
     // Otherwise -> Bible
-    if (/S8|S9/i.test(statusStr)) {
-      console.log("[v0] Setting activeTab to preview because status is", statusStr)
+    if (isDone || /S8|S9/i.test(statusStr)) {
       setActiveTab("preview")
     } else if (/S6|S7/i.test(statusStr)) {
-      console.log("[v0] Setting activeTab to voiceover because status is", statusStr)
       setActiveTab("voiceover")
     } else {
-      console.log("[v0] Setting activeTab to bible because status is", statusStr)
       setActiveTab("bible")
     }
     
-    if (/S8|S9/i.test(statusStr)) {
+    if (isDone || /S8|S9/i.test(statusStr)) {
       if (isDone) {
         // S9_Done: videos are already rendered, just fetch them once (no polling)
         console.log("[v0] S9_Done -- loading final videos without polling")
