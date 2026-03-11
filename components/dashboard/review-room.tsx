@@ -1583,18 +1583,17 @@ export function ReviewRoom(props: ReviewRoomProps) {
                   ? "Sending request to backend..."
                   : `Estimated ~${Math.round(estimateTimeoutMs() / 1000)}s. Do NOT close this page.`}
               </p>
-              {/* Fake progress bar with percentage */}
+              {/* Indeterminate progress bar - never stops */}
               <div className="w-full">
                 <div className="relative h-2 w-full overflow-hidden rounded-full bg-[var(--brand-pink)]/20">
                   <div
-                    className="h-full rounded-full transition-all duration-700 animate-progress-shimmer"
+                    className="absolute h-full w-1/3 rounded-full animate-indeterminate"
                     style={{
-                      width: `${fakeProgress}%`,
-                      background: "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
+                      background: "linear-gradient(90deg, transparent, var(--brand-pink), var(--brand-purple), transparent)",
                     }}
                   />
                 </div>
-                <p className="mt-1 text-right text-[10px] text-muted-foreground">{fakeProgress}%</p>
+                <p className="mt-1 text-center text-[10px] text-muted-foreground">Processing...</p>
               </div>
               {/* Stop button */}
               <button
@@ -2312,14 +2311,13 @@ export function ReviewRoom(props: ReviewRoomProps) {
                       <div className="w-48">
                         <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-[var(--brand-pink)]/20">
                           <div
-                            className="h-full rounded-full transition-all duration-700 animate-progress-shimmer"
+                            className="absolute h-full w-1/3 rounded-full animate-indeterminate"
                             style={{
-                              width: `${fakeProgress}%`,
-                              background: "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
+                              background: "linear-gradient(90deg, transparent, var(--brand-pink), var(--brand-purple), transparent)",
                             }}
                           />
                         </div>
-                        <p className="mt-1 text-right text-[10px] text-muted-foreground">{fakeProgress}%</p>
+                        <p className="mt-1 text-center text-[10px] text-muted-foreground">Processing...</p>
                       </div>
                       <button
                         onClick={handleStop}
