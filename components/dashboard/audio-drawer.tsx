@@ -270,21 +270,28 @@ export function AudioDrawer({
                   )}
                 >
                   {/* Play / Pause */}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handlePlay(v.id, v.preview) }}
-                    disabled={!hasPreview}
-                    className={cn(
-                      "flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all",
-                      isPlaying
-                        ? "brand-gradient text-[#fff]"
-                        : hasPreview
-                          ? "bg-secondary/60 text-muted-foreground hover:text-foreground"
-                          : "cursor-not-allowed bg-secondary/30 text-muted-foreground/30",
+                  <div className="relative group/play">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handlePlay(v.id, v.preview) }}
+                      disabled={!hasPreview}
+                      className={cn(
+                        "flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all",
+                        isPlaying
+                          ? "brand-gradient text-[#fff]"
+                          : hasPreview
+                            ? "bg-secondary/60 text-muted-foreground hover:text-foreground"
+                            : "cursor-not-allowed bg-secondary/30 text-muted-foreground/30",
+                      )}
+                      aria-label={isPlaying ? "Pause preview" : hasPreview ? "Play preview" : "No preview"}
+                    >
+                      {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="ml-0.5 h-4 w-4" />}
+                    </button>
+                    {!hasPreview && (
+                      <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-black/80 px-1.5 py-0.5 text-[9px] text-white opacity-0 transition-opacity group-hover/play:opacity-100">
+                        No preview
+                      </div>
                     )}
-                    aria-label={isPlaying ? "Pause preview" : hasPreview ? "Play preview" : "No preview"}
-                  >
-                    {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="ml-0.5 h-4 w-4" />}
-                  </button>
+                  </div>
 
                   {/* Name + tags */}
                   <div className="flex-1 overflow-hidden">
