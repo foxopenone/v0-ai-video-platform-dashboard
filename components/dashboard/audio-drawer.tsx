@@ -31,7 +31,7 @@ interface AudioDrawerProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   selectedId: string | null
-  onSelect: (id: string, name: string) => void
+  onSelect: (id: string, name: string, provider?: "ElevenLabs" | "MiniMax") => void
 }
 
 /* ── Main AudioDrawer ────────────────────────────────── */
@@ -172,7 +172,7 @@ export function AudioDrawer({
           </SheetTitle>
           <SheetDescription className="text-muted-foreground">
             {isVoice
-              ? "Choose a narrator voice powered by ElevenLabs"
+              ? "Choose a narrator voice for your video"
               : "Browse categories and preview tracks"}
           </SheetDescription>
         </SheetHeader>
@@ -254,14 +254,14 @@ export function AudioDrawer({
               const hasPreview = !!v.preview && v.preview !== "#"
 
               return (
-                <div
-                  key={v.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => onSelect(v.id, v.name)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(v.id, v.name) }
-                  }}
+                                <div
+                                  key={v.id}
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={() => onSelect(v.id, v.name, v.provider)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(v.id, v.name, v.provider) }
+                                  }}
                   className={cn(
                     "group flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-left transition-all",
                     isSelected
@@ -300,12 +300,22 @@ export function AudioDrawer({
                           {genderLabel(v.gender)}
                         </span>
                       )}
-                      {v.language && (
-                        <span className="inline-flex rounded bg-secondary/60 px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground">
-                          {langLabel(v.language)}
-                        </span>
-                      )}
-                    </div>
+                                      {v.language && (
+                                        <span className="inline-flex rounded bg-secondary/60 px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground">
+                                          {langLabel(v.language)}
+                                        </span>
+                                      )}
+                                      {v.provider && (
+                                        <span className={cn(
+                                          "inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium leading-none",
+                                          v.provider === "MiniMax" 
+                                            ? "bg-orange-500/15 text-orange-400"
+                                            : "bg-violet-500/15 text-violet-400"
+                                        )}>
+                                          {v.provider}
+                                        </span>
+                                      )}
+                                    </div>
                   </div>
 
                   {/* Playing indicator */}

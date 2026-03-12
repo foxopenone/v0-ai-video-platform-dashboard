@@ -110,15 +110,17 @@ export async function uploadVideoToR2(
 
 /**
  * Fetch voices from Airtable via /api/voices.
- * Returns: { id: ElevenLabs_ID, name, gender, language, preview }
- * The `id` IS the real ElevenLabs voice_id used in production.
+ * Returns: { id, name, gender, language, preview, provider }
+ * The `id` IS the real voice_id used in production.
+ * The `provider` indicates which TTS service: "ElevenLabs" or "MiniMax"
  */
 export interface VoiceOption {
-  id: string       // ElevenLabs_ID -> used as Voice_Select value
+  id: string       // voice_id -> used as Voice_Select value
   name: string     // Display label
   gender: string   // male / female / neutral
   language: string // e.g. "en"
   preview: string  // Audio preview URL (may be empty)
+  provider: "ElevenLabs" | "MiniMax"  // TTS provider
 }
 
 export async function fetchVoices(): Promise<VoiceOption[]> {
@@ -131,6 +133,7 @@ export async function fetchVoices(): Promise<VoiceOption[]> {
       gender: string
       language: string
       preview_url: string | null
+      provider: "ElevenLabs" | "MiniMax"
     }> = await res.json()
     return data.map((v) => ({
       id: v.voice_id,
@@ -138,6 +141,7 @@ export async function fetchVoices(): Promise<VoiceOption[]> {
       gender: v.gender || "",
       language: v.language || "en",
       preview: v.preview_url || "",
+      provider: v.provider || "ElevenLabs",
     }))
   } catch (err) {
     console.error("[fetchVoices] Failed to load from /api/voices, using empty list:", err)

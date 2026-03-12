@@ -173,6 +173,7 @@ export function ConfigForm({
   const [bgmDrawerOpen, setBgmDrawerOpen] = useState(false)
   const [selectedVoice, setSelectedVoice] = useState<string | null>(null)
   const [selectedVoiceName, setSelectedVoiceName] = useState<string | null>(null)
+  const [selectedVoiceProvider, setSelectedVoiceProvider] = useState<"ElevenLabs" | "MiniMax" | null>(null)
   const [selectedBgm, setSelectedBgm] = useState<string | null>(null)
   const [selectedBgmName, setSelectedBgmName] = useState<string | null>(null)
   const [targetParts, setTargetParts] = useState<number>(3)
@@ -188,6 +189,8 @@ export function ConfigForm({
       if (v) setSelectedVoice(JSON.parse(v))
       const vn = localStorage.getItem("cfg_voiceName")
       if (vn) setSelectedVoiceName(JSON.parse(vn))
+      const vp = localStorage.getItem("cfg_voiceProvider")
+      if (vp) setSelectedVoiceProvider(JSON.parse(vp))
       const b = localStorage.getItem("cfg_bgm")
       if (b) setSelectedBgm(JSON.parse(b))
       const bn = localStorage.getItem("cfg_bgmName")
@@ -206,11 +209,12 @@ export function ConfigForm({
       localStorage.setItem("cfg_params", JSON.stringify(params))
       localStorage.setItem("cfg_voice", JSON.stringify(selectedVoice))
       localStorage.setItem("cfg_voiceName", JSON.stringify(selectedVoiceName))
+      localStorage.setItem("cfg_voiceProvider", JSON.stringify(selectedVoiceProvider))
       localStorage.setItem("cfg_bgm", JSON.stringify(selectedBgm))
       localStorage.setItem("cfg_bgmName", JSON.stringify(selectedBgmName))
       localStorage.setItem("cfg_targetParts", JSON.stringify(targetParts))
     } catch {}
-  }, [mode, params, selectedVoice, selectedVoiceName, selectedBgm, selectedBgmName, targetParts])
+  }, [mode, params, selectedVoice, selectedVoiceName, selectedVoiceProvider, selectedBgm, selectedBgmName, targetParts])
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -262,6 +266,7 @@ export function ConfigForm({
       Style_Variant: resolveParam("style"),
       Hook_Pattern: resolveParam("hook"),
       Voice_Select: selectedVoice || "default_voice",
+      Voice_Provider: selectedVoiceProvider || "ElevenLabs",  // TTS provider: ElevenLabs or MiniMax
       BGM_Select: selectedBgm || "default_bgm",
       Work_Mode: mode === "full_auto" ? "Full_Auto" : "Step_Review",
       Target_Parts: targetParts,
@@ -592,7 +597,7 @@ export function ConfigForm({
             <p className="truncate text-xs font-medium text-foreground">
               {selectedVoiceName || "Add Voice"}
             </p>
-            <p className="mt-0.5 text-[10px] text-muted-foreground">Eleven Labs AI</p>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">{selectedVoiceProvider || "Select Voice"}</p>
           </div>
         </button>
 
@@ -683,9 +688,10 @@ export function ConfigForm({
         open={voiceDrawerOpen}
         onOpenChange={setVoiceDrawerOpen}
         selectedId={selectedVoice}
-        onSelect={(id, name) => {
+        onSelect={(id, name, provider) => {
           setSelectedVoice(id)
           setSelectedVoiceName(name)
+          setSelectedVoiceProvider(provider || "ElevenLabs")
           // Do NOT close drawer -- let user preview and browse freely
         }}
       />
