@@ -81,9 +81,15 @@ export async function GET() {
   try {
     // Fetch from both tables in parallel
     const [elevenLabsRecords, minimaxRecords] = await Promise.all([
-      fetchAirtableTable("voices").catch(() => []),
-      fetchAirtableTable("MiniMax_Voices").catch(() => []),
+      fetchAirtableTable("voices").catch((e) => { console.error("[voices] ElevenLabs fetch error:", e); return [] }),
+      fetchAirtableTable("MiniMax_Voices").catch((e) => { console.error("[voices] MiniMax fetch error:", e); return [] }),
     ])
+    
+    console.log("[voices] ElevenLabs records:", elevenLabsRecords.length)
+    console.log("[voices] MiniMax records:", minimaxRecords.length)
+    if (minimaxRecords.length > 0) {
+      console.log("[voices] MiniMax first record fields:", Object.keys(minimaxRecords[0].fields))
+    }
 
     // Parse ElevenLabs voices
     const elevenLabsVoices: VoiceRecord[] = elevenLabsRecords
