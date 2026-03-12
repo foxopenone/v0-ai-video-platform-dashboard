@@ -12,10 +12,10 @@
  *   - Preview_Audio -> preview_url (Airtable ATTACHMENT field)
  *
  * MiniMax table fields:
- *   - Name          -> name
- *   - Voice_ID      -> voice_id (MiniMax voice_id)
+ *   - Name          -> name (display label)
+ *   - MiniMax_ID    -> voice_id (MiniMax voice identifier)
  *   - Gender        -> gender
- *   - Language      -> language
+ *   - Language      -> language (usually "multilingual", mapped to "zh")
  *   - Preview_Audio -> preview_url
  *
  * Caches for 5 minutes to avoid excessive Airtable reads.
@@ -100,15 +100,15 @@ export async function GET() {
       }))
 
     // Parse MiniMax voices
-    // MiniMax table uses Name as the voice identifier (no separate Voice_ID field)
+    // MiniMax table uses MiniMax_ID as the voice identifier
     // Language field contains "multilingual" - we'll normalize it to "zh" for Chinese
     const minimaxVoices: VoiceRecord[] = minimaxRecords
-      .filter((r) => r.fields.Name)
+      .filter((r) => r.fields.MiniMax_ID)
       .map((r) => {
         const lang = String(r.fields.Language || "").trim().toLowerCase()
         return {
           name: String(r.fields.Name || "Unnamed").trim(),
-          voice_id: String(r.fields.Name || "").trim(), // MiniMax uses Name as voice_id
+          voice_id: String(r.fields.MiniMax_ID || "").trim(),
           gender: String(r.fields.Gender || "").trim().toLowerCase(),
           language: lang === "multilingual" ? "zh" : lang || "zh",
           preview_url: extractAttachmentUrl(r.fields.Preview_Audio),
