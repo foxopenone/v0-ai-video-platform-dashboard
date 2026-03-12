@@ -85,11 +85,7 @@ export async function GET() {
       fetchAirtableTable("MiniMax_Voices").catch((e) => { console.error("[voices] MiniMax fetch error:", e); return [] }),
     ])
     
-    console.log("[voices] ElevenLabs records:", elevenLabsRecords.length)
-    console.log("[voices] MiniMax records:", minimaxRecords.length)
-    if (minimaxRecords.length > 0) {
-      console.log("[voices] MiniMax first record fields:", Object.keys(minimaxRecords[0].fields))
-    }
+
 
     // Parse ElevenLabs voices
     const elevenLabsVoices: VoiceRecord[] = elevenLabsRecords
@@ -104,16 +100,21 @@ export async function GET() {
       }))
 
     // Parse MiniMax voices
+    // MiniMax table uses Name as the voice identifier (no separate Voice_ID field)
+    // Language field contains "multilingual" - we'll normalize it to "zh" for Chinese
     const minimaxVoices: VoiceRecord[] = minimaxRecords
-      .filter((r) => r.fields.Voice_ID)
-      .map((r) => ({
-        name: String(r.fields.Name || "Unnamed").trim(),
-        voice_id: String(r.fields.Voice_ID).trim(),
-        gender: String(r.fields.Gender || "").trim().toLowerCase(),
-        language: String(r.fields.Language || "en").trim().toLowerCase(),
-        preview_url: extractAttachmentUrl(r.fields.Preview_Audio),
-        provider: "MiniMax" as const,
-      }))
+      .filter((r) => r.fields.Name)
+      .map((r) => {
+        const lang = String(r.fields.Language || "").trim().toLowerCase()
+        return {
+          name: String(r.fields.Name || "Unnamed").trim(),
+          voice_id: String(r.fields.Name || "").trim(), // MiniMax uses Name as voice_id
+          gender: String(r.fields.Gender || "").trim().toLowerCase(),
+          language: lang === "multilingual" ? "zh" : lang || "zh",
+          preview_url: extractAttachmentUrl(r.fields.Preview_Audio),
+          provider: "MiniMax" as const,
+        }
+      })
 
     // Merge and return all voices
     const allVoices = [...elevenLabsVoices, ...minimaxVoices]
