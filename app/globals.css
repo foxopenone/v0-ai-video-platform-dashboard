@@ -99,12 +99,13 @@
 }
 
 @keyframes indeterminate {
-  0% { left: -40%; }
-  100% { left: 100%; }
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
 }
 
 .animate-indeterminate {
-  animation: indeterminate 1.2s ease-in-out infinite;
+  animation: indeterminate 1.5s ease-in-out infinite;
+  width: 33%;
 }
 
 @keyframes progress-shimmer {

@@ -1587,9 +1587,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
               <div className="w-full">
                 <div className="relative h-2 w-full overflow-hidden rounded-full bg-[var(--brand-pink)]/20">
                   <div
-                    className="absolute h-full w-1/3 rounded-full animate-indeterminate"
+                    className="h-full rounded-full animate-indeterminate"
                     style={{
-                      background: "linear-gradient(90deg, transparent, var(--brand-pink), var(--brand-purple), transparent)",
+                      background: "linear-gradient(90deg, var(--brand-pink), var(--brand-purple), var(--brand-pink))",
                     }}
                   />
                 </div>
@@ -2311,9 +2311,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
                       <div className="w-48">
                         <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-[var(--brand-pink)]/20">
                           <div
-                            className="absolute h-full w-1/3 rounded-full animate-indeterminate"
+                            className="h-full rounded-full animate-indeterminate"
                             style={{
-                              background: "linear-gradient(90deg, transparent, var(--brand-pink), var(--brand-purple), transparent)",
+                              background: "linear-gradient(90deg, var(--brand-pink), var(--brand-purple), var(--brand-pink))",
                             }}
                           />
                         </div>
