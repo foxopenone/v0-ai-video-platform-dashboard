@@ -1469,17 +1469,26 @@ export function ReviewRoom(props: ReviewRoomProps) {
                 <span className="text-xs font-semibold tabular-nums text-foreground">{Math.round(animatedPct)}%</span>
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-secondary/30">
-                <div
-                  className={cn(
-                    "h-full rounded-full transition-[width] duration-300 ease-out",
-                    progressPolling && "animate-progress-shimmer"
-                  )}
-                  style={{
-                    width: `${Math.max(animatedPct, 3)}%`,
-                    background: "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
+              {/* Show filled portion */}
+              <div
+                className="h-full rounded-full transition-[width] duration-300 ease-out"
+                style={{
+                  width: `${Math.max(animatedPct, 3)}%`,
+                  background: "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
+                }}
+              />
+              {/* Overlay shimmer animation when polling to show activity */}
+              {progressPolling && (
+                <div 
+                  className="relative -mt-2 h-2 w-full"
+                  style={{ 
+                    background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.15) 50%, transparent 100%)",
+                    animation: "shimmer 1.5s infinite",
+                    backgroundSize: "200% 100%",
                   }}
                 />
-              </div>
+              )}
+            </div>
             </div>
 
             {/* S8 special message */}
