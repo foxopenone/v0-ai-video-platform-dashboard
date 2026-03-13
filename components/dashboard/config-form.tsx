@@ -173,7 +173,7 @@ export function ConfigForm({
   const [bgmDrawerOpen, setBgmDrawerOpen] = useState(false)
   const [selectedVoice, setSelectedVoice] = useState<string | null>(null)
   const [selectedVoiceName, setSelectedVoiceName] = useState<string | null>(null)
-  const [selectedVoiceProvider, setSelectedVoiceProvider] = useState<"ElevenLabs" | "MiniMax" | null>(null)
+  const [selectedVoiceProvider, setSelectedVoiceProvider] = useState<"ElevenLabs" | "Azure" | null>(null)
   const [selectedBgm, setSelectedBgm] = useState<string | null>(null)
   const [selectedBgmName, setSelectedBgmName] = useState<string | null>(null)
   const [targetParts, setTargetParts] = useState<number>(3)

@@ -1,7 +1,7 @@
 /**
  * /api/voices
  *
- * Fetches voices from both "voices" (ElevenLabs) and "MiniMax_Voices" tables.
+ * Fetches voices from both "voices" (ElevenLabs) and "Azure_Voices" tables.
  * Returns: [{ name, voice_id, gender, language, preview_url, provider }]
  *
  * ElevenLabs table fields:
@@ -11,12 +11,12 @@
  *   - Language      -> language (e.g. "en")
  *   - Preview_Audio -> preview_url (Airtable ATTACHMENT field)
  *
- * MiniMax table fields:
+ * Azure table fields:
  *   - Name          -> name (display label)
- *   - MiniMax_ID    -> voice_id (MiniMax voice identifier)
+ *   - Azure_ID      -> voice_id (Azure voice identifier, e.g. "zh-CN-XiaoxiaoNeural")
  *   - Gender        -> gender
- *   - Language      -> language (usually "multilingual", mapped to "zh")
- *   - Preview_Audio -> preview_url
+ *   - Language      -> language (e.g. "zh-CN")
+ *   - Preview_Audio -> preview_url (direct URL string, NOT attachment)
  *
  * Caches for 5 minutes to avoid excessive Airtable reads.
  */
@@ -33,7 +33,7 @@ export interface VoiceRecord {
   gender: string
   language: string
   preview_url: string | null
-  provider: "ElevenLabs" | "MiniMax"
+  provider: "ElevenLabs" | "Azure"
 }
 
 /** Extract URL from an Airtable attachment field (array of {url, filename, ...}) */
@@ -80,12 +80,10 @@ export async function GET() {
 
   try {
     // Fetch from both tables in parallel
-    const [elevenLabsRecords, minimaxRecords] = await Promise.all([
+    const [elevenLabsRecords, azureRecords] = await Promise.all([
       fetchAirtableTable("voices").catch((e) => { console.error("[voices] ElevenLabs fetch error:", e); return [] }),
-      fetchAirtableTable("MiniMax_Voices").catch((e) => { console.error("[voices] MiniMax fetch error:", e); return [] }),
+      fetchAirtableTable("Azure_Voices").catch((e) => { console.error("[voices] Azure fetch error:", e); return [] }),
     ])
-    
-
 
     // Parse ElevenLabs voices
     const elevenLabsVoices: VoiceRecord[] = elevenLabsRecords
@@ -99,26 +97,32 @@ export async function GET() {
         provider: "ElevenLabs" as const,
       }))
 
-    // Parse MiniMax voices
-    // MiniMax table uses MiniMax_ID as the voice identifier
-    // Language field contains "multilingual" - we'll normalize it to "zh" for Chinese
-    const minimaxVoices: VoiceRecord[] = minimaxRecords
-      .filter((r) => r.fields.MiniMax_ID)
+    // Parse Azure voices
+    // Azure table uses Azure_ID as the voice identifier (e.g. "zh-CN-XiaoxiaoNeural")
+    // Preview_Audio is a direct URL string, NOT an attachment array
+    const azureVoices: VoiceRecord[] = azureRecords
+      .filter((r) => r.fields.Azure_ID)
       .map((r) => {
-        const lang = String(r.fields.Language || "").trim().toLowerCase()
+        const lang = String(r.fields.Language || "zh-CN").trim().toLowerCase()
+        // Normalize language: "zh-cn" -> "zh", keep others as-is
+        const normalizedLang = lang.startsWith("zh") ? "zh" : lang.split("-")[0] || "zh"
         return {
           name: String(r.fields.Name || "Unnamed").trim(),
-          voice_id: String(r.fields.MiniMax_ID || "").trim(),
+          voice_id: `azure:${String(r.fields.Azure_ID || "").trim()}`, // Prefix with azure:
           gender: String(r.fields.Gender || "").trim().toLowerCase(),
-          language: lang === "multilingual" ? "zh" : lang || "zh",
-          preview_url: extractAttachmentUrl(r.fields.Preview_Audio),
-          provider: "MiniMax" as const,
+          language: normalizedLang,
+          preview_url: typeof r.fields.Preview_Audio === "string" ? r.fields.Preview_Audio : null,
+          provider: "Azure" as const,
         }
       })
 
-    // Merge and return all voices
-    const allVoices = [...elevenLabsVoices, ...minimaxVoices]
-    return NextResponse.json(allVoices)
+    // Merge and return all voices with cache headers
+    const allVoices = [...elevenLabsVoices, ...azureVoices]
+    return NextResponse.json(allVoices, {
+      headers: {
+        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
+      },
+    })
   } catch (err) {
     console.error("[voices] Fetch error:", err)
     return NextResponse.json({ error: "Failed to query Airtable voices" }, { status: 500 })

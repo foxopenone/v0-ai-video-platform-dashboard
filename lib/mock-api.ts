@@ -112,7 +112,8 @@ export async function uploadVideoToR2(
  * Fetch voices from Airtable via /api/voices.
  * Returns: { id, name, gender, language, preview, provider }
  * The `id` IS the real voice_id used in production.
- * The `provider` indicates which TTS service: "ElevenLabs" or "MiniMax"
+ * For Azure voices, id is prefixed with "azure:" (e.g. "azure:zh-CN-XiaoxiaoNeural")
+ * The `provider` indicates which TTS service: "ElevenLabs" or "Azure"
  */
 export interface VoiceOption {
   id: string       // voice_id -> used as Voice_Select value
@@ -120,7 +121,7 @@ export interface VoiceOption {
   gender: string   // male / female / neutral
   language: string // e.g. "en"
   preview: string  // Audio preview URL (may be empty)
-  provider: "ElevenLabs" | "MiniMax"  // TTS provider
+  provider: "ElevenLabs" | "Azure"  // TTS provider
 }
 
 export async function fetchVoices(): Promise<VoiceOption[]> {
@@ -133,7 +134,7 @@ export async function fetchVoices(): Promise<VoiceOption[]> {
       gender: string
       language: string
       preview_url: string | null
-      provider: "ElevenLabs" | "MiniMax"
+      provider: "ElevenLabs" | "Azure"
     }> = await res.json()
     return data.map((v) => ({
       id: v.voice_id,

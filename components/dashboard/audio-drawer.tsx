@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
+import useSWR from "swr"
 import {
   Play, Pause, Check, Plus, Mic, Music, Volume2, AlertCircle,
   ChevronRight, FolderOpen, Filter,
@@ -31,7 +32,7 @@ interface AudioDrawerProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   selectedId: string | null
-  onSelect: (id: string, name: string, provider?: "ElevenLabs" | "MiniMax") => void
+  onSelect: (id: string, name: string, provider?: "ElevenLabs" | "Azure") => void
 }
 
 /* ── Main AudioDrawer ────────────────────────────────── */
@@ -43,11 +44,7 @@ export function AudioDrawer({
   selectedId,
   onSelect,
 }: AudioDrawerProps) {
-  const [voiceItems, setVoiceItems] = useState<VoiceOption[]>([])
-  const [bgmItems, setBgmItems] = useState<BGMItem[]>([])
   const [playingId, setPlayingId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const isVoice = type === "voice"
@@ -56,29 +53,31 @@ export function AudioDrawer({
   const [genderFilter, setGenderFilter] = useState<string>("all")
   const [languageFilter, setLanguageFilter] = useState<string>("all")
 
-  /* ── Load data ─────────────────────────────────────── */
+  /* ── Load data with SWR caching ─────────────────────── */
+  // Voices: cached globally, revalidate every 5 minutes
+  const { data: voiceItems = [], error: voiceError, isLoading: voiceLoading } = useSWR<VoiceOption[]>(
+    isVoice && open ? "/api/voices" : null,
+    () => fetchVoices(),
+    { revalidateOnFocus: false, dedupingInterval: 300000 } // 5 min cache
+  )
+  
+  // BGM: cached globally
+  const { data: bgmItems = [], error: bgmError, isLoading: bgmLoading } = useSWR<BGMItem[]>(
+    !isVoice && open ? "bgm-list" : null,
+    () => fetchBGM(),
+    { revalidateOnFocus: false, dedupingInterval: 300000 }
+  )
+  
+  const loading = isVoice ? voiceLoading : bgmLoading
+  const error = isVoice ? (voiceError?.message || null) : (bgmError?.message || null)
+  
+  // Expand category of selected BGM
   useEffect(() => {
-    if (!open) return
-    setLoading(true)
-    setError(null)
-
-    if (isVoice) {
-      fetchVoices()
-        .then((data) => { setVoiceItems(data); setLoading(false) })
-        .catch((err) => { setError(err instanceof Error ? err.message : "Failed to load voices"); setLoading(false) })
-    } else {
-      fetchBGM()
-        .then((data) => {
-          setBgmItems(data)
-          if (selectedId) {
-            const sel = data.find((d) => d.id === selectedId)
-            if (sel) setExpandedCategories(new Set([sel.category]))
-          }
-          setLoading(false)
-        })
-        .catch((err) => { setError(err instanceof Error ? err.message : "Failed to load BGM"); setLoading(false) })
+    if (!isVoice && selectedId && bgmItems.length > 0) {
+      const sel = bgmItems.find((d) => d.id === selectedId)
+      if (sel) setExpandedCategories(new Set([sel.category]))
     }
-  }, [open, isVoice]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isVoice, selectedId, bgmItems])
 
   /* ── Clean up audio on close ───────────────────────── */
   useEffect(() => {
@@ -315,8 +314,8 @@ export function AudioDrawer({
                                       {v.provider && (
                                         <span className={cn(
                                           "inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium leading-none",
-                                          v.provider === "MiniMax" 
-                                            ? "bg-orange-500/15 text-orange-400"
+                                          v.provider === "Azure" 
+                                            ? "bg-sky-500/15 text-sky-400"
                                             : "bg-violet-500/15 text-violet-400"
                                         )}>
                                           {v.provider}
