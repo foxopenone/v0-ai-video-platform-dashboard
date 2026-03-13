@@ -230,10 +230,27 @@ export function AudioDrawer({
 
         <ScrollArea className={cn("pr-1", isVoice && !loading ? "mt-3" : "mt-6")} style={{ height: "calc(100vh - 16rem)" }}>
           <div className="flex flex-col gap-2 pr-3">
-            {/* Loading */}
-            {loading && Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-16 animate-pulse rounded-lg bg-secondary/40" />
-            ))}
+            {/* Loading skeleton - show more items to fill screen */}
+            {loading && (
+              <div className="space-y-2">
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--brand-pink)] border-t-transparent" />
+                  <span className="text-xs text-muted-foreground">Loading voices...</span>
+                </div>
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 rounded-lg border border-border/30 bg-secondary/20 p-3">
+                    <div className="h-10 w-10 animate-pulse rounded-full bg-secondary/50" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 w-32 animate-pulse rounded bg-secondary/50" />
+                      <div className="flex gap-2">
+                        <div className="h-3 w-12 animate-pulse rounded bg-secondary/40" />
+                        <div className="h-3 w-8 animate-pulse rounded bg-secondary/40" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Error */}
             {error && !loading && (

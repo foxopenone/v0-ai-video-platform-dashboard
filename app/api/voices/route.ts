@@ -23,6 +23,7 @@
 
 import { NextResponse } from "next/server"
 
+// API Version: 2 - Azure voices (removed MiniMax)
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY!
 const RAW_BASE_ID = process.env.AIRTABLE_BASE_ID ?? ""
 const AIRTABLE_BASE_ID = RAW_BASE_ID === "appyXXzlQNigMCMOQ" ? "appyXXzIQNigMCMOQ" : RAW_BASE_ID
