@@ -56,7 +56,7 @@ async function fetchAirtableTable(tableName: string): Promise<Array<{ id: string
     const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(tableName)}?${params}`
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
-      next: { revalidate: 300 },
+      cache: "no-store", // Always fetch fresh data from Airtable
     })
 
     if (!res.ok) {

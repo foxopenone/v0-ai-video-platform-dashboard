@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import useSWR from "swr"
 import {
   Play, Pause, Check, Plus, Mic, Music, Volume2, AlertCircle,
-  ChevronRight, FolderOpen, Filter,
+  ChevronRight, FolderOpen, Filter, RefreshCw,
 } from "lucide-react"
 import {
   Sheet,
@@ -55,14 +55,14 @@ export function AudioDrawer({
 
   /* ── Load data with SWR caching ─────────────────────── */
   // Voices: cached globally, revalidate every 5 minutes
-  const { data: voiceItems = [], error: voiceError, isLoading: voiceLoading } = useSWR<VoiceOption[]>(
+  const { data: voiceItems = [], error: voiceError, isLoading: voiceLoading, mutate: mutateVoices } = useSWR<VoiceOption[]>(
     isVoice && open ? "/api/voices" : null,
     () => fetchVoices(),
     { revalidateOnFocus: false, dedupingInterval: 300000 } // 5 min cache
   )
   
   // BGM: cached globally
-  const { data: bgmItems = [], error: bgmError, isLoading: bgmLoading } = useSWR<BGMItem[]>(
+  const { data: bgmItems = [], error: bgmError, isLoading: bgmLoading, mutate: mutateBgm } = useSWR<BGMItem[]>(
     !isVoice && open ? "bgm-list" : null,
     () => fetchBGM(),
     { revalidateOnFocus: false, dedupingInterval: 300000 }
@@ -70,6 +70,15 @@ export function AudioDrawer({
   
   const loading = isVoice ? voiceLoading : bgmLoading
   const error = isVoice ? (voiceError?.message || null) : (bgmError?.message || null)
+  
+  // Refresh data function
+  const handleRefresh = useCallback(() => {
+    if (isVoice) {
+      mutateVoices()
+    } else {
+      mutateBgm()
+    }
+  }, [isVoice, mutateVoices, mutateBgm])
   
   // Expand category of selected BGM
   useEffect(() => {
@@ -203,11 +212,19 @@ export function AudioDrawer({
             {(genderFilter !== "all" || languageFilter !== "all") && (
               <button
                 onClick={() => { setGenderFilter("all"); setLanguageFilter("all") }}
-                className="ml-auto text-[10px] text-muted-foreground hover:text-foreground"
+                className="text-[10px] text-muted-foreground hover:text-foreground"
               >
                 Clear
               </button>
             )}
+            <button
+              onClick={handleRefresh}
+              disabled={loading}
+              className="ml-auto flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+              title="Refresh voice list"
+            >
+              <RefreshCw className={cn("h-3 w-3", loading && "animate-spin")} />
+            </button>
           </div>
         )}
 
