@@ -23,10 +23,16 @@ import {
 import type { BibleJSON, BibleCharacter, ScriptJSON, VOTimelineEvent } from "@/lib/mock-api"
 import { cn } from "@/lib/utils"
 
-// ---------- Inline CSS Animations for Progress Bars ----------
-// This style tag is rendered once and provides CSS animations for all progress bars
-const ProgressBarStyles = () => (
-  <style dangerouslySetInnerHTML={{ __html: `
+// ---------- CSS Animations for Progress Bars ----------
+// Inject CSS into document head on first render
+let rrCssInjected = false
+function injectProgressBarCSS() {
+  if (rrCssInjected || typeof document === "undefined") return
+  rrCssInjected = true
+  
+  const style = document.createElement("style")
+  style.id = "review-room-progress-css"
+  style.textContent = `
     @keyframes rr-shimmer {
       0% { transform: translateX(-100%); }
       100% { transform: translateX(200%); }
@@ -41,8 +47,16 @@ const ProgressBarStyles = () => (
     .rr-slide {
       animation: rr-slide 1.5s ease-in-out infinite !important;
     }
-  `}} />
-)
+  `
+  document.head.appendChild(style)
+}
+
+// Hook to inject CSS on mount
+function useProgressBarStyles() {
+  useEffect(() => {
+    injectProgressBarCSS()
+  }, [])
+}
 
 // ---------- Types ----------
 interface Episode {
@@ -218,6 +232,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
 
 
+  // Inject progress bar CSS animations on mount
+  useProgressBarStyles()
+  
   // Step Review state
   const [bible, setBible] = useState<BibleJSON | null>(null)
   const [originalBible, setOriginalBible] = useState<BibleJSON | null>(null)
@@ -1367,7 +1384,6 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
     return (
       <div className="fixed inset-0 z-50 flex flex-col bg-background">
-        <ProgressBarStyles />
         <header className="flex h-12 shrink-0 items-center justify-between border-b border-border/30 px-5">
           <div className="flex items-center gap-2 text-sm">
             <button onClick={onClose} className="text-muted-foreground transition-colors hover:text-foreground">Home</button>
@@ -1584,7 +1600,6 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
     return (
       <div className="fixed inset-0 z-50 flex flex-col bg-background">
-        <ProgressBarStyles />
         {/* ===== GLOBAL ACTION LOCK OVERLAY (hidden on preview tab - preview has its own UI) ===== */}
         {actionLocked && activeTab !== "preview" && (
           <div className="absolute inset-0 z-[60] flex items-center justify-center bg-background/80 backdrop-blur-sm">
