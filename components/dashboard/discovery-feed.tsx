@@ -123,7 +123,7 @@ function PostedFeedCard({
       <div className="relative flex aspect-[9/16] items-center justify-center overflow-hidden bg-black/80">
         {firstVideo?.url ? (
           <video
-            src={firstVideo.url}
+            src={`${firstVideo.url}${firstVideo.url.includes('?') ? '&' : '?'}t=${Date.now()}`}
             muted
             playsInline
             preload="metadata"

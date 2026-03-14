@@ -40,7 +40,13 @@ export async function uploadVideoToR2(
   const targetJid = jobId || Date.now().toString()
 
   // Phase 1 – obtain upload ticket
-  console.log(`[Phase 1] Target: ${targetUid}/${targetJid}. Fetching ticket...`)
+  // Add timestamp to filename to prevent caching issues
+  const timestamp = Date.now()
+  const ext = file.name.includes('.') ? file.name.substring(file.name.lastIndexOf('.')) : ''
+  const baseName = file.name.includes('.') ? file.name.substring(0, file.name.lastIndexOf('.')) : file.name
+  const timestampedFilename = `${baseName}_${timestamp}${ext}`
+  
+  console.log(`[Phase 1] Target: ${targetUid}/${targetJid}. Fetching ticket for ${timestampedFilename}...`)
   onProgress(5)
 
   let ticketRes: Response
@@ -53,7 +59,7 @@ export async function uploadVideoToR2(
         body: JSON.stringify({
           user_id: targetUid,
           job_id: targetJid,
-          filename: file.name,
+          filename: timestampedFilename,
         }),
       }
     )

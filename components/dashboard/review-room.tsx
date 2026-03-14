@@ -1759,7 +1759,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                           autoPlay
                           preload="metadata"
                           className="h-full w-full object-contain"
-                          src={selectedVp.url}
+                          src={`${selectedVp.url}${selectedVp.url.includes('?') ? '&' : '?'}t=${Date.now()}`}
                         >
                           Your browser does not support the video tag.
                         </video>
