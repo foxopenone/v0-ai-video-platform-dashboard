@@ -29,17 +29,12 @@ export async function submitProject(data: WebhookPayload) {
  * Matches the handleVideoUpload contract exactly.
  * Falls back to safe defaults for userId / jobId to prevent any blocking.
  */
-export interface UploadResult {
-  r2Key: string
-  timestampedFilename: string
-}
-
 export async function uploadVideoToR2(
   file: File,
   userId: string,
   jobId: string,
   onProgress: (progress: number) => void
-): Promise<UploadResult> {
+): Promise<string> {
   // Force safe defaults
   const targetUid = userId || "test_user"
   const targetJid = jobId || Date.now().toString()
@@ -111,7 +106,7 @@ export async function uploadVideoToR2(
   if (uploadRes.status === 200) {
     console.log("%c[SUCCESS] R2 Key: " + r2_key, "color: green")
     onProgress(100)
-    return { r2Key: r2_key, timestampedFilename }
+    return r2_key
   } else {
     const errBody = await uploadRes.text().catch(() => "")
     console.error("[v0] Phase 2 FAIL body:", errBody)
