@@ -33,6 +33,7 @@ const PARAMS = [
     label: "ASR_Language",
     icon: Globe2,
     options: ["Auto", "EN", "ZH", "YUE", "KO", "FR", "RU", "HI", "JA", "ES"],
+    required: true,
   },
   {
     key: "language",
@@ -80,10 +81,12 @@ interface TileProps {
   icon: React.ComponentType<{ className?: string }>
   options: readonly string[]
   onChange: (value: string) => void
+  required?: boolean
 }
 
-function ParamTile({ label, value, icon: Icon, options, onChange }: TileProps) {
+function ParamTile({ label, value, icon: Icon, options, onChange, required }: TileProps) {
   const [open, setOpen] = useState(false)
+  const showRequiredWarning = required && !value
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -93,17 +96,22 @@ function ParamTile({ label, value, icon: Icon, options, onChange }: TileProps) {
             "flex items-center gap-2 rounded-md border px-2.5 py-2 text-left transition-all",
             value
               ? "border-[var(--brand-pink)]/20 bg-[var(--brand-pink)]/5"
-              : "border-border/40 bg-secondary/20 hover:border-border/60 hover:bg-secondary/35"
+              : showRequiredWarning
+                ? "border-red-500/50 bg-red-500/5 hover:border-red-500/70"
+                : "border-border/40 bg-secondary/20 hover:border-border/60 hover:bg-secondary/35"
           )}
         >
-          <Icon className={cn("h-3.5 w-3.5 shrink-0", value ? "text-[var(--brand-pink)]" : "text-foreground/70")} />
+          <Icon className={cn("h-3.5 w-3.5 shrink-0", value ? "text-[var(--brand-pink)]" : showRequiredWarning ? "text-red-400" : "text-foreground/70")} />
           <div className="flex-1 overflow-hidden">
-            <p className="text-[9px] font-medium uppercase tracking-wider text-foreground/90">{label}</p>
+            <p className="text-[9px] font-medium uppercase tracking-wider text-foreground/90">
+              {label}
+              {required && <span className="ml-0.5 text-red-400">*</span>}
+            </p>
             <p className={cn(
               "truncate text-[11px]",
-              value ? "font-medium text-foreground" : "text-muted-foreground/60"
+              value ? "font-medium text-foreground" : showRequiredWarning ? "text-red-400" : "text-muted-foreground/60"
             )}>
-              {value || "Select"}
+              {value || (showRequiredWarning ? "Required" : "Select")}
             </p>
           </div>
           <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground/50" />
@@ -542,6 +550,7 @@ export function ConfigForm({
             icon={p.icon}
             options={p.options}
             onChange={(val) => setParams((prev) => ({ ...prev, [p.key]: val }))}
+            required={"required" in p && p.required}
           />
         ))}
         {/* Target Parts - number input tile (before Hook) */}
