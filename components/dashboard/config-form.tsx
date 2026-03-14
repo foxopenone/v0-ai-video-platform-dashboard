@@ -256,6 +256,12 @@ export function ConfigForm({
       setErrorMsg("Video_Files is empty. Please upload at least one video.")
       return
     }
+    
+    // Validate required fields
+    if (!params.asr_language) {
+      setErrorMsg("ASR_Language is required. Please select a language.")
+      return
+    }
 
     // Auth gate: must be logged in to dispatch
     const supabase = createClient()
@@ -280,7 +286,7 @@ export function ConfigForm({
       id: jobId,
       Video_Files: videoFiles,
       Platform: resolveParam("platform"),
-      ASR_Language: resolveParam("asr_language") || "Auto",  // ASR/Deepgram language mode
+      ASR_Language: params.asr_language,  // ASR/Deepgram language mode (required)
       Language: resolveParam("language"),  // VO_Language for TTS
       POV: resolveParam("pov"),
       Tone: resolveParam("tone"),
