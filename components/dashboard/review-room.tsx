@@ -23,6 +23,46 @@ import {
 import type { BibleJSON, BibleCharacter, ScriptJSON, VOTimelineEvent } from "@/lib/mock-api"
 import { cn } from "@/lib/utils"
 
+// ---------- Inline Keyframe Styles for Progress Bars ----------
+// Inject styles into document head on mount
+function useProgressStyles() {
+  useEffect(() => {
+    const styleId = "review-room-progress-keyframes"
+    if (document.getElementById(styleId)) return
+    
+    const style = document.createElement("style")
+    style.id = styleId
+    style.textContent = `
+      @keyframes progress-slide-anim {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(400%); }
+      }
+      @keyframes shimmer-anim {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(200%); }
+      }
+      .progress-bar-slide {
+        animation: progress-slide-anim 1.5s ease-in-out infinite !important;
+      }
+      .progress-bar-shimmer {
+        position: relative;
+        overflow: hidden;
+      }
+      .progress-bar-shimmer::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 50%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+        animation: shimmer-anim 1.2s ease-in-out infinite !important;
+      }
+    `
+    document.head.appendChild(style)
+  }, [])
+}
+
 // ---------- Types ----------
 interface Episode {
   id: string
@@ -194,6 +234,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const isStepReview = props.mode === "step_review"
   const isProgress = props.mode === "progress"
   const onClose = props.onClose
+
+  // Inject progress bar animation styles
+  useProgressStyles()
 
   // Step Review state
   const [bible, setBible] = useState<BibleJSON | null>(null)
@@ -1828,7 +1871,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                             <div
                               className={cn(
                                 "h-full rounded-full transition-all duration-700 ease-out",
-                                !allDone && !videoStopped && "animate-progress-shimmer"
+                                !allDone && !videoStopped && "progress-bar-shimmer"
                               )}
                               style={{
                                 width: `${overallPct}%`,
@@ -1973,7 +2016,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                     </div>
                                     <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary/25">
                                       <div
-                                        className="h-full rounded-full transition-all duration-1000 ease-out animate-progress-shimmer"
+                                        className="h-full rounded-full transition-all duration-1000 ease-out progress-bar-shimmer"
                                         style={{
                                           width: `${skeletonPct}%`,
                                           background: "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
@@ -2047,7 +2090,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                     <div
                                       className={cn(
                                         "h-full rounded-full transition-all duration-500 ease-out",
-                                        !hasUrl && !vp.approved && !vp.redoing && "animate-progress-shimmer"
+                                        !hasUrl && !vp.approved && !vp.redoing && "progress-bar-shimmer"
                                       )}
                                       style={{
                                         width: `${partPct}%`,
@@ -2801,7 +2844,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                 <Loader2 className="h-6 w-6 animate-spin text-[var(--brand-pink)]" />
                 <p className="text-xs font-medium text-foreground/80">AI Processing...</p>
                 <div className="relative h-1 w-24 overflow-hidden rounded-full bg-[var(--brand-pink)]/20">
-                  <div className="absolute inset-y-0 left-0 w-1/3 animate-[progress-slide_1.8s_ease-in-out_infinite] rounded-full bg-[var(--brand-pink)]" />
+                  <div className="absolute inset-y-0 left-0 w-1/3 progress-bar-slide rounded-full bg-[var(--brand-pink)]" />
                 </div>
               </div>
             ) : phase === 3 && currentEp ? (
@@ -2863,7 +2906,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                 <Loader2 className="h-8 w-8 animate-spin text-[var(--brand-pink)]" />
                 <p className="text-sm font-medium text-foreground/80">AI is processing your project...</p>
                 <div className="relative h-1.5 w-48 overflow-hidden rounded-full bg-[var(--brand-pink)]/20">
-                  <div className="absolute inset-y-0 left-0 w-1/3 animate-[progress-slide_1.8s_ease-in-out_infinite] rounded-full bg-[var(--brand-pink)]" />
+                  <div className="absolute inset-y-0 left-0 w-1/3 progress-bar-slide rounded-full bg-[var(--brand-pink)]" />
                 </div>
                 <p className="text-[10px] text-muted-foreground">This may take a few minutes</p>
               </div>
