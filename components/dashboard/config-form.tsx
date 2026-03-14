@@ -533,7 +533,8 @@ export function ConfigForm({
 
       {/* Parameter tiles grid - compact, converged */}
       <div className="grid grid-cols-3 gap-2">
-        {PARAMS.map((p) => (
+        {/* Render params before hook */}
+        {PARAMS.filter(p => p.key !== "hook" && p.key !== "energy_level").map((p) => (
           <ParamTile
             key={p.key}
             label={p.label}
@@ -543,7 +544,7 @@ export function ConfigForm({
             onChange={(val) => setParams((prev) => ({ ...prev, [p.key]: val }))}
           />
         ))}
-        {/* Target Parts - number input tile */}
+        {/* Target Parts - number input tile (before Hook) */}
         <div
           className={cn(
             "flex items-center gap-2 rounded-md border px-2.5 py-2",
@@ -578,6 +579,17 @@ export function ConfigForm({
             ))}
           </select>
         </div>
+        {/* Hook and Energy Level - after Target Parts */}
+        {PARAMS.filter(p => p.key === "hook" || p.key === "energy_level").map((p) => (
+          <ParamTile
+            key={p.key}
+            label={p.label}
+            value={params[p.key]}
+            icon={p.icon}
+            options={p.options}
+            onChange={(val) => setParams((prev) => ({ ...prev, [p.key]: val }))}
+          />
+        ))}
       </div>
 
       {/* Audio Slots - expanded cards with waveform hint */}
