@@ -23,31 +23,26 @@ import {
 import type { BibleJSON, BibleCharacter, ScriptJSON, VOTimelineEvent } from "@/lib/mock-api"
 import { cn } from "@/lib/utils"
 
-// ---------- JavaScript-Driven Animation Hook ----------
-// Uses requestAnimationFrame for smooth, reliable animation
-function useShimmerAnimation() {
-  const posRef = useRef(0)
-  const [, forceUpdate] = useState(0)
-  
-  useEffect(() => {
-    let animationId: number
-    let lastTime = 0
-    
-    const animate = (currentTime: number) => {
-      if (currentTime - lastTime >= 30) {
-        posRef.current = (posRef.current + 3) % 120
-        forceUpdate(n => n + 1)
-        lastTime = currentTime
-      }
-      animationId = requestAnimationFrame(animate)
+// ---------- Inline CSS Animations for Progress Bars ----------
+// This style tag is rendered once and provides CSS animations for all progress bars
+const ProgressBarStyles = () => (
+  <style dangerouslySetInnerHTML={{ __html: `
+    @keyframes rr-shimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(200%); }
     }
-    
-    animationId = requestAnimationFrame(animate)
-    return () => cancelAnimationFrame(animationId)
-  }, [])
-  
-  return posRef.current - 20 // Return position from -20 to 100
-}
+    @keyframes rr-slide {
+      0% { left: -30%; }
+      100% { left: 100%; }
+    }
+    .rr-shimmer {
+      animation: rr-shimmer 1.2s ease-in-out infinite !important;
+    }
+    .rr-slide {
+      animation: rr-slide 1.5s ease-in-out infinite !important;
+    }
+  `}} />
+)
 
 // ---------- Types ----------
 interface Episode {
@@ -221,8 +216,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const isProgress = props.mode === "progress"
   const onClose = props.onClose
 
-  // JavaScript-driven shimmer animation position (0-100)
-  const shimmerPos = useShimmerAnimation()
+
 
   // Step Review state
   const [bible, setBible] = useState<BibleJSON | null>(null)
@@ -1373,6 +1367,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
     return (
       <div className="fixed inset-0 z-50 flex flex-col bg-background">
+        <ProgressBarStyles />
         <header className="flex h-12 shrink-0 items-center justify-between border-b border-border/30 px-5">
           <div className="flex items-center gap-2 text-sm">
             <button onClick={onClose} className="text-muted-foreground transition-colors hover:text-foreground">Home</button>
@@ -1589,6 +1584,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
     return (
       <div className="fixed inset-0 z-50 flex flex-col bg-background">
+        <ProgressBarStyles />
         {/* ===== GLOBAL ACTION LOCK OVERLAY (hidden on preview tab - preview has its own UI) ===== */}
         {actionLocked && activeTab !== "preview" && (
           <div className="absolute inset-0 z-[60] flex items-center justify-center bg-background/80 backdrop-blur-sm">
@@ -1865,14 +1861,11 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                     : "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
                               }}
                             >
-                              {/* JS-driven shimmer light */}
+                              {/* CSS shimmer animation */}
                               {!allDone && !videoStopped && (
                                 <div
-                                  className="absolute inset-y-0 w-1/2"
-                                  style={{
-                                    left: `${shimmerPos}%`,
-                                    background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent)",
-                                  }}
+                                  className="absolute inset-0 rr-shimmer"
+                                  style={{ background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.5) 50%, transparent 100%)" }}
                                 />
                               )}
                             </div>
@@ -2017,13 +2010,10 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                           opacity: 0.5,
                                         }}
                                       >
-                                        {/* JS-driven shimmer */}
+                                        {/* CSS shimmer animation */}
                                         <div
-                                          className="absolute inset-y-0 w-1/2"
-                                          style={{
-                                            left: `${shimmerPos}%`,
-                                            background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent)",
-                                          }}
+                                          className="absolute inset-0 rr-shimmer"
+                                          style={{ background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.6) 50%, transparent 100%)" }}
                                         />
                                       </div>
                                     </div>
@@ -2103,15 +2093,11 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                               : "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
                                       }}
                                     >
-                                      {/* JS-driven shimmer when processing */}
+                                      {/* CSS shimmer animation when processing */}
                                       {!hasUrl && !vp.approved && !vp.redoing && (
                                         <div
-                                          className="absolute inset-y-0 w-1/2"
-                                          style={{
-                                            left: `${shimmerPos - 25}%`,
-                                            background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent)",
-                                            transition: shimmerPos === 0 ? "none" : "left 30ms linear",
-                                          }}
+                                          className="absolute inset-0 rr-shimmer"
+                                          style={{ background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.5) 50%, transparent 100%)" }}
                                         />
                                       )}
                                     </div>
@@ -2856,10 +2842,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                 <Loader2 className="h-6 w-6 animate-spin text-[var(--brand-pink)]" />
                 <p className="text-xs font-medium text-foreground/80">AI Processing...</p>
                 <div className="relative h-1 w-24 overflow-hidden rounded-full bg-[var(--brand-pink)]/20">
-                  <div 
-                    className="absolute inset-y-0 w-1/3 rounded-full bg-[var(--brand-pink)]" 
-                    style={{ left: `${shimmerPos}%` }}
-                  />
+                  <div className="absolute inset-y-0 w-1/3 rounded-full bg-[var(--brand-pink)] rr-slide" />
                 </div>
               </div>
             ) : phase === 3 && currentEp ? (
@@ -2921,10 +2904,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                 <Loader2 className="h-8 w-8 animate-spin text-[var(--brand-pink)]" />
                 <p className="text-sm font-medium text-foreground/80">AI is processing your project...</p>
                 <div className="relative h-1.5 w-48 overflow-hidden rounded-full bg-[var(--brand-pink)]/20">
-                  <div 
-                    className="absolute inset-y-0 w-1/3 rounded-full bg-[var(--brand-pink)]" 
-                    style={{ left: `${shimmerPos}%` }}
-                  />
+                  <div className="absolute inset-y-0 w-1/3 rounded-full bg-[var(--brand-pink)] rr-slide" />
                 </div>
                 <p className="text-[10px] text-muted-foreground">This may take a few minutes</p>
               </div>
