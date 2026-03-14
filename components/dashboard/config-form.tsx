@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client"
 import {
   Mic, Music, Rocket, CheckCircle2,
   Monitor, Globe2, Eye, Palette, Sparkles, Anchor,
-  ChevronDown, Wand2, LayoutGrid
+  ChevronDown, Wand2, LayoutGrid, Zap
 } from "lucide-react"
 import {
   Popover,
@@ -29,8 +29,14 @@ const PARAMS = [
     options: ["TikTok", "Reels", "YouTube_Shorts", "YouTube_Long"],
   },
   {
+    key: "asr_language",
+    label: "ASR_Language",
+    icon: Globe2,
+    options: ["Auto", "EN", "ZH", "YUE", "KO", "FR", "RU", "HI", "JA", "ES"],
+  },
+  {
     key: "language",
-    label: "Language",
+    label: "VO_Language",
     icon: Globe2,
     options: ["English", "Spanish", "Chinese", "Korean", "Arabic", "Portuguese", "Hindi", "Indonesian"],
   },
@@ -57,6 +63,12 @@ const PARAMS = [
     label: "Hook",
     icon: Anchor,
     options: ["POV_Shock", "Question", "Roast", "Suspense", "Emotional"],
+  },
+  {
+    key: "energy_level",
+    label: "Energy_Level",
+    icon: Zap,
+    options: ["Low", "Medium", "High", "Extreme"],
   },
 ] as const
 
@@ -260,13 +272,15 @@ export function ConfigForm({
       id: jobId,
       Video_Files: videoFiles,
       Platform: resolveParam("platform"),
-      Language: resolveParam("language"),
+      ASR_Language: resolveParam("asr_language") || "Auto",  // ASR/Deepgram language mode
+      Language: resolveParam("language"),  // VO_Language for TTS
       POV: resolveParam("pov"),
       Tone: resolveParam("tone"),
       Style_Variant: resolveParam("style"),
       Hook_Pattern: resolveParam("hook"),
+      Energy_Level: resolveParam("energy_level") || "Medium",  // Energy level, default Medium
       Voice_Select: selectedVoice || "default_voice",
-      Voice_Provider: selectedVoiceProvider || "ElevenLabs",  // TTS provider: ElevenLabs or MiniMax
+      Voice_Provider: selectedVoiceProvider || "ElevenLabs",  // TTS provider: ElevenLabs or Azure
       BGM_Select: selectedBgm || "default_bgm",
       Work_Mode: mode === "full_auto" ? "Full_Auto" : "Step_Review",
       Target_Parts: targetParts,
