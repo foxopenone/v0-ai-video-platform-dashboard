@@ -38,32 +38,21 @@ export function AnimatedProgress({
         {isIndeterminate ? (
           /* Indeterminate: sliding bar animation */
           <div
-            className={cn("absolute left-0 w-1/3", heightClass)}
+            className={cn("absolute left-0 w-1/3 rounded-full", heightClass)}
             style={{
               background: "linear-gradient(90deg, transparent, var(--brand-pink), var(--brand-purple), transparent)",
               animation: "progress-slide 1.5s ease-in-out infinite",
             }}
           />
         ) : (
-          /* Determinate: filled bar with shimmer */
-          <>
-            <div
-              className={cn("rounded-full transition-[width] duration-500 ease-out", heightClass)}
-              style={{
-                width: `${Math.max(value, 3)}%`,
-                background: "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
-              }}
-            />
-            {/* Shimmer overlay - always animating */}
-            <div
-              className="absolute inset-0 rounded-full"
-              style={{
-                background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%)",
-                backgroundSize: "200% 100%",
-                animation: "shimmer 2s ease-in-out infinite",
-              }}
-            />
-          </>
+          /* Determinate: filled bar with shimmer using ::after pseudo-element */
+          <div
+            className={cn("rounded-full animate-progress-shimmer", heightClass)}
+            style={{
+              width: `${Math.max(value, 3)}%`,
+              background: "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
+            }}
+          />
         )}
       </div>
       {showPercentage && value !== undefined && (
