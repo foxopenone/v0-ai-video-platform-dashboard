@@ -277,13 +277,13 @@ export function ConfigForm({
       POV: resolveParam("pov"),
       Tone: resolveParam("tone"),
       Style_Variant: resolveParam("style"),
+      Target_Parts: targetParts,
       Hook_Pattern: resolveParam("hook"),
       Energy_Level: resolveParam("energy_level") || "Medium",  // Energy level, default Medium
       Voice_Select: selectedVoice || "default_voice",
       Voice_Provider: selectedVoiceProvider || "ElevenLabs",  // TTS provider: ElevenLabs or Azure
       BGM_Select: selectedBgm || "default_bgm",
       Work_Mode: mode === "full_auto" ? "Full_Auto" : "Step_Review",
-      Target_Parts: targetParts,
     }
 
     try {
