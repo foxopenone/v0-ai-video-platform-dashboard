@@ -93,9 +93,8 @@
 }
 
 @keyframes progress-slide {
-  0% { left: -33%; }
-  50% { left: 100%; }
-  100% { left: -33%; }
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
 }
 
 @keyframes indeterminate {

@@ -8,6 +8,7 @@ import {
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { AnimatedProgress } from "@/components/ui/animated-progress"
 import {
   fetchBibleFromR2,
   fetchScriptFromR2,
@@ -1468,27 +1469,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                 <span className="text-[10px] text-muted-foreground">Processing...</span>
                 <span className="text-xs font-semibold tabular-nums text-foreground">{Math.round(animatedPct)}%</span>
               </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-secondary/30">
-              {/* Show filled portion */}
-              <div
-                className="h-full rounded-full transition-[width] duration-300 ease-out"
-                style={{
-                  width: `${Math.max(animatedPct, 3)}%`,
-                  background: "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
-                }}
-              />
-              {/* Overlay shimmer animation when polling to show activity */}
-              {progressPolling && (
-                <div 
-                  className="relative -mt-2 h-2 w-full"
-                  style={{ 
-                    background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.15) 50%, transparent 100%)",
-                    animation: "shimmer 1.5s infinite",
-                    backgroundSize: "200% 100%",
-                  }}
-                />
-              )}
-            </div>
+              <AnimatedProgress value={animatedPct} size="md" />
             </div>
 
             {/* S8 special message */}
@@ -1594,14 +1575,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
               </p>
               {/* Indeterminate progress bar - never stops */}
               <div className="w-full">
-                <div className="relative h-2 w-full overflow-hidden rounded-full bg-[var(--brand-pink)]/20">
-                  <div
-                    className="h-full rounded-full animate-indeterminate"
-                    style={{
-                      background: "linear-gradient(90deg, var(--brand-pink), var(--brand-purple), var(--brand-pink))",
-                    }}
-                  />
-                </div>
+                <AnimatedProgress size="md" />
                 <p className="mt-1 text-center text-[10px] text-muted-foreground">Processing...</p>
               </div>
               {/* Stop button */}
@@ -2318,14 +2292,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                         This usually takes 1~3 minutes. Please wait...
                       </p>
                       <div className="w-48">
-                        <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-[var(--brand-pink)]/20">
-                          <div
-                            className="h-full rounded-full animate-indeterminate"
-                            style={{
-                              background: "linear-gradient(90deg, var(--brand-pink), var(--brand-purple), var(--brand-pink))",
-                            }}
-                          />
-                        </div>
+                        <AnimatedProgress size="sm" />
                         <p className="mt-1 text-center text-[10px] text-muted-foreground">Processing...</p>
                       </div>
                       <button
