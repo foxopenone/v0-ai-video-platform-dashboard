@@ -1243,7 +1243,8 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const [progressVideoParts, setProgressVideoParts] = useState<Array<{ part: string; url: string }>>([])
   const [animatedPct, setAnimatedPct] = useState(0) // Smoothly animated percentage for progress bar
 
-  // Animate progress bar percentage smoothly
+  // Animate progress bar percentage - NEVER stops, always slowly increasing
+  // This gives users confidence that the backend is working
   useEffect(() => {
     if (!isProgress || !progressPolling) return
     const STAGE_PCT: Record<string, number> = {
@@ -1258,15 +1259,27 @@ export function ReviewRoom(props: ReviewRoomProps) {
       S9_Done: 100,
     }
     const targetPct = STAGE_PCT[progressStatus] ?? 5
-    // Animate towards target
+    // Calculate max allowed (next stage - 1, but never exceed 99 unless done)
+    const maxAllowed = progressStatus === "S9_Done" ? 100 : Math.min(targetPct + 8, 99)
+    
     const interval = setInterval(() => {
       setAnimatedPct((prev) => {
-        if (prev >= targetPct) return targetPct
-        // Increment by 0.5-1% each tick for smooth animation
-        const step = Math.max(0.5, (targetPct - prev) * 0.08)
-        return Math.min(prev + step, targetPct)
+        // If below target, move faster towards it
+        if (prev < targetPct) {
+          const step = Math.max(0.5, (targetPct - prev) * 0.1)
+          return Math.min(prev + step, targetPct)
+        }
+        // If at or above target but below max, keep slowly creeping up
+        // This ensures the progress bar NEVER stops moving
+        if (prev < maxAllowed) {
+          // Slow creep: 0.1-0.3% per tick, slowing down as we approach max
+          const remaining = maxAllowed - prev
+          const creepStep = Math.max(0.05, remaining * 0.02)
+          return Math.min(prev + creepStep, maxAllowed)
+        }
+        return prev
       })
-    }, 100)
+    }, 150) // Slightly slower tick for more natural feel
     return () => clearInterval(interval)
   }, [isProgress, progressPolling, progressStatus])
 
