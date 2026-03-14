@@ -1,7 +1,7 @@
 "use client"
 
 import { cn } from "@/lib/utils"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 interface AnimatedProgressProps {
   /** Current progress percentage (0-100). If undefined, shows indeterminate animation */
@@ -15,14 +15,10 @@ interface AnimatedProgressProps {
 }
 
 /**
- * Animated progress bar that ALWAYS shows movement using JavaScript intervals.
+ * Animated progress bar that ALWAYS shows movement using requestAnimationFrame.
  * 
- * Key insight: CSS keyframe animations are unreliable in Next.js/React SSR environments.
- * This component uses setInterval to drive all animations via React state updates,
- * guaranteeing that the progress bar will always animate regardless of CSS issues.
- * 
- * - When value is provided: shows filled portion with moving shimmer light
- * - When value is undefined: shows sliding bar animation
+ * Uses requestAnimationFrame for smooth, reliable animation that won't stop.
+ * The shimmer continuously moves from left to right across the progress bar.
  */
 export function AnimatedProgress({ 
   value, 
@@ -33,20 +29,31 @@ export function AnimatedProgress({
   const height = { sm: 6, md: 8, lg: 12 }[size]
   const isIndeterminate = value === undefined
   
-  // JavaScript-driven animation position (0-100)
-  const [animPos, setAnimPos] = useState(0)
+  // Use ref for animation position to avoid re-renders stopping animation
+  const animPosRef = useRef(0)
+  const [, forceUpdate] = useState(0)
   
-  // Drive animation with setInterval - this ALWAYS works regardless of CSS
+  // Drive animation with requestAnimationFrame - guaranteed smooth animation
   useEffect(() => {
-    const interval = setInterval(() => {
-      setAnimPos(prev => {
-        const next = prev + 2 // Move 2% each tick
-        return next > 100 ? 0 : next // Reset to 0 when reaching 100
-      })
-    }, 30) // 30ms = ~33fps, smooth animation
+    let animationId: number
+    let lastTime = 0
     
-    return () => clearInterval(interval)
+    const animate = (currentTime: number) => {
+      // Move ~3% per 30ms for smooth animation
+      if (currentTime - lastTime >= 30) {
+        animPosRef.current = (animPosRef.current + 3) % 120 // 0-120 range for smooth looping
+        forceUpdate(n => n + 1) // Trigger re-render
+        lastTime = currentTime
+      }
+      animationId = requestAnimationFrame(animate)
+    }
+    
+    animationId = requestAnimationFrame(animate)
+    return () => cancelAnimationFrame(animationId)
   }, [])
+
+  // Calculate shimmer position (-20 to 100)
+  const shimmerLeft = animPosRef.current - 20
 
   return (
     <div className={cn("w-full", className)}>
@@ -55,19 +62,18 @@ export function AnimatedProgress({
         style={{ height, backgroundColor: "rgba(236, 72, 153, 0.2)" }}
       >
         {isIndeterminate ? (
-          /* Indeterminate: sliding bar driven by JS state */
+          /* Indeterminate: sliding bar */
           <div
             className="absolute rounded-full"
             style={{
               width: "30%",
               height: "100%",
-              left: `${animPos - 30}%`, // Start off-screen left, move right
+              left: `${shimmerLeft}%`,
               background: "linear-gradient(90deg, transparent, #ec4899, #a855f7, transparent)",
-              transition: animPos === 0 ? "none" : "left 30ms linear", // No transition on reset
             }}
           />
         ) : (
-          /* Determinate: filled bar with JS-driven shimmer */
+          /* Determinate: filled bar with shimmer */
           <div
             className="relative rounded-full overflow-hidden"
             style={{
@@ -77,15 +83,14 @@ export function AnimatedProgress({
               transition: "width 0.3s ease-out",
             }}
           >
-            {/* Shimmer light driven by JS state - moves across the filled bar */}
+            {/* Shimmer light - continuously moving */}
             <div
               className="absolute"
               style={{
-                width: "40%",
+                width: "50%",
                 height: "100%",
-                left: `${animPos - 20}%`,
-                background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent)",
-                transition: animPos === 0 ? "none" : "left 30ms linear",
+                left: `${shimmerLeft}%`,
+                background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent)",
               }}
             />
           </div>

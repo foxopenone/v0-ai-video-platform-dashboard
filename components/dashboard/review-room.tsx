@@ -24,18 +24,29 @@ import type { BibleJSON, BibleCharacter, ScriptJSON, VOTimelineEvent } from "@/l
 import { cn } from "@/lib/utils"
 
 // ---------- JavaScript-Driven Animation Hook ----------
-// CSS keyframes are unreliable in Next.js/React SSR. Use JS interval instead.
+// Uses requestAnimationFrame for smooth, reliable animation
 function useShimmerAnimation() {
-  const [pos, setPos] = useState(0)
+  const posRef = useRef(0)
+  const [, forceUpdate] = useState(0)
   
   useEffect(() => {
-    const interval = setInterval(() => {
-      setPos(prev => (prev + 2) > 100 ? 0 : prev + 2)
-    }, 30) // 30ms = ~33fps
-    return () => clearInterval(interval)
+    let animationId: number
+    let lastTime = 0
+    
+    const animate = (currentTime: number) => {
+      if (currentTime - lastTime >= 30) {
+        posRef.current = (posRef.current + 3) % 120
+        forceUpdate(n => n + 1)
+        lastTime = currentTime
+      }
+      animationId = requestAnimationFrame(animate)
+    }
+    
+    animationId = requestAnimationFrame(animate)
+    return () => cancelAnimationFrame(animationId)
   }, [])
   
-  return pos
+  return posRef.current - 20 // Return position from -20 to 100
 }
 
 // ---------- Types ----------
@@ -1859,9 +1870,8 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                 <div
                                   className="absolute inset-y-0 w-1/2"
                                   style={{
-                                    left: `${shimmerPos - 25}%`,
+                                    left: `${shimmerPos}%`,
                                     background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent)",
-                                    transition: shimmerPos === 0 ? "none" : "left 30ms linear",
                                   }}
                                 />
                               )}
@@ -2011,9 +2021,8 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                         <div
                                           className="absolute inset-y-0 w-1/2"
                                           style={{
-                                            left: `${shimmerPos - 25}%`,
+                                            left: `${shimmerPos}%`,
                                             background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent)",
-                                            transition: shimmerPos === 0 ? "none" : "left 30ms linear",
                                           }}
                                         />
                                       </div>
@@ -2849,7 +2858,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                 <div className="relative h-1 w-24 overflow-hidden rounded-full bg-[var(--brand-pink)]/20">
                   <div 
                     className="absolute inset-y-0 w-1/3 rounded-full bg-[var(--brand-pink)]" 
-                    style={{ left: `${shimmerPos - 33}%`, transition: shimmerPos === 0 ? "none" : "left 30ms linear" }}
+                    style={{ left: `${shimmerPos}%` }}
                   />
                 </div>
               </div>
@@ -2914,7 +2923,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                 <div className="relative h-1.5 w-48 overflow-hidden rounded-full bg-[var(--brand-pink)]/20">
                   <div 
                     className="absolute inset-y-0 w-1/3 rounded-full bg-[var(--brand-pink)]" 
-                    style={{ left: `${shimmerPos - 33}%`, transition: shimmerPos === 0 ? "none" : "left 30ms linear" }}
+                    style={{ left: `${shimmerPos}%` }}
                   />
                 </div>
                 <p className="text-[10px] text-muted-foreground">This may take a few minutes</p>
