@@ -1,7 +1,7 @@
 "use client"
 
 import { cn } from "@/lib/utils"
-import { useEffect, useRef } from "react"
+import { useEffect, useState } from "react"
 
 interface AnimatedProgressProps {
   /** Current progress percentage (0-100). If undefined, shows indeterminate animation */
@@ -15,11 +15,14 @@ interface AnimatedProgressProps {
 }
 
 /**
- * Animated progress bar that always shows movement.
- * - When value is provided: shows filled portion with shimmer overlay
- * - When value is undefined: shows indeterminate sliding animation
+ * Animated progress bar that ALWAYS shows movement using JavaScript intervals.
  * 
- * Uses CSS animations injected directly into head for maximum compatibility.
+ * Key insight: CSS keyframe animations are unreliable in Next.js/React SSR environments.
+ * This component uses setInterval to drive all animations via React state updates,
+ * guaranteeing that the progress bar will always animate regardless of CSS issues.
+ * 
+ * - When value is provided: shows filled portion with moving shimmer light
+ * - When value is undefined: shows sliding bar animation
  */
 export function AnimatedProgress({ 
   value, 
@@ -29,29 +32,20 @@ export function AnimatedProgress({
 }: AnimatedProgressProps) {
   const height = { sm: 6, md: 8, lg: 12 }[size]
   const isIndeterminate = value === undefined
-  const injectedRef = useRef(false)
-
-  // Inject keyframes into document head once
+  
+  // JavaScript-driven animation position (0-100)
+  const [animPos, setAnimPos] = useState(0)
+  
+  // Drive animation with setInterval - this ALWAYS works regardless of CSS
   useEffect(() => {
-    if (injectedRef.current) return
-    injectedRef.current = true
+    const interval = setInterval(() => {
+      setAnimPos(prev => {
+        const next = prev + 2 // Move 2% each tick
+        return next > 100 ? 0 : next // Reset to 0 when reaching 100
+      })
+    }, 30) // 30ms = ~33fps, smooth animation
     
-    const styleId = "animated-progress-keyframes"
-    if (document.getElementById(styleId)) return
-    
-    const style = document.createElement("style")
-    style.id = styleId
-    style.textContent = `
-      @keyframes ap-slide {
-        0% { transform: translateX(-100%); }
-        100% { transform: translateX(400%); }
-      }
-      @keyframes ap-shimmer {
-        0% { transform: translateX(-100%); }
-        100% { transform: translateX(200%); }
-      }
-    `
-    document.head.appendChild(style)
+    return () => clearInterval(interval)
   }, [])
 
   return (
@@ -61,18 +55,19 @@ export function AnimatedProgress({
         style={{ height, backgroundColor: "rgba(236, 72, 153, 0.2)" }}
       >
         {isIndeterminate ? (
-          /* Indeterminate: sliding bar animation */
+          /* Indeterminate: sliding bar driven by JS state */
           <div
             className="absolute rounded-full"
             style={{
-              width: "25%",
+              width: "30%",
               height: "100%",
+              left: `${animPos - 30}%`, // Start off-screen left, move right
               background: "linear-gradient(90deg, transparent, #ec4899, #a855f7, transparent)",
-              animation: "ap-slide 1.5s ease-in-out infinite",
+              transition: animPos === 0 ? "none" : "left 30ms linear", // No transition on reset
             }}
           />
         ) : (
-          /* Determinate: filled bar with shimmer overlay */
+          /* Determinate: filled bar with JS-driven shimmer */
           <div
             className="relative rounded-full overflow-hidden"
             style={{
@@ -82,12 +77,15 @@ export function AnimatedProgress({
               transition: "width 0.3s ease-out",
             }}
           >
-            {/* Shimmer overlay */}
+            {/* Shimmer light driven by JS state - moves across the filled bar */}
             <div
-              className="absolute inset-0"
+              className="absolute"
               style={{
-                background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%)",
-                animation: "ap-shimmer 1.2s ease-in-out infinite",
+                width: "40%",
+                height: "100%",
+                left: `${animPos - 20}%`,
+                background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent)",
+                transition: animPos === 0 ? "none" : "left 30ms linear",
               }}
             />
           </div>
