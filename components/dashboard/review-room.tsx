@@ -2565,13 +2565,28 @@ export function ReviewRoom(props: ReviewRoomProps) {
                     </div>
                   )}
 
-                  {/* Empty state: no data, not polling, no error */}
-                  {!scriptPolling && !scriptData && !scriptError && (
-                    <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-border/20 bg-secondary/10 px-6 py-20">
-                      <Mic className="h-12 w-12 text-muted-foreground/40" />
-                      <p className="text-center text-base font-semibold text-foreground/80">
-                        No voice over content
-                      </p>
+  {/* Empty state: no data, not polling, no error */}
+  {/* In Full_Auto mode, show loading spinner while waiting for script */}
+  {!scriptPolling && !scriptData && !scriptError && isFullAuto && !isCompleted && (
+  <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-border/20 bg-secondary/10 px-6 py-20">
+  <Loader2 className="h-12 w-12 animate-spin text-[var(--brand-pink)]" />
+  <p className="text-center text-base font-semibold text-foreground/80">
+    Loading Voice Over...
+  </p>
+  <p className="max-w-sm text-center text-sm text-muted-foreground">
+    Full Auto mode is processing. Please wait while the script is being generated.
+  </p>
+  </div>
+  )}
+  {!scriptPolling && !scriptData && !scriptError && (!isFullAuto || isCompleted) && (
+  <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-border/20 bg-secondary/10 px-6 py-20">
+  <Mic className="h-12 w-12 text-muted-foreground/40" />
+  <p className="text-center text-base font-semibold text-foreground/80">
+    No voice over content
+  </p>
+  <p className="max-w-sm text-center text-sm text-muted-foreground">
+    The voice over generation was stopped or has not started yet.
+  </p>
                       <p className="max-w-sm text-center text-sm text-muted-foreground">
                         The voice over generation was stopped or has not started yet.
                       </p>
