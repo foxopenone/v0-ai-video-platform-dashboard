@@ -1800,6 +1800,10 @@ export function ReviewRoom(props: ReviewRoomProps) {
             {/* ====== FINAL PREVIEW TAB (full width, outside ScrollArea) ====== */}
             {activeTab === "preview" && (() => {
               const selectedVp = videoParts.find((vp) => vp.part === selectedVideoPartId) || null
+              // Debug: Log video state to diagnose playback issues
+              console.log("[v0] Preview Tab - selectedVideoPartId:", selectedVideoPartId)
+              console.log("[v0] Preview Tab - videoParts:", videoParts.map(vp => ({ part: vp.part, url: vp.url?.substring(0, 80), redoing: vp.redoing })))
+              console.log("[v0] Preview Tab - selectedVp:", selectedVp ? { part: selectedVp.part, url: selectedVp.url?.substring(0, 80), redoing: selectedVp.redoing } : null)
               const readyCount = videoParts.filter((vp) => !!vp.url && !vp.redoing).length
               // Use actual videoParts count, not episodeCount (episodes != parts)
               const totalParts = Math.max(videoParts.length, 1)
@@ -1824,12 +1828,24 @@ export function ReviewRoom(props: ReviewRoomProps) {
                           controls
                           autoPlay
                           preload="metadata"
+                          crossOrigin="anonymous"
                           className="h-full w-full object-contain"
                           src={selectedVp.url}
+                          onLoadStart={() => console.log("[v0] Video loadstart for part", selectedVp.part)}
+                          onCanPlay={() => console.log("[v0] Video canplay for part", selectedVp.part)}
                           onError={(e) => {
-                            // Log error but do NOT retry automatically to avoid request loops
-                            console.error("[v0] Video load error for part", selectedVp.part, e)
+                            const video = e.currentTarget
+                            const error = video.error
+                            console.error("[v0] Video load error for part", selectedVp.part, {
+                              errorCode: error?.code,
+                              errorMessage: error?.message,
+                              networkState: video.networkState,
+                              readyState: video.readyState,
+                              src: selectedVp.url?.substring(0, 100)
+                            })
                           }}
+                          onStalled={() => console.log("[v0] Video stalled for part", selectedVp.part)}
+                          onAbort={() => console.log("[v0] Video aborted for part", selectedVp.part)}
                         >
                           Your browser does not support the video tag.
                         </video>
