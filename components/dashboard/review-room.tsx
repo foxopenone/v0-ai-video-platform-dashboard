@@ -286,13 +286,14 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const currentStatusStr = isStepReview ? (props as StepReviewProps).currentStatus : ""
   const isAutoFlowPhase = /^S[1246]|S4_Visuals|S6_Audio|S7_Render/.test(currentStatusStr)
 
-  // Auto-select first video part with a URL when videos arrive
+  // Auto-select first video part with a URL when videos arrive (only once)
   useEffect(() => {
     if (videoParts.length > 0 && !selectedVideoPartId) {
       const first = videoParts.find((vp) => vp.url)
       if (first) setSelectedVideoPartId(first.part)
     }
-  }, [videoParts, selectedVideoPartId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoParts.length]) // Only trigger when parts count changes, not on every videoParts update
 
   // Legacy review state
   const [project, setProject] = useState<ProjectDetail | null>(null)
@@ -1105,20 +1106,26 @@ export function ReviewRoom(props: ReviewRoomProps) {
           const deletedParts: string[] = JSON.parse(localStorage.getItem(deletedKey) || "[]")
           const filteredFinalVideos = finalVideos.filter((fv) => !deletedParts.includes(String(fv.part)))
           // Merge with existing state (preserve approved/redoing flags)
+          // IMPORTANT: Only update state if data actually changed to avoid unnecessary re-renders
           setVideoParts((prev) => {
-            return filteredFinalVideos.map((fv) => {
+            const newParts = filteredFinalVideos.map((fv) => {
               const existing = prev.find((p) => p.part === String(fv.part))
               if (existing && existing.redoing && fv.url) {
                 // Redo completed: new URL arrived, clear redoing
                 return { part: String(fv.part), url: fv.url, approved: false, redoing: false }
               }
               if (existing && existing.approved) {
-                // Keep approved state, update URL in case it changed
+                // Keep approved state, only update if URL actually changed
+                if (existing.url === fv.url) return existing // Return same object reference
                 return { ...existing, url: fv.url }
               }
               if (existing && !fv.url) {
                 // URL not yet ready for this part
                 return existing
+              }
+              // Check if existing part already matches
+              if (existing && existing.url === (fv.url || "") && !existing.redoing) {
+                return existing // No change needed, return same reference
               }
               // New part or update
               return {
@@ -1128,6 +1135,12 @@ export function ReviewRoom(props: ReviewRoomProps) {
                 redoing: existing?.redoing ?? false,
               }
             })
+            // Check if array actually changed (compare by URL/approved/redoing)
+            if (prev.length === newParts.length && 
+                prev.every((p, i) => p === newParts[i])) {
+              return prev // Return previous array reference to prevent re-render
+            }
+            return newParts
           })
 
           // Check if all parts have URLs (rendering complete)
@@ -1807,12 +1820,16 @@ export function ReviewRoom(props: ReviewRoomProps) {
                     <div className="relative flex flex-1 items-center justify-center rounded-xl border border-border/10 bg-black/60 overflow-hidden min-h-[320px]">
                       {selectedVp?.url && !selectedVp.redoing ? (
                         <video
-                          key={selectedVp.url}
+                          key={`video-${selectedVp.part}`}
                           controls
                           autoPlay
-                          preload="auto"
+                          preload="metadata"
                           className="h-full w-full object-contain"
                           src={selectedVp.url}
+                          onError={(e) => {
+                            // Log error but do NOT retry automatically to avoid request loops
+                            console.error("[v0] Video load error for part", selectedVp.part, e)
+                          }}
                         >
                           Your browser does not support the video tag.
                         </video>
