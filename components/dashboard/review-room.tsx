@@ -1810,9 +1810,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
                           key={selectedVp.url}
                           controls
                           autoPlay
-                          preload="metadata"
+                          preload="auto"
                           className="h-full w-full object-contain"
-                          src={`${selectedVp.url}${selectedVp.url.includes('?') ? '&' : '?'}t=${Date.now()}`}
+                          src={selectedVp.url}
                         >
                           Your browser does not support the video tag.
                         </video>
