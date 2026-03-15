@@ -104,6 +104,8 @@ interface ProgressProps {
   mode: "progress"
   jobRecordId: string
   projectTitle: string
+  /** Number of source videos (for timeout calculation). Defaults to 1 if not provided. */
+  videoCount?: number
   onClose: () => void
   onDelete?: () => void
   onStop?: () => void
@@ -1466,11 +1468,37 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
         // No R2 key yet -- keep polling
         consecutiveHits++
-        // After 30 polls (~2 min) with no R2 key, show timeout
-        if (consecutiveHits >= 30) {
+        
+        // Dynamic timeout based on stage and video count
+        // Stage 1 (S1/S2): 22s per video, minimum 60s
+        // VO stage (S5/S6): 50s per video, minimum 120s  
+        // Final stage (S7/S8): 15s per video, minimum 45s
+        // Default/unknown: generous 90s per video
+        const videoCount = (props as ProgressProps).videoCount || 3 // Default to 3 if unknown
+        let maxWaitSeconds: number
+        const status = job.Status || ""
+        
+        if (/S1|S2|Preproc|Ingestion|Upload/i.test(status)) {
+          // Stage 1: Bible generation - 22s per video, min 60s
+          maxWaitSeconds = Math.max(videoCount * 25, 60) // 25s to be safe (22 + buffer)
+        } else if (/S5|S6|VO|Voice|Script/i.test(status)) {
+          // VO stage - 50s per video, min 120s
+          maxWaitSeconds = Math.max(videoCount * 55, 120) // 55s to be safe
+        } else if (/S7|S8|Render/i.test(status)) {
+          // Final render stage - 15s per video, min 45s
+          maxWaitSeconds = Math.max(videoCount * 20, 45) // 20s to be safe
+        } else {
+          // Unknown/other stages - be generous
+          maxWaitSeconds = Math.max(videoCount * 60, 180) // 60s per video, min 3 minutes
+        }
+        
+        // Convert to poll count (4s per poll)
+        const maxPolls = Math.ceil(maxWaitSeconds / 4)
+        
+        if (consecutiveHits >= maxPolls) {
           stopped = true
           setProgressPolling(false)
-          setProgressError(`Waited too long. Status: ${job.Status}. Please close and try again later.`)
+          setProgressError(`Waited too long (${Math.round(consecutiveHits * 4)}s). Status: ${job.Status}. Please close and try again later.`)
           return
         }
       } catch (err) {

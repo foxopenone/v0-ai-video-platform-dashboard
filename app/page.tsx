@@ -12,7 +12,7 @@ import { stopJob } from "@/lib/mock-api"
 
 export default function Page() {
   const [stepReviewData, setStepReviewData] = useState<StepReviewData | null>(null)
-  const [progressData, setProgressData] = useState<{ jobRecordId: string; projectTitle: string } | null>(null)
+  const [progressData, setProgressData] = useState<{ jobRecordId: string; projectTitle: string; videoCount?: number } | null>(null)
   const [insertedProjects, setInsertedProjects] = useState<InsertedProject[]>([])
   // Posted items for Discovery feed
   const [postedItems, setPostedItems] = useState<Array<{ id: string; title: string; author: string; videoParts: Array<{ part: string; url: string }> }>>(() => {
@@ -272,6 +272,7 @@ onStop={async () => {
         mode="progress"
         jobRecordId={progressData.jobRecordId}
         projectTitle={progressData.projectTitle}
+        videoCount={progressData.videoCount}
         onClose={() => {
           setProgressData(null)
           if (window.history.state?.reviewOpen) window.history.back()
@@ -381,7 +382,7 @@ onStop={async () => {
             }
 
             // Open progress mode for processing cards or if quick fetch failed
-            setProgressData({ jobRecordId: recordId, projectTitle: inserted.title })
+            setProgressData({ jobRecordId: recordId, projectTitle: inserted.title, videoCount: inserted.episodes || 1 })
           }}
           onProjectPost={(projectId) => {
             const project = insertedProjects.find((p) => p.id === projectId)
