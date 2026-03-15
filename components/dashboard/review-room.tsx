@@ -428,11 +428,12 @@ export function ReviewRoom(props: ReviewRoomProps) {
     // S7_Render/S8_Render -> VO approved, rendering
     // S9_Done -> All done
     
-    console.log("[v0] ReviewRoom init - currentStatus:", currentStatus, "statusStr:", statusStr)
+    console.log("[v0] ReviewRoom init - currentStatus:", currentStatus, "statusStr:", statusStr, "workMode:", workMode)
     const isDone = /S9_Done|S9|ALL_DONE|DONE|COMPLETE/i.test(statusStr)
     const isBibleApproved = isDone || /S[4-9]|S4|S5|S6|S7|S8/i.test(statusStr)
     const isVoApproved = isDone || /S[7-9]|S7|S8/i.test(statusStr)
     console.log("[v0] Status check - isDone:", isDone, "isBibleApproved:", isBibleApproved, "isVoApproved:", isVoApproved)
+    console.log("[v0] isDone test on statusStr:", statusStr, "-> result:", /S9_Done|S9|ALL_DONE|DONE|COMPLETE/i.test(statusStr))
     
 
     
@@ -506,16 +507,25 @@ export function ReviewRoom(props: ReviewRoomProps) {
         setVideoRenderStartTime(Date.now())
         setVideoRenderProgress(0)
       }
-      // Also try to load script data in background (for VO tab browsing)
+      // Also load script data for VO tab browsing (critical for ALL_DONE state)
       fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}`)
         .then((r) => r.ok ? r.json() : Promise.reject(new Error(`API ${r.status}`)))
         .then((job) => {
           if (job.Script_R2_Key) {
+            console.log("[v0] ALL_DONE: Loading script from R2 for VO tab", job.Script_R2_Key)
             setScriptR2Key(job.Script_R2_Key)
-            return fetchScriptFromR2(job.Script_R2_Key).then((data) => setScriptData(data))
+            return fetchScriptFromR2(job.Script_R2_Key).then((data) => {
+              console.log("[v0] ALL_DONE: Script loaded successfully", data?.parts?.length, "parts")
+              setScriptData(data)
+            })
+          } else {
+            console.log("[v0] ALL_DONE: No Script_R2_Key found")
           }
         })
-        .catch(() => { /* non-critical, VO tab just won't be browseable */ })
+        .catch((err) => {
+          console.error("[v0] ALL_DONE: Failed to load script", err)
+          setScriptError(err.message || "Failed to load script")
+        })
       return // skip S5 check below
     }
 
@@ -1036,6 +1046,102 @@ export function ReviewRoom(props: ReviewRoomProps) {
     const interval = setInterval(poll, 10000) // 10 seconds per spec
     return () => { stopped = true; clearInterval(interval); console.log("[v0] Script poller STOPPED") }
   }, [scriptPolling, isStepReview])
+
+  // ── Full_Auto Mode: Continuous Status Polling ──
+  // In Full_Auto mode, we need to poll for status updates until ALL_DONE
+  useEffect(() => {
+    if (!isStepReview || !isFullAuto) return
+    if (isCompleted) return // Already done, no need to poll
+    
+    const { jobRecordId } = props as StepReviewProps
+    let stopped = false
+    let pollCount = 0
+    const MAX_POLLS = 300 // ~15 minutes at 3s intervals
+    
+    console.log("[v0] Full_Auto poller STARTED for record:", jobRecordId)
+    
+    const poll = async () => {
+      if (stopped) return
+      pollCount++
+      
+      if (pollCount > MAX_POLLS) {
+        stopped = true
+        console.log("[v0] Full_Auto poller timed out after", MAX_POLLS, "polls")
+        return
+      }
+      
+      try {
+        const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}`)
+        if (!res.ok) return
+        
+        const job = await res.json()
+        console.log(`[v0] Full_Auto poll #${pollCount} | Status: ${job.Status} | Script_R2_Key: ${job.Script_R2_Key ? "present" : "null"} | Final_Video: ${job.Final_Video ? "present" : "null"}`)
+        
+        // Load Script if available and not already loaded
+        if (job.Script_R2_Key && !scriptData && !scriptR2Key) {
+          console.log("[v0] Full_Auto: Loading script from R2")
+          setScriptR2Key(job.Script_R2_Key)
+          try {
+            const data = await fetchScriptFromR2(job.Script_R2_Key)
+            setScriptData(data)
+            console.log("[v0] Full_Auto: Script loaded successfully")
+          } catch (err) {
+            console.error("[v0] Full_Auto: Script load failed", err)
+          }
+        }
+        
+        // Load Final Videos if available
+        if (job.Final_Video) {
+          let finalVideos: Array<{ part: string; url: string }> = []
+          try {
+            finalVideos = typeof job.Final_Video === "string"
+              ? JSON.parse(job.Final_Video)
+              : job.Final_Video
+          } catch { /* ignore parse errors */ }
+          
+          if (finalVideos.length > 0 && videoParts.length === 0) {
+            console.log("[v0] Full_Auto: Loading final videos")
+            const deletedKey = `deleted_parts_${jobRecordId}`
+            const deletedParts: string[] = JSON.parse(localStorage.getItem(deletedKey) || "[]")
+            const filteredVideos = finalVideos.filter((fv) => !deletedParts.includes(String(fv.part)))
+            setVideoParts(filteredVideos.map((fv) => ({
+              part: String(fv.part), url: fv.url, approved: true, redoing: false,
+            })))
+            setVideoRenderProgress(100)
+            // Auto-select first video
+            if (filteredVideos.length > 0) {
+              setSelectedVideoPartId(String(filteredVideos[0].part))
+            }
+          }
+        }
+        
+        // Check if done
+        if (job.Status === "S9_Done" || job.Status === "ALL_DONE") {
+          stopped = true
+          console.log("[v0] Full_Auto: Job completed!")
+          setIsCompleted(true)
+          setApprovedPhases(new Set(["bible", "voiceover", "preview"]))
+          return
+        }
+        
+        // Check for error
+        if (["Error", "Failed"].includes(job.Status)) {
+          stopped = true
+          console.log("[v0] Full_Auto: Job failed with status:", job.Status)
+          return
+        }
+        
+      } catch (err) {
+        console.error("[v0] Full_Auto poll error:", err)
+      }
+    }
+    
+    // Start polling immediately and then every 3 seconds
+    poll()
+    const interval = setInterval(poll, 3000)
+    return () => { stopped = true; clearInterval(interval); console.log("[v0] Full_Auto poller STOPPED") }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStepReview, isFullAuto, isCompleted])
 
   // ── Final Preview: Video Polling (after VO Approve or S8_Render auto-detect) ──
   useEffect(() => {
