@@ -515,7 +515,7 @@ export function AudioDrawer({
                       : "bg-secondary/40 text-muted-foreground hover:bg-secondary/60"
                   )}
                 >
-                  {Math.round(vol * 100)}%
+                  {vol}
                 </button>
               ))}
             </div>
@@ -532,7 +532,7 @@ export function AudioDrawer({
                   : bgmItems.find((b) => b.id === selectedId)?.name
                   || "..."}
               </span>
-              {!isVoice && <span className="ml-1 text-muted-foreground/70">@ {Math.round(localVolume * 100)}%</span>}
+              {!isVoice && <span className="ml-1 text-muted-foreground/70">@ {localVolume}</span>}
             </p>
           )}
           {!selectedId && <p className="flex-1 text-xs text-muted-foreground">No selection</p>}
