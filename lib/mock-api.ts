@@ -285,10 +285,18 @@ export async function fetchBibleFromR2(r2Key: string): Promise<BibleJSON> {
   // R2 real format: { meta, character_graph, episode_index }
   // We need:        { story_summary, characters, episodes }
 
-  // 1) Characters: from character_graph array
-  const charGraph = rawObj.character_graph as Array<Record<string, unknown>> | undefined
+  // 1) Characters: from character_graph (can be array or object with nested array)
+  let charGraph = rawObj.character_graph
+  // Handle nested structure: { character_graph: { characters: [...] } }
+  if (charGraph && typeof charGraph === "object" && !Array.isArray(charGraph)) {
+    const nested = charGraph as Record<string, unknown>
+    if (Array.isArray(nested.characters)) charGraph = nested.characters
+    else if (Array.isArray(nested.character_graph)) charGraph = nested.character_graph
+  }
+  console.log("[v0] character_graph type:", Array.isArray(charGraph) ? `array[${(charGraph as unknown[]).length}]` : typeof charGraph)
+  
   const characters: BibleCharacter[] = Array.isArray(charGraph)
-    ? charGraph.map((c) => ({
+    ? (charGraph as Array<Record<string, unknown>>).map((c) => ({
         name: String(c.name ?? "Unknown").trim(),
         role: String(c.role ?? "Supporting").trim(),
         description: String(c.visual_feature ?? c.description ?? "").trim(),
@@ -298,19 +306,37 @@ export async function fetchBibleFromR2(r2Key: string): Promise<BibleJSON> {
       }))
     : []
 
-  // 2) Episodes: from episode_index object { Ep01: {...}, Ep02: {...} }
-  const epIndex = rawObj.episode_index as Record<string, Record<string, unknown>> | undefined
-  const episodes: BibleEpisode[] = epIndex
-    ? Object.entries(epIndex)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([key, ep]) => ({
-          key: key.trim(),
-          setting: String(ep.setting ?? "").trim(),
-          summary: String(ep.summary ?? "").trim(),
-          special_alerts: Array.isArray(ep.special_alerts) ? ep.special_alerts.map((s: unknown) => String(s).trim()) : [],
-          visual_anchors: Array.isArray(ep.visual_anchors) ? ep.visual_anchors.map((s: unknown) => String(s).trim()) : [],
-        }))
-    : []
+  // 2) Episodes: from episode_index (can be object { Ep01: {...} } or array)
+  let epIndex = rawObj.episode_index
+  // Handle nested structure
+  if (epIndex && typeof epIndex === "object" && !Array.isArray(epIndex)) {
+    const nested = epIndex as Record<string, unknown>
+    if (nested.episodes && typeof nested.episodes === "object") epIndex = nested.episodes
+  }
+  console.log("[v0] episode_index type:", Array.isArray(epIndex) ? `array[${(epIndex as unknown[]).length}]` : typeof epIndex)
+  
+  let episodes: BibleEpisode[] = []
+  if (Array.isArray(epIndex)) {
+    // episode_index is array format: [{ key: "Ep01", ... }]
+    episodes = (epIndex as Array<Record<string, unknown>>).map((ep) => ({
+      key: String(ep.key ?? ep.episode_id ?? "").trim(),
+      setting: String(ep.setting ?? "").trim(),
+      summary: String(ep.summary ?? "").trim(),
+      special_alerts: Array.isArray(ep.special_alerts) ? ep.special_alerts.map((s: unknown) => String(s).trim()) : [],
+      visual_anchors: Array.isArray(ep.visual_anchors) ? ep.visual_anchors.map((s: unknown) => String(s).trim()) : [],
+    }))
+  } else if (epIndex && typeof epIndex === "object") {
+    // episode_index is object format: { Ep01: {...}, Ep02: {...} }
+    episodes = Object.entries(epIndex as Record<string, Record<string, unknown>>)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, ep]) => ({
+        key: key.trim(),
+        setting: String(ep.setting ?? "").trim(),
+        summary: String(ep.summary ?? "").trim(),
+        special_alerts: Array.isArray(ep.special_alerts) ? ep.special_alerts.map((s: unknown) => String(s).trim()) : [],
+        visual_anchors: Array.isArray(ep.visual_anchors) ? ep.visual_anchors.map((s: unknown) => String(s).trim()) : [],
+      }))
+  }
 
   // 3) Story summary: read from meta.story_summary (NEVER concatenate episodes)
   const meta = rawObj.meta as BibleJSON["meta"] | undefined
@@ -328,8 +354,10 @@ export async function fetchBibleFromR2(r2Key: string): Promise<BibleJSON> {
       if (!Array.isArray(rawObj.characters)) rawObj.characters = []
       return rawObj as unknown as BibleJSON
     }
+    // Log more details for debugging
+    console.error("[v0] Bible parse failed. Raw structure:", JSON.stringify(rawObj, null, 2).substring(0, 1000))
     throw new Error(
-      `Bible JSON has no character_graph and no episode_index. ` +
+      `Bible JSON parse failed: character_graph=${typeof rawObj.character_graph}, episode_index=${typeof rawObj.episode_index}. ` +
       `Top-level keys: [${Object.keys(rawObj).join(", ")}]`
     )
   }
