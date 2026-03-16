@@ -49,15 +49,15 @@ export function Header() {
         <img
           src="/images/shortee-icon.png"
           alt="Shortee.TV"
-          width={36}
-          height={36}
-          className="h-9 w-9 object-contain"
+          width={40}
+          height={40}
+          className="h-10 w-10 object-contain drop-shadow-[0_0_8px_rgba(244,63,122,0.3)]"
         />
         <div className="flex flex-col justify-center">
-          <span className="brand-gradient-text text-[17px] font-bold leading-tight tracking-tight">
+          <span className="brand-gradient-text text-lg font-extrabold leading-tight tracking-tight">
             Shortee.TV
           </span>
-          <span className="text-[10px] font-medium leading-tight tracking-wide text-muted-foreground/80">
+          <span className="text-[11px] font-medium leading-tight tracking-wide text-foreground/60">
             One-Click AI Mini Drama Clipper
           </span>
         </div>
