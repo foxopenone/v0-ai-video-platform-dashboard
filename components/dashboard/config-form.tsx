@@ -186,8 +186,8 @@ export function ConfigForm({
   const router = useRouter()
 
   const [mode, setMode] = useState<"full_auto" | "step_review">("full_auto")
-  const [params, setParams] = useState<Record<ParamKey, string>>({
-    platform: "", language: "", pov: "", tone: "", style: "", hook: "",
+const [params, setParams] = useState<Record<ParamKey, string>>({
+  platform: "", language: "", pov: "", tone: "", style: "", hook: "", energy_level: "Medium",
   })
   const [voiceDrawerOpen, setVoiceDrawerOpen] = useState(false)
   const [bgmDrawerOpen, setBgmDrawerOpen] = useState(false)
