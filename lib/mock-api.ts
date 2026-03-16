@@ -285,18 +285,28 @@ export async function fetchBibleFromR2(r2Key: string): Promise<BibleJSON> {
   // R2 real format: { meta, character_graph, episode_index }
   // We need:        { story_summary, characters, episodes }
 
-  // 1) Characters: from character_graph (can be array or object with nested array)
+  // 1) Characters: from character_graph (multiple formats supported)
   let charGraph = rawObj.character_graph
-  // Handle nested structure: { character_graph: { characters: [...] } }
-  if (charGraph && typeof charGraph === "object" && !Array.isArray(charGraph)) {
-    const nested = charGraph as Record<string, unknown>
-    if (Array.isArray(nested.characters)) charGraph = nested.characters
-    else if (Array.isArray(nested.character_graph)) charGraph = nested.character_graph
-  }
-  console.log("[v0] character_graph type:", Array.isArray(charGraph) ? `array[${(charGraph as unknown[]).length}]` : typeof charGraph)
+  console.log("[v0] Raw character_graph:", typeof charGraph, charGraph ? Object.keys(charGraph as object).slice(0, 5) : "null")
   
-  const characters: BibleCharacter[] = Array.isArray(charGraph)
-    ? (charGraph as Array<Record<string, unknown>>).map((c) => ({
+  let characters: BibleCharacter[] = []
+  
+  if (Array.isArray(charGraph)) {
+    // Format A: character_graph is an array of character objects
+    characters = (charGraph as Array<Record<string, unknown>>).map((c) => ({
+      name: String(c.name ?? "Unknown").trim(),
+      role: String(c.role ?? "Supporting").trim(),
+      description: String(c.visual_feature ?? c.description ?? "").trim(),
+      relation_map: c.relation_map ? String(c.relation_map).trim() : undefined,
+      intent_tag: c.intent_tag ? String(c.intent_tag).trim() : undefined,
+      visual_feature: c.visual_feature ? String(c.visual_feature).trim() : undefined,
+    }))
+  } else if (charGraph && typeof charGraph === "object") {
+    const nested = charGraph as Record<string, unknown>
+    
+    // Format B: { characters: [...] } - nested array
+    if (Array.isArray(nested.characters)) {
+      characters = (nested.characters as Array<Record<string, unknown>>).map((c) => ({
         name: String(c.name ?? "Unknown").trim(),
         role: String(c.role ?? "Supporting").trim(),
         description: String(c.visual_feature ?? c.description ?? "").trim(),
@@ -304,39 +314,89 @@ export async function fetchBibleFromR2(r2Key: string): Promise<BibleJSON> {
         intent_tag: c.intent_tag ? String(c.intent_tag).trim() : undefined,
         visual_feature: c.visual_feature ? String(c.visual_feature).trim() : undefined,
       }))
-    : []
-
-  // 2) Episodes: from episode_index (can be object { Ep01: {...} } or array)
-  let epIndex = rawObj.episode_index
-  // Handle nested structure
-  if (epIndex && typeof epIndex === "object" && !Array.isArray(epIndex)) {
-    const nested = epIndex as Record<string, unknown>
-    if (nested.episodes && typeof nested.episodes === "object") epIndex = nested.episodes
+    }
+    // Format C: { "周小雪": { role: "...", ... }, "乔森": { ... } } - name-keyed object
+    else if (Object.keys(nested).length > 0 && !("name" in nested)) {
+      characters = Object.entries(nested).map(([name, data]) => {
+        const c = data as Record<string, unknown>
+        return {
+          name: name.trim(),
+          role: String(c.role ?? "Supporting").trim(),
+          description: String(c.visual_feature ?? c.description ?? "").trim(),
+          relation_map: c.relation_map ? String(c.relation_map).trim() : undefined,
+          intent_tag: c.intent_tag ? String(c.intent_tag).trim() : undefined,
+          visual_feature: c.visual_feature ? String(c.visual_feature).trim() : undefined,
+        }
+      })
+    }
+    // Format D: Single character object with name field
+    else if ("name" in nested) {
+      characters = [{
+        name: String(nested.name ?? "Unknown").trim(),
+        role: String(nested.role ?? "Supporting").trim(),
+        description: String((nested as Record<string, unknown>).visual_feature ?? nested.description ?? "").trim(),
+        relation_map: nested.relation_map ? String(nested.relation_map).trim() : undefined,
+        intent_tag: nested.intent_tag ? String(nested.intent_tag).trim() : undefined,
+        visual_feature: nested.visual_feature ? String(nested.visual_feature).trim() : undefined,
+      }]
+    }
   }
-  console.log("[v0] episode_index type:", Array.isArray(epIndex) ? `array[${(epIndex as unknown[]).length}]` : typeof epIndex)
+  console.log("[v0] Parsed characters count:", characters.length)
+
+  // 2) Episodes: from episode_index (multiple formats supported)
+  const epIndex = rawObj.episode_index
+  console.log("[v0] Raw episode_index:", typeof epIndex, epIndex ? Object.keys(epIndex as object).slice(0, 5) : "null")
   
   let episodes: BibleEpisode[] = []
+  
   if (Array.isArray(epIndex)) {
-    // episode_index is array format: [{ key: "Ep01", ... }]
+    // Format A: episode_index is array: [{ key: "Ep01", ... }]
     episodes = (epIndex as Array<Record<string, unknown>>).map((ep) => ({
-      key: String(ep.key ?? ep.episode_id ?? "").trim(),
+      key: String(ep.key ?? ep.episode_id ?? ep.ep_id ?? "").trim(),
       setting: String(ep.setting ?? "").trim(),
       summary: String(ep.summary ?? "").trim(),
       special_alerts: Array.isArray(ep.special_alerts) ? ep.special_alerts.map((s: unknown) => String(s).trim()) : [],
       visual_anchors: Array.isArray(ep.visual_anchors) ? ep.visual_anchors.map((s: unknown) => String(s).trim()) : [],
     }))
   } else if (epIndex && typeof epIndex === "object") {
-    // episode_index is object format: { Ep01: {...}, Ep02: {...} }
-    episodes = Object.entries(epIndex as Record<string, Record<string, unknown>>)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, ep]) => ({
-        key: key.trim(),
+    const nested = epIndex as Record<string, unknown>
+    
+    // Format B: { episodes: [...] } - nested array
+    if (Array.isArray(nested.episodes)) {
+      episodes = (nested.episodes as Array<Record<string, unknown>>).map((ep) => ({
+        key: String(ep.key ?? ep.episode_id ?? ep.ep_id ?? "").trim(),
         setting: String(ep.setting ?? "").trim(),
         summary: String(ep.summary ?? "").trim(),
         special_alerts: Array.isArray(ep.special_alerts) ? ep.special_alerts.map((s: unknown) => String(s).trim()) : [],
         visual_anchors: Array.isArray(ep.visual_anchors) ? ep.visual_anchors.map((s: unknown) => String(s).trim()) : [],
       }))
+    }
+    // Format C: { Ep01: {...}, Ep02: {...} } - key-value object
+    else {
+      const entries = Object.entries(nested)
+      // Check if keys look like episode keys (Ep01, Episode_1, etc.) or have episode data
+      const looksLikeEpisodes = entries.some(([key, val]) => 
+        /ep|episode/i.test(key) || (val && typeof val === "object" && ("summary" in (val as object) || "setting" in (val as object)))
+      )
+      
+      if (looksLikeEpisodes && entries.length > 0) {
+        episodes = entries
+          .filter(([, val]) => val && typeof val === "object")
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([key, val]) => {
+            const ep = val as Record<string, unknown>
+            return {
+              key: key.trim(),
+              setting: String(ep.setting ?? "").trim(),
+              summary: String(ep.summary ?? "").trim(),
+              special_alerts: Array.isArray(ep.special_alerts) ? ep.special_alerts.map((s: unknown) => String(s).trim()) : [],
+              visual_anchors: Array.isArray(ep.visual_anchors) ? ep.visual_anchors.map((s: unknown) => String(s).trim()) : [],
+            }
+          })
+      }
+    }
   }
+  console.log("[v0] Parsed episodes count:", episodes.length)
 
   // 3) Story summary: read from meta.story_summary (NEVER concatenate episodes)
   const meta = rawObj.meta as BibleJSON["meta"] | undefined
