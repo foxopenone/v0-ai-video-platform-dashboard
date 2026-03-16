@@ -32,10 +32,16 @@ interface AudioDrawerProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   selectedId: string | null
-  onSelect: (id: string, name: string, provider?: "ElevenLabs" | "Azure") => void
+  onSelect: (id: string, name: string, provider?: "ElevenLabs" | "Azure", bgmVolume?: number) => void
+  /** BGM volume (0.25-0.6), only used when type="bgm" */
+  bgmVolume?: number
+  onBgmVolumeChange?: (volume: number) => void
 }
 
 /* ── Main AudioDrawer ────────────────────────────────── */
+
+const BGM_VOLUME_OPTIONS = [0.25, 0.35, 0.45, 0.5, 0.55, 0.6] as const
+const DEFAULT_BGM_VOLUME = 0.45
 
 export function AudioDrawer({
   type,
@@ -43,11 +49,19 @@ export function AudioDrawer({
   onOpenChange,
   selectedId,
   onSelect,
+  bgmVolume = DEFAULT_BGM_VOLUME,
+  onBgmVolumeChange,
 }: AudioDrawerProps) {
   const [playingId, setPlayingId] = useState<string | null>(null)
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
+  const [localVolume, setLocalVolume] = useState(bgmVolume)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const isVoice = type === "voice"
+  
+  // Sync local volume with prop
+  useEffect(() => {
+    setLocalVolume(bgmVolume)
+  }, [bgmVolume])
 
   // Voice filters
   const [genderFilter, setGenderFilter] = useState<string>("all")
@@ -481,6 +495,33 @@ export function AudioDrawer({
           </div>
         </ScrollArea>
 
+        {/* BGM Volume selector - only show for BGM type */}
+        {!isVoice && selectedId && (
+          <div className="mt-3 flex items-center gap-3 border-t border-border/20 pt-3">
+            <Volume2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="shrink-0 text-xs text-muted-foreground">Volume:</span>
+            <div className="flex flex-1 flex-wrap gap-1.5">
+              {BGM_VOLUME_OPTIONS.map((vol) => (
+                <button
+                  key={vol}
+                  onClick={() => {
+                    setLocalVolume(vol)
+                    onBgmVolumeChange?.(vol)
+                  }}
+                  className={cn(
+                    "rounded-md px-2.5 py-1 text-xs font-medium transition-all",
+                    localVolume === vol
+                      ? "bg-[var(--brand-pink)] text-white"
+                      : "bg-secondary/40 text-muted-foreground hover:bg-secondary/60"
+                  )}
+                >
+                  {Math.round(vol * 100)}%
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Confirm button -- always visible at bottom */}
         <div className="mt-3 flex items-center gap-3 border-t border-border/20 pt-3">
           {selectedId && (
@@ -491,11 +532,19 @@ export function AudioDrawer({
                   : bgmItems.find((b) => b.id === selectedId)?.name
                   || "..."}
               </span>
+              {!isVoice && <span className="ml-1 text-muted-foreground/70">@ {Math.round(localVolume * 100)}%</span>}
             </p>
           )}
           {!selectedId && <p className="flex-1 text-xs text-muted-foreground">No selection</p>}
           <button
-            onClick={() => onOpenChange(false)}
+            onClick={() => {
+              if (!isVoice && selectedId) {
+                // For BGM, pass volume along with selection
+                const bgm = bgmItems.find((b) => b.id === selectedId)
+                if (bgm) onSelect(bgm.id, bgm.name, undefined, localVolume)
+              }
+              onOpenChange(false)
+            }}
             className={cn(
               "shrink-0 rounded-lg px-5 py-2 text-xs font-semibold transition-all",
               selectedId

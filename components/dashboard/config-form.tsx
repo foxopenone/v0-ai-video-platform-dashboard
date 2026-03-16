@@ -196,6 +196,7 @@ export function ConfigForm({
   const [selectedVoiceProvider, setSelectedVoiceProvider] = useState<"ElevenLabs" | "Azure" | null>(null)
   const [selectedBgm, setSelectedBgm] = useState<string | null>(null)
   const [selectedBgmName, setSelectedBgmName] = useState<string | null>(null)
+  const [bgmVolume, setBgmVolume] = useState<number>(0.45) // Default 45%
   const [targetParts, setTargetParts] = useState<number>(3)
 
   // Restore saved preferences after mount (avoids SSR hydration mismatch)
@@ -215,6 +216,8 @@ export function ConfigForm({
       if (b) setSelectedBgm(JSON.parse(b))
       const bn = localStorage.getItem("cfg_bgmName")
       if (bn) setSelectedBgmName(JSON.parse(bn))
+      const bv = localStorage.getItem("cfg_bgmVolume")
+      if (bv) { const vol = JSON.parse(bv); if (vol >= 0.2 && vol <= 0.7) setBgmVolume(vol) }
       const tp = localStorage.getItem("cfg_targetParts")
       if (tp) { const n = JSON.parse(tp); if (n >= 1 && n <= 10) setTargetParts(n) }
     } catch {}
@@ -232,9 +235,10 @@ export function ConfigForm({
       localStorage.setItem("cfg_voiceProvider", JSON.stringify(selectedVoiceProvider))
       localStorage.setItem("cfg_bgm", JSON.stringify(selectedBgm))
       localStorage.setItem("cfg_bgmName", JSON.stringify(selectedBgmName))
+      localStorage.setItem("cfg_bgmVolume", JSON.stringify(bgmVolume))
       localStorage.setItem("cfg_targetParts", JSON.stringify(targetParts))
     } catch {}
-  }, [mode, params, selectedVoice, selectedVoiceName, selectedVoiceProvider, selectedBgm, selectedBgmName, targetParts])
+  }, [mode, params, selectedVoice, selectedVoiceName, selectedVoiceProvider, selectedBgm, selectedBgmName, bgmVolume, targetParts])
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -297,6 +301,7 @@ export function ConfigForm({
       Voice_Select: selectedVoice || "default_voice",
       Voice_Provider: selectedVoiceProvider || "ElevenLabs",  // TTS provider: ElevenLabs or Azure
       BGM_Select: selectedBgm || "default_bgm",
+      BGM_Volume: bgmVolume,  // BGM volume (0.25-0.6)
       Work_Mode: mode === "full_auto" ? "Full_Auto" : "Step_Review",
     }
 
@@ -741,9 +746,12 @@ export function ConfigForm({
         open={bgmDrawerOpen}
         onOpenChange={setBgmDrawerOpen}
         selectedId={selectedBgm}
-        onSelect={(id, name) => {
+        bgmVolume={bgmVolume}
+        onBgmVolumeChange={setBgmVolume}
+        onSelect={(id, name, _provider, volume) => {
           setSelectedBgm(id)
           setSelectedBgmName(name)
+          if (volume !== undefined) setBgmVolume(volume)
           // Do NOT close drawer -- let user preview and browse freely
         }}
       />
