@@ -43,25 +43,24 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 border-b border-border/40 bg-background/80 backdrop-blur-xl">
       <div className="mx-auto flex h-12 w-full max-w-[1400px] items-center justify-between px-6">
-      {/* Logo + Slogan */}
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2.5">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/images/shortee-icon.png"
-            alt="Shortee.TV"
-            width={32}
-            height={32}
-            className="h-8 w-8 object-contain"
-          />
-          <span className="brand-gradient-text text-lg font-bold tracking-tight">
+      {/* Logo + Slogan - compact two-line layout */}
+      <div className="flex items-center gap-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/images/shortee-icon.png"
+          alt="Shortee.TV"
+          width={36}
+          height={36}
+          className="h-9 w-9 object-contain"
+        />
+        <div className="flex flex-col justify-center">
+          <span className="brand-gradient-text text-[17px] font-bold leading-tight tracking-tight">
             Shortee.TV
           </span>
+          <span className="text-[10px] font-medium leading-tight tracking-wide text-muted-foreground/80">
+            One-Click AI Mini Drama Clipper
+          </span>
         </div>
-        <div className="hidden h-4 w-px bg-border/40 lg:block" />
-        <span className="hidden text-[11px] font-medium text-muted-foreground/70 lg:block">
-          One-Click Output | Full Auto AI Mini Drama Clipper
-        </span>
       </div>
 
       {/* Center Nav */}
