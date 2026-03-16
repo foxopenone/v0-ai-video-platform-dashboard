@@ -346,18 +346,40 @@ export async function fetchBibleFromR2(r2Key: string): Promise<BibleJSON> {
     ?? ""
   ).trim()
 
-  // Validate we got something useful
-  if (characters.length === 0 && episodes.length === 0) {
+  // Validate: Step 1 - Check field EXISTENCE (separate from emptiness check)
+  const hasCharacterGraphField = "character_graph" in rawObj
+  const hasEpisodeIndexField = "episode_index" in rawObj
+  
+  // If missing required fields, check for old format fallback
+  if (!hasCharacterGraphField && !hasEpisodeIndexField) {
     // Fallback: maybe it's already in the old format (story_summary + characters)
     if (rawObj.story_summary || rawObj.characters) {
       console.log("[v0] Bible already in normalized format, using as-is")
       if (!Array.isArray(rawObj.characters)) rawObj.characters = []
       return rawObj as unknown as BibleJSON
     }
-    // Log more details for debugging
+    throw new Error(
+      `Bible JSON is missing required fields: character_graph, episode_index. ` +
+      `Top-level keys: [${Object.keys(rawObj).join(", ")}]`
+    )
+  }
+  
+  // Validate: Step 2 - Check if fields are EMPTY (different from not existing)
+  const emptyFields: string[] = []
+  if (hasCharacterGraphField && characters.length === 0) emptyFields.push("character_graph")
+  if (hasEpisodeIndexField && episodes.length === 0) emptyFields.push("episode_index")
+  
+  if (emptyFields.length > 0) {
+    console.warn(`[v0] Bible JSON fields exist but are empty: ${emptyFields.join(", ")}`)
+    // Don't throw - empty arrays/objects are valid, just log a warning
+  }
+  
+  // If we have at least one of characters or episodes, proceed
+  if (characters.length === 0 && episodes.length === 0) {
     console.error("[v0] Bible parse failed. Raw structure:", JSON.stringify(rawObj, null, 2).substring(0, 1000))
     throw new Error(
-      `Bible JSON parse failed: character_graph=${typeof rawObj.character_graph}, episode_index=${typeof rawObj.episode_index}. ` +
+      `Bible JSON fields exist but failed to parse. ` +
+      `character_graph type: ${typeof rawObj.character_graph}, episode_index type: ${typeof rawObj.episode_index}. ` +
       `Top-level keys: [${Object.keys(rawObj).join(", ")}]`
     )
   }
