@@ -278,6 +278,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const [videoStopped, setVideoStopped] = useState(false) // true after user clicks Stop
   const [isCompleted, setIsCompleted] = useState(false) // true when project is S9_Done (read-only)
   const videosLoadedRef = useRef(false) // prevent duplicate video loads
+  // Full Auto progress tracking
+  const [fullAutoStatus, setFullAutoStatus] = useState<string>("") // Current backend status for Full Auto mode
+  const [fullAutoProgress, setFullAutoProgress] = useState(0) // 0-100 progress percentage
   // Work mode: "Full_Auto" disables all approval buttons; "Step_Review" enables them
   const [workMode, setWorkMode] = useState<"Full_Auto" | "Step_Review">(
     isStepReview ? ((props as StepReviewProps).workMode || "Step_Review") : "Step_Review"
@@ -1078,6 +1081,19 @@ export function ReviewRoom(props: ReviewRoomProps) {
         
         const job = await res.json()
         console.log(`[v0] Full_Auto poll #${pollCount} | Status: ${job.Status} | Script_R2_Key: ${job.Script_R2_Key ? "present" : "null"} | Final_Video: ${job.Final_Video ? "present" : "null"}`)
+        
+        // Update progress based on status
+        const status = job.Status || ""
+        setFullAutoStatus(status)
+        // Map status to progress percentage
+        let progress = 10
+        if (/S3|Bible/i.test(status)) progress = 20
+        else if (/S4|Visual/i.test(status)) progress = 35
+        else if (/S5|Script/i.test(status)) progress = 50
+        else if (/S6|Audio|Voice/i.test(status)) progress = 65
+        else if (/S7|S8|Render/i.test(status)) progress = 80
+        else if (/S9|Done|ALL_DONE/i.test(status)) progress = 100
+        setFullAutoProgress(progress)
         
         // Load Script if available and not already loaded
         if (job.Script_R2_Key && !scriptData && !scriptR2Key) {
@@ -1930,6 +1946,29 @@ export function ReviewRoom(props: ReviewRoomProps) {
                 {videoPolling && <Loader2 className="ml-1 h-3 w-3 animate-spin text-[var(--brand-pink)]" />}
               </button>
             </div>
+
+            {/* Full Auto Progress Bar - only show when Full Auto is processing */}
+            {isFullAuto && !isCompleted && fullAutoStatus && (
+              <div className="border-b border-border/20 bg-secondary/20 px-5 py-2.5">
+                <div className="flex items-center gap-3">
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[var(--brand-pink)]" />
+                  <div className="flex-1">
+                    <div className="mb-1 flex items-center justify-between text-[11px]">
+                      <span className="font-medium text-foreground/80">
+                        Full Auto Processing: <span className="text-[var(--brand-pink)]">{fullAutoStatus}</span>
+                      </span>
+                      <span className="text-muted-foreground">{fullAutoProgress}%</span>
+                    </div>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary/40">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-[var(--brand-pink)] to-[var(--brand-purple)] transition-all duration-500"
+                        style={{ width: `${fullAutoProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* ====== FINAL PREVIEW TAB (full width, outside ScrollArea) ====== */}
             {activeTab === "preview" && (() => {
