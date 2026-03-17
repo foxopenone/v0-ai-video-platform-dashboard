@@ -187,7 +187,7 @@ export function ConfigForm({
 
   const [mode, setMode] = useState<"full_auto" | "step_review">("full_auto")
 const [params, setParams] = useState<Record<ParamKey, string>>({
-  platform: "", language: "", pov: "", tone: "", style: "", hook: "", energy_level: "Medium",
+  platform: "", asr_language: "Auto", language: "", pov: "", tone: "", style: "", hook: "", energy_level: "Medium",
   })
   const [voiceDrawerOpen, setVoiceDrawerOpen] = useState(false)
   const [bgmDrawerOpen, setBgmDrawerOpen] = useState(false)
