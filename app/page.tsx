@@ -86,7 +86,15 @@ export default function Page() {
 
         // Use Bible_R2_Key presence as the real indicator for review-ready
         const hasR2Key = !!job.Bible_R2_Key
-        if (hasR2Key) {
+        // Check if project is fully completed (has final video or S9_Done/ALL_DONE status)
+        const isFullyDone = job.Status === "S9_Done" || job.Status === "ALL_DONE" || !!job.Final_Video
+        
+        if (isFullyDone) {
+          // Project is completely done - show as completed
+          setInsertedProjects((prev) =>
+            prev.map((p) => p.id === card.id ? { ...p, status: "completed" as const, progress: 100 } : p)
+          )
+        } else if (hasR2Key) {
           setInsertedProjects((prev) =>
             prev.map((p) => p.id === card.id ? {
               ...p,
@@ -95,10 +103,6 @@ export default function Page() {
               ...(betterTitle && p.title.startsWith("New Project") ? { title: betterTitle } : {}),
               ...(job.Total_Episodes ? { episodes: Number(job.Total_Episodes) } : {}),
             } : p)
-          )
-        } else if (job.Status === "S9_Done") {
-          setInsertedProjects((prev) =>
-            prev.map((p) => p.id === card.id ? { ...p, status: "completed" as const, progress: 100 } : p)
           )
         } else if (["Error", "Failed"].includes(job.Status)) {
           // Show error state
