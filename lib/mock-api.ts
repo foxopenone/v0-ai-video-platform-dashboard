@@ -161,6 +161,9 @@ export async function fetchVoices(): Promise<VoiceOption[]> {
  * Returns: { id: r2_key, name: track_name, category, preview: url }
  * The `id` IS the r2_key passed directly as BGM_Select to n8n.
  */
+// BGM assets base URL
+const BGM_ASSETS_BASE = "https://assets.aihers.live"
+
 export async function fetchBGM(): Promise<
   Array<{ id: string; name: string; category: string; preview: string }>
 > {
@@ -171,12 +174,30 @@ export async function fetchBGM(): Promise<
     if (!json.success || !Array.isArray(json.data)) {
       throw new Error("BGM API returned invalid data")
     }
-    return json.data.map((t: { track_name: string; category: string; r2_key: string; url: string }) => ({
-      id: t.r2_key,         // r2_key IS the BGM_Select value
-      name: t.track_name,
-      category: t.category,
-      preview: t.url || "",  // playback URL
-    }))
+    return json.data.map((t: { track_name: string; category: string; r2_key: string; url: string }) => {
+      // Build preview URL using new assets domain
+      // r2_key format: "BGM/BGM/Cheerful/Ch01.MP3" -> "https://assets.aihers.live/BGM/BGM/Cheerful/Ch01.MP3"
+      let previewUrl = ""
+      if (t.r2_key) {
+        // Ensure path doesn't start with slash when concatenating
+        const path = t.r2_key.startsWith("/") ? t.r2_key.slice(1) : t.r2_key
+        previewUrl = `${BGM_ASSETS_BASE}/${path}`
+      } else if (t.url) {
+        // Fallback: if url is provided, use it (may already be full URL or relative)
+        if (t.url.startsWith("http")) {
+          previewUrl = t.url
+        } else {
+          const path = t.url.startsWith("/") ? t.url.slice(1) : t.url
+          previewUrl = `${BGM_ASSETS_BASE}/${path}`
+        }
+      }
+      return {
+        id: t.r2_key,         // r2_key IS the BGM_Select value
+        name: t.track_name,
+        category: t.category,
+        preview: previewUrl,
+      }
+    })
   } catch (err) {
     console.error("[fetchBGM] Failed to load from BGM API:", err)
     return []
