@@ -39,7 +39,7 @@ const PARAMS = [
     key: "language",
     label: "VO_Language",
     icon: Globe2,
-    options: ["English", "Spanish", "Chinese", "Korean", "Arabic", "Portuguese", "Hindi", "Indonesian"],
+    options: ["Auto", "English", "Spanish", "Chinese", "Korean", "Arabic", "Portuguese", "Hindi", "Indonesian"],
   },
   {
     key: "pov",
