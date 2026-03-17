@@ -1380,50 +1380,55 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const [progressVideoParts, setProgressVideoParts] = useState<Array<{ part: string; url: string }>>([])
   const [animatedPct, setAnimatedPct] = useState(0) // Smoothly animated percentage for progress bar
 
-  // Animate progress bar percentage - NEVER stops, always slowly increasing
-  // This gives users confidence that the backend is working
+  // Independent fake progress bar - NOT tied to backend status
+  // 0-80%: linear growth, 80-99%: Zeno asymptotic approach, 100%: only on success
+  const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const progressDoneRef = useRef(false)
+
   useEffect(() => {
-    if (!isProgress || !progressPolling) return
-    const STAGE_PCT: Record<string, number> = {
-      "Loading...": 2,
-      S1_Ingestion: 8, S1_Upload: 5,
-      S2_Preproc: 15, S2_Brain: 30,
-      S3_Bible: 45, S3_Bible_Check: 50,
-      S4_Script: 55, S4_Visuals: 60,
-      S5_Script: 65, S5_Script_Check: 70,
-      S6_VO: 75, S6_Audio: 80,
-      S7_Render: 85, S8_Render: 92,
-      S9_Done: 100,
+    if (!isProgress) return
+    const { jobRecordId } = props as ProgressProps
+
+    // Reset progress state
+    progressDoneRef.current = false
+    setAnimatedPct(0)
+
+    // Clear any existing timer
+    if (progressTimerRef.current) {
+      clearInterval(progressTimerRef.current)
+      progressTimerRef.current = null
     }
-    const targetPct = STAGE_PCT[progressStatus] ?? 5
-    // Calculate max allowed (next stage - 1, but never exceed 99 unless done)
-    const maxAllowed = progressStatus === "S9_Done" ? 100 : Math.min(targetPct + 8, 99)
-    
-    const interval = setInterval(() => {
+
+    // Estimated total time ~60s, tick every 100ms
+    const estimatedMs = 60000
+    const tickMs = 100
+    const linearStep = 80 / (estimatedMs / tickMs) // ~0.13% per tick
+
+    progressTimerRef.current = setInterval(() => {
       setAnimatedPct((prev) => {
-        // If below target, move faster towards it
-        if (prev < targetPct) {
-          const step = Math.max(0.5, (targetPct - prev) * 0.1)
-          return Math.min(prev + step, targetPct)
-        }
-        // If at or above target but below max, keep slowly creeping up
-        // This ensures the progress bar NEVER stops moving
-        if (prev < maxAllowed) {
-          // Slow creep: 0.1-0.3% per tick, slowing down as we approach max
-          const remaining = maxAllowed - prev
-          const creepStep = Math.max(0.05, remaining * 0.02)
-          return Math.min(prev + creepStep, maxAllowed)
-        }
+        // If done, jump to 100%
+        if (progressDoneRef.current) return 100
+        // Phase 1: 0-80% linear growth
+        if (prev < 80) return Math.min(prev + linearStep, 80)
+        // Phase 2: 80-99% Zeno asymptotic approach (never reaches 100 on its own)
+        if (prev < 99) return Math.min(prev + (99 - prev) * 0.05, 99)
+        // Stay at 99 until done
         return prev
       })
-    }, 150) // Slightly slower tick for more natural feel
-    return () => clearInterval(interval)
-  }, [isProgress, progressPolling, progressStatus])
+    }, tickMs)
+
+    return () => {
+      if (progressTimerRef.current) {
+        clearInterval(progressTimerRef.current)
+        progressTimerRef.current = null
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isProgress, (props as ProgressProps).jobRecordId])
 
   useEffect(() => {
     if (!isProgress) return
     const { jobRecordId, onReviewReady } = props as ProgressProps
-    let consecutiveHits = 0
     let stopped = false
     let failCount = 0
 
@@ -1451,6 +1456,13 @@ export function ReviewRoom(props: ReviewRoomProps) {
           stopped = true
           setProgressPolling(false)
           setProgressCompleted(true)
+          // Mark progress as done - jump to 100%
+          progressDoneRef.current = true
+          setAnimatedPct(100)
+          if (progressTimerRef.current) {
+            clearInterval(progressTimerRef.current)
+            progressTimerRef.current = null
+          }
           // Fetch video parts (filter deleted)
           if (job.Final_Video) {
             try {
@@ -1469,54 +1481,32 @@ export function ReviewRoom(props: ReviewRoomProps) {
           stopped = true
           setProgressPolling(false)
           setProgressError(`Job ended with status: ${job.Status}`)
+          // Stop progress timer on error
+          if (progressTimerRef.current) {
+            clearInterval(progressTimerRef.current)
+            progressTimerRef.current = null
+          }
           return
         }
 
         // Strategy: if Bible_R2_Key exists, transition to step_review.
         // ReviewRoom auto-detects S5_Script_Check and fetches script separately.
         if (job.Bible_R2_Key) {
-      console.log("[v0] TRANSITIONING to step_review! Status:", job.Status, "Bible_R2_Key:", job.Bible_R2_Key, "Work_Mode:", job.Work_Mode)
-      stopped = true
-      setProgressPolling(false)
-      onReviewReady?.({ lockToken: job.Lock_Token || "", bibleR2Key: job.Bible_R2_Key, currentStatus: job.Status, workMode: job.Work_Mode || "Step_Review" })
+          console.log("[v0] TRANSITIONING to step_review! Status:", job.Status, "Bible_R2_Key:", job.Bible_R2_Key, "Work_Mode:", job.Work_Mode)
+          stopped = true
+          setProgressPolling(false)
+          // Mark progress as done - jump to 100%
+          progressDoneRef.current = true
+          setAnimatedPct(100)
+          if (progressTimerRef.current) {
+            clearInterval(progressTimerRef.current)
+            progressTimerRef.current = null
+          }
+          onReviewReady?.({ lockToken: job.Lock_Token || "", bibleR2Key: job.Bible_R2_Key, currentStatus: job.Status, workMode: job.Work_Mode || "Step_Review" })
           return
         }
 
-        // No R2 key yet -- keep polling
-        consecutiveHits++
-        
-        // Dynamic timeout based on stage and video count
-        // Stage 1 (S1/S2): 22s per video, minimum 60s
-        // VO stage (S5/S6): 50s per video, minimum 120s  
-        // Final stage (S7/S8): 15s per video, minimum 45s
-        // Default/unknown: generous 90s per video
-        const videoCount = (props as ProgressProps).videoCount || 3 // Default to 3 if unknown
-        let maxWaitSeconds: number
-        const status = job.Status || ""
-        
-        if (/S1|S2|Preproc|Ingestion|Upload/i.test(status)) {
-          // Stage 1: Bible generation - 22s per video, min 60s
-          maxWaitSeconds = Math.max(videoCount * 25, 60) // 25s to be safe (22 + buffer)
-        } else if (/S5|S6|VO|Voice|Script/i.test(status)) {
-          // VO stage - 50s per video, min 120s
-          maxWaitSeconds = Math.max(videoCount * 55, 120) // 55s to be safe
-        } else if (/S7|S8|Render/i.test(status)) {
-          // Final render stage - 15s per video, min 45s
-          maxWaitSeconds = Math.max(videoCount * 20, 45) // 20s to be safe
-        } else {
-          // Unknown/other stages - be generous
-          maxWaitSeconds = Math.max(videoCount * 60, 180) // 60s per video, min 3 minutes
-        }
-        
-        // Convert to poll count (4s per poll)
-        const maxPolls = Math.ceil(maxWaitSeconds / 4)
-        
-        if (consecutiveHits >= maxPolls) {
-          stopped = true
-          setProgressPolling(false)
-          setProgressError(`Waited too long (${Math.round(consecutiveHits * 4)}s). Status: ${job.Status}. Please close and try again later.`)
-          return
-        }
+        // No R2 key yet -- keep polling (no timeout - let backend take as long as needed)
       } catch (err) {
         failCount++
         console.log(`[v0] Progress poll exception (fail #${failCount}):`, err)
