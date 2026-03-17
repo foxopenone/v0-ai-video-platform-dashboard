@@ -168,12 +168,17 @@ export async function fetchBGM(): Promise<
   Array<{ id: string; name: string; category: string; preview: string }>
 > {
   try {
+    console.log("[v0] fetchBGM: Starting fetch from API...")
     const res = await fetch("https://reel.digipalca.workers.dev/api/bgm/list")
+    console.log("[v0] fetchBGM: Response status:", res.status)
     if (!res.ok) throw new Error(`BGM API returned ${res.status}`)
     const json = await res.json()
+    console.log("[v0] fetchBGM: Response JSON:", JSON.stringify(json).substring(0, 500))
     if (!json.success || !Array.isArray(json.data)) {
+      console.error("[v0] fetchBGM: Invalid data structure. success:", json.success, "data is array:", Array.isArray(json.data))
       throw new Error("BGM API returned invalid data")
     }
+    console.log("[v0] fetchBGM: Got", json.data.length, "tracks")
     return json.data.map((t: { track_name: string; category: string; r2_key: string; url: string }) => {
       // Build preview URL using new assets domain
       // r2_key format: "BGM/BGM/Cheerful/Ch01.MP3" -> "https://assets.aihers.live/BGM/BGM/Cheerful/Ch01.MP3"
