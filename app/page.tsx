@@ -55,7 +55,7 @@ export default function Page() {
     } catch {}
   }, [])
 
-  // On mount: refresh status of all "processing" cards from Airtable
+  // On mount: refresh status of all tracked cards from Airtable
   // Uses a ref to only run once, after localStorage restore has populated state
   const hasRefreshed = useRef(false)
   useEffect(() => {
@@ -63,11 +63,13 @@ export default function Page() {
     if (insertedProjects.length === 0) return
     hasRefreshed.current = true
 
-    const processingCards = insertedProjects.filter((p) => p.status === "processing" && p.airtableRecordId)
-    if (processingCards.length === 0) return
+    // Track ALL cards with airtableRecordId, not just "processing" ones
+    // This ensures stopped/completed cards get updated if backend state changed
+    const trackedCards = insertedProjects.filter((p) => p.airtableRecordId)
+    if (trackedCards.length === 0) return
 
-    console.log(`[v0] Refreshing ${processingCards.length} processing cards from Airtable...`)
-    processingCards.forEach(async (card) => {
+    console.log(`[v0] Refreshing ${trackedCards.length} tracked cards from Airtable...`)
+    trackedCards.forEach(async (card) => {
       try {
         const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(card.airtableRecordId!)}`)
         if (!res.ok) {
@@ -86,15 +88,11 @@ export default function Page() {
 
         // Use Bible_R2_Key presence as the real indicator for review-ready
         const hasR2Key = !!job.Bible_R2_Key
-        // Check if project is fully completed (has final video or S9_Done/ALL_DONE status)
-        const isFullyDone = job.Status === "S9_Done" || job.Status === "ALL_DONE" || !!job.Final_Video
-        
-        if (isFullyDone) {
-          // Project is completely done - show as completed
-          setInsertedProjects((prev) =>
-            prev.map((p) => p.id === card.id ? { ...p, status: "completed" as const, progress: 100 } : p)
-          )
-        } else if (hasR2Key) {
+        const isDone = job.Status === "S9_Done" || job.Status === "ALL_DONE"
+        const isPosted = card.status === "posted"
+
+        if (hasR2Key && !isDone) {
+          // Has Bible but not fully done - ready for review
           setInsertedProjects((prev) =>
             prev.map((p) => p.id === card.id ? {
               ...p,
@@ -104,10 +102,25 @@ export default function Page() {
               ...(job.Total_Episodes ? { episodes: Number(job.Total_Episodes) } : {}),
             } : p)
           )
-        } else if (["Error", "Failed"].includes(job.Status)) {
-          // Show error state
+        } else if (isDone) {
+          // Project is completely done - preserve "posted" status if already posted
           setInsertedProjects((prev) =>
-            prev.map((p) => p.id === card.id ? { ...p, status: "completed" as const, progress: 0 } : p)
+            prev.map((p) => p.id === card.id ? {
+              ...p,
+              status: isPosted ? "posted" as const : "completed" as const,
+              progress: 100,
+              ...(betterTitle && p.title.startsWith("New Project") ? { title: betterTitle } : {}),
+              ...(job.Total_Episodes ? { episodes: Number(job.Total_Episodes) } : {}),
+            } : p)
+          )
+        } else if (["Error", "Failed", "Stopped"].includes(job.Status)) {
+          // Error/Stopped state
+          setInsertedProjects((prev) =>
+            prev.map((p) => p.id === card.id ? {
+              ...p,
+              status: job.Status === "Stopped" ? "stopped" as const : "completed" as const,
+              progress: job.Status === "Stopped" ? p.progress : 0,
+            } : p)
           )
         }
         // else: still genuinely processing, leave as-is
