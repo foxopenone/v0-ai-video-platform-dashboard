@@ -10,31 +10,39 @@ import {
   CheckCircle2,
   AlertCircle,
   Smartphone,
+  Link2,
+  Plus,
 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { uploadVideoToR2 } from "@/lib/mock-api"
 import { cn } from "@/lib/utils"
 
+const R2_BUCKET_URL = "https://video.aihers.live"
+
 interface UploadFile {
   id: string
-  file: File
+  file?: File
   name: string
   progress: number
   status: "queued" | "uploading" | "complete" | "error"
   errorMsg?: string
   r2Key?: string
+  sourceUrl?: string
+  sourceType: "r2" | "url"
   sortKey: number
   episodeLabel: string
 }
 
-export interface R2FileEntry {
-  r2Key: string
+export interface SourceVideoEntry {
+  url: string
   filename: string
+  r2Key?: string
+  sourceType: "r2" | "url"
 }
 
 interface UploadZoneProps {
-  /** Called whenever the set of successfully-uploaded r2 entries changes */
-  onR2KeysChange?: (entries: R2FileEntry[]) => void
+  /** Called whenever the set of ready source video entries changes */
+  onSourceEntriesChange?: (entries: SourceVideoEntry[]) => void
   /** Called whenever total file count changes (including still-uploading) */
   onTotalCountChange?: (count: number) => void
   /** Expose a clear function so parent can reset after ignition */
@@ -58,6 +66,39 @@ function getEpisodeLabel(filename: string): string {
   const numMatch = filename.match(/(\d+)/)
   if (numMatch) return `EP${numMatch[1].padStart(2, "0")}`
   return filename.replace(/\.[^.]+$/, "").slice(0, 6)
+}
+
+function guessFilenameFromUrl(rawUrl: string): string {
+  try {
+    const url = new URL(rawUrl)
+    const pathname = decodeURIComponent(url.pathname || "")
+    const last = pathname.split("/").filter(Boolean).pop()
+    return last || url.hostname || "remote-video.mp4"
+  } catch {
+    return "remote-video.mp4"
+  }
+}
+
+function buildSourceEntries(items: UploadFile[]): SourceVideoEntry[] {
+  return items
+    .filter((item) => item.status === "complete")
+    .map((item) => {
+      if (item.sourceType === "url") {
+        return {
+          url: item.sourceUrl || "",
+          filename: item.name,
+          sourceType: "url" as const,
+        }
+      }
+
+      return {
+        url: `${R2_BUCKET_URL}/${item.r2Key}`,
+        filename: item.name,
+        r2Key: item.r2Key,
+        sourceType: "r2" as const,
+      }
+    })
+    .filter((entry) => entry.url)
 }
 
 function PortraitGuide() {
@@ -120,6 +161,8 @@ function FilmStripItem({
           <CheckCircle2 className="h-3 w-3 text-[hsl(var(--success))]" />
         ) : file.status === "error" ? (
           <AlertCircle className="h-3 w-3 text-destructive" />
+        ) : file.sourceType === "url" ? (
+          <Link2 className="h-3 w-3 text-muted-foreground/40" />
         ) : (
           <Film className="h-3 w-3 text-muted-foreground/40" />
         )}
@@ -143,25 +186,27 @@ function FilmStripItem({
   )
 }
 
-export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, userId = "anonymous" }: UploadZoneProps) {
+export function UploadZone({ onSourceEntriesChange, onTotalCountChange, onClearRef, userId = "anonymous" }: UploadZoneProps) {
   const [files, setFiles] = useState<UploadFile[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
+  const [urlInput, setUrlInput] = useState("")
+  const [urlError, setUrlError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const filmStripRef = useRef<HTMLDivElement>(null)
   const jobIdRef = useRef(generateJobId())
   const router = useRouter()
 
-  // Expose clear function to parent
   useEffect(() => {
     onClearRef?.(() => {
       setFiles([])
+      setUrlInput("")
+      setUrlError(null)
       jobIdRef.current = generateJobId()
     })
   }, [onClearRef])
 
   const processFiles = useCallback(
     async (newFiles: FileList | File[]) => {
-      // Auth gate: check login before processing uploads
       const supabase = createClient()
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) {
@@ -186,6 +231,7 @@ export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, use
         name: file.name,
         progress: 0,
         status: "queued" as const,
+        sourceType: "r2" as const,
         sortKey: extractNumericSuffix(file.name),
         episodeLabel: getEpisodeLabel(file.name),
       }))
@@ -193,12 +239,10 @@ export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, use
       setFiles((prev) => {
         const combined = [...prev, ...uploadFiles]
         const sorted = combined.sort((a, b) => a.sortKey - b.sortKey).slice(0, 15)
-        // Notify parent of new total count
         onTotalCountChange?.(sorted.length)
         return sorted
       })
 
-      // Upload to R2 immediately (async pre-upload)
       const uploadPromises = uploadFiles.map(async (uf) => {
         setFiles((prev) =>
           prev.map((f) =>
@@ -207,7 +251,7 @@ export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, use
         )
         try {
           const r2Key = await uploadVideoToR2(
-            uf.file,
+            uf.file!,
             userId,
             jobIdRef.current,
             (progress) => {
@@ -222,11 +266,7 @@ export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, use
                 ? { ...f, status: "complete" as const, progress: 100, r2Key }
                 : f
             )
-            // Notify parent of all completed r2 entries (key + filename)
-            const entries = updated
-              .filter((f) => f.r2Key)
-              .map((f) => ({ r2Key: f.r2Key!, filename: f.name }))
-            onR2KeysChange?.(entries)
+            onSourceEntriesChange?.(buildSourceEntries(updated))
             return updated
           })
         } catch (err) {
@@ -241,8 +281,55 @@ export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, use
 
       await Promise.allSettled(uploadPromises)
     },
-    [files.length, userId, onR2KeysChange, onTotalCountChange]
+    [files.length, userId, onSourceEntriesChange, onTotalCountChange, router]
   )
+
+  const addUrlEntry = useCallback(() => {
+    const raw = urlInput.trim()
+    if (!raw) {
+      setUrlError("Please paste a video URL.")
+      return
+    }
+
+    let parsed: URL
+    try {
+      parsed = new URL(raw)
+    } catch {
+      setUrlError("Invalid URL.")
+      return
+    }
+
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      setUrlError("Only HTTP/HTTPS URLs are supported.")
+      return
+    }
+
+    if (files.length >= 15) {
+      setUrlError("Maximum 15 videos.")
+      return
+    }
+
+    const filename = guessFilenameFromUrl(raw)
+    const entry: UploadFile = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      name: filename,
+      progress: 100,
+      status: "complete",
+      sourceType: "url",
+      sourceUrl: raw,
+      sortKey: extractNumericSuffix(filename),
+      episodeLabel: getEpisodeLabel(filename),
+    }
+
+    setFiles((prev) => {
+      const updated = [...prev, entry].sort((a, b) => a.sortKey - b.sortKey).slice(0, 15)
+      onSourceEntriesChange?.(buildSourceEntries(updated))
+      onTotalCountChange?.(updated.length)
+      return updated
+    })
+    setUrlInput("")
+    setUrlError(null)
+  }, [files.length, onSourceEntriesChange, onTotalCountChange, urlInput])
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -256,10 +343,7 @@ export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, use
   const removeFile = (id: string) => {
     setFiles((prev) => {
       const updated = prev.filter((f) => f.id !== id)
-      const entries = updated
-        .filter((f) => f.r2Key)
-        .map((f) => ({ r2Key: f.r2Key!, filename: f.name }))
-      onR2KeysChange?.(entries)
+      onSourceEntriesChange?.(buildSourceEntries(updated))
       onTotalCountChange?.(updated.length)
       return updated
     })
@@ -271,7 +355,6 @@ export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, use
 
   return (
     <div className="flex h-full flex-col">
-      {/* Counter row - only when files present */}
       {hasFiles && (
         <div className="mb-2 flex items-center justify-between">
           <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -280,14 +363,13 @@ export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, use
           <span className="font-mono text-[11px] font-medium text-foreground/70">
             <span className="text-[var(--brand-pink)]">{completeCount}</span>
             <span className="text-muted-foreground">
-              /{files.length} uploaded
+              /{files.length} ready
             </span>
             <span className="ml-1 text-muted-foreground/50">of 15 max</span>
           </span>
         </div>
       )}
 
-      {/* Drop zone - stretches to fill available space when empty */}
       <div
         onDragOver={(e) => {
           e.preventDefault()
@@ -302,7 +384,6 @@ export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, use
           handleDrop(e)
         }}
         onClick={() => {
-          // Prevent opening file dialog while uploads are in progress
           if (isUploading) return
           inputRef.current?.click()
         }}
@@ -318,7 +399,6 @@ export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, use
           files.length >= 15 && "pointer-events-none opacity-40"
         )}
       >
-        {/* Empty state: portrait guide centered + CTA in lower third */}
         {!hasFiles && (
           <>
             <div className="flex flex-1 items-center justify-center">
@@ -333,14 +413,13 @@ export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, use
                   Drop videos or click to browse
                 </p>
                 <p className="mt-0.5 text-[10px] text-muted-foreground">
-                  {"MP4, MOV, AVI, MKV \u00b7 Max 15 files"}
+                  {"MP4, MOV, AVI, MKV · Max 15 files"}
                 </p>
               </div>
             </div>
           </>
         )}
 
-        {/* Compact drop trigger when files already added */}
         {hasFiles && (
           <div className="flex items-center justify-center gap-2 px-4 py-3">
             {isUploading ? (
@@ -376,7 +455,42 @@ export function UploadZone({ onR2KeysChange, onTotalCountChange, onClearRef, use
         />
       </div>
 
-      {/* Film-strip: horizontal scroll of episode thumbnails */}
+      <div className="mt-3 rounded-lg border border-border/30 bg-secondary/10 p-3">
+        <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-foreground/80">
+          <Link2 className="h-3.5 w-3.5 text-[var(--brand-pink)]" />
+          Add video URL
+        </div>
+        <div className="flex gap-2">
+          <input
+            value={urlInput}
+            onChange={(e) => {
+              setUrlInput(e.target.value)
+              if (urlError) setUrlError(null)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault()
+                addUrlEntry()
+              }
+            }}
+            placeholder="https://example.com/video.mp4"
+            className="flex-1 rounded-md border border-border/40 bg-background px-3 py-2 text-xs text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-[var(--brand-pink)]/40"
+          />
+          <button
+            type="button"
+            onClick={addUrlEntry}
+            disabled={files.length >= 15}
+            className="inline-flex items-center gap-1 rounded-md border border-[var(--brand-pink)]/25 bg-[var(--brand-pink)]/8 px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-[var(--brand-pink)]/12 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add URL
+          </button>
+        </div>
+        {urlError && (
+          <p className="mt-2 text-[11px] text-destructive">{urlError}</p>
+        )}
+      </div>
+
       {hasFiles && (
         <div className="mt-3">
           <div
