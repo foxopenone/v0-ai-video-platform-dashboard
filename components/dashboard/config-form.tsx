@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
@@ -15,11 +15,10 @@ import {
 } from "@/components/ui/popover"
 import { AudioDrawer } from "@/components/dashboard/audio-drawer"
 import { cn } from "@/lib/utils"
-import type { R2FileEntry } from "@/components/dashboard/upload-zone"
+import type { SourceVideoEntry } from "@/components/dashboard/upload-zone"
 
 const DISPATCHER_URL = "https://n8n-production-8abb.up.railway.app/webhook/job-ingestion-final"
 const API_KEY = "7043cdf229ea2c813b1ec646264cda891c047a69"
-const R2_BUCKET_URL = "https://video.aihers.live"
 
 const PARAMS = [
   {
@@ -148,7 +147,7 @@ export interface InsertedProject {
   airtableRecordId?: string
   supabaseUserId?: string
   numericJobId?: number
-  }
+}
 
 export interface StepReviewData {
   jobRecordId: string
@@ -161,8 +160,8 @@ export interface StepReviewData {
 }
 
 interface ConfigFormProps {
-  /** All r2 file entries collected from UploadZone pre-uploads */
-  r2Entries?: R2FileEntry[]
+  /** All ready source entries collected from UploadZone */
+  sourceEntries?: SourceVideoEntry[]
   /** Total file count in upload zone (includes still-uploading) */
   totalFileCount?: number
   /** Clear completed uploads after successful ignition */
@@ -176,7 +175,7 @@ interface ConfigFormProps {
 }
 
 export function ConfigForm({
-  r2Entries = [],
+  sourceEntries = [],
   totalFileCount = 0,
   clearUploads,
   onProjectInsert,
@@ -186,8 +185,8 @@ export function ConfigForm({
   const router = useRouter()
 
   const [mode, setMode] = useState<"full_auto" | "step_review">("full_auto")
-const [params, setParams] = useState<Record<ParamKey, string>>({
-  platform: "", asr_language: "Auto", language: "", pov: "", tone: "", style: "", hook: "", energy_level: "Medium",
+  const [params, setParams] = useState<Record<ParamKey, string>>({
+    platform: "", asr_language: "Auto", language: "", pov: "", tone: "", style: "", hook: "", energy_level: "Medium",
   })
   const [voiceDrawerOpen, setVoiceDrawerOpen] = useState(false)
   const [bgmDrawerOpen, setBgmDrawerOpen] = useState(false)
@@ -196,10 +195,9 @@ const [params, setParams] = useState<Record<ParamKey, string>>({
   const [selectedVoiceProvider, setSelectedVoiceProvider] = useState<"ElevenLabs" | "Azure" | null>(null)
   const [selectedBgm, setSelectedBgm] = useState<string | null>(null)
   const [selectedBgmName, setSelectedBgmName] = useState<string | null>(null)
-  const [bgmVolume, setBgmVolume] = useState<number>(0.45) // Default 45%
+  const [bgmVolume, setBgmVolume] = useState<number>(0.45)
   const [targetParts, setTargetParts] = useState<number>(3)
 
-  // Restore saved preferences after mount (avoids SSR hydration mismatch)
   useEffect(() => {
     try {
       const m = localStorage.getItem("cfg_mode")
@@ -223,7 +221,6 @@ const [params, setParams] = useState<Record<ParamKey, string>>({
     } catch {}
   }, [])
 
-  // Persist preferences on change (skip first render via ref)
   const hasMounted = useRef(false)
   useEffect(() => {
     if (!hasMounted.current) { hasMounted.current = true; return }
@@ -243,11 +240,9 @@ const [params, setParams] = useState<Record<ParamKey, string>>({
   const [submitted, setSubmitted] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
-  // All files must have r2_key before ignition is allowed
-  const allUploaded = totalFileCount > 0 && r2Entries.length === totalFileCount
-  const hasFilesUploading = totalFileCount > 0 && r2Entries.length < totalFileCount
+  const allUploaded = totalFileCount > 0 && sourceEntries.length === totalFileCount
+  const hasFilesUploading = totalFileCount > 0 && sourceEntries.length < totalFileCount
 
-  // Resolve param value: user selection or first option in list (default)
   const resolveParam = (key: ParamKey): string => {
     if (params[key]) return params[key]
     const paramDef = PARAMS.find((p) => p.key === key)
@@ -256,18 +251,16 @@ const [params, setParams] = useState<Record<ParamKey, string>>({
 
   const handleSubmit = async () => {
     if (!allUploaded) return
-    if (r2Entries.length === 0) {
+    if (sourceEntries.length === 0) {
       setErrorMsg("Video_Files is empty. Please upload at least one video.")
       return
     }
-    
-    // Validate required fields
+
     if (!params.asr_language) {
       setErrorMsg("ASR_Language is required. Please select a language.")
       return
     }
 
-    // Auth gate: must be logged in to dispatch
     const supabase = createClient()
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) {
@@ -281,8 +274,8 @@ const [params, setParams] = useState<Record<ParamKey, string>>({
 
     const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
-    const videoFiles = r2Entries.map((entry) => ({
-      url: `${R2_BUCKET_URL}/${entry.r2Key}`,
+    const videoFiles = sourceEntries.map((entry) => ({
+      url: entry.url,
       filename: entry.filename,
     }))
 
@@ -290,18 +283,18 @@ const [params, setParams] = useState<Record<ParamKey, string>>({
       id: jobId,
       Video_Files: videoFiles,
       Platform: resolveParam("platform"),
-      ASR_Language: params.asr_language,  // ASR/Deepgram language mode (required)
-      Language: resolveParam("language"),  // VO_Language for TTS
+      ASR_Language: params.asr_language,
+      Language: resolveParam("language"),
       POV: resolveParam("pov"),
       Tone: resolveParam("tone"),
       Style_Variant: resolveParam("style"),
       Target_Parts: targetParts,
       Hook_Pattern: resolveParam("hook"),
-      Energy_Level: resolveParam("energy_level") || "Medium",  // Energy level, default Medium
+      Energy_Level: resolveParam("energy_level") || "Medium",
       Voice_Select: selectedVoice || "default_voice",
-      Voice_Provider: selectedVoiceProvider || "ElevenLabs",  // TTS provider: ElevenLabs or Azure
+      Voice_Provider: selectedVoiceProvider || "ElevenLabs",
       BGM_Select: selectedBgm || "default_bgm",
-      BGM_Volume: bgmVolume,  // BGM volume (0.25-0.6)
+      BGM_Volume: bgmVolume,
       Work_Mode: mode === "full_auto" ? "Full_Auto" : "Step_Review",
     }
 
@@ -338,16 +331,14 @@ const [params, setParams] = useState<Record<ParamKey, string>>({
       setSubmitted(true)
       clearUploads?.()
 
-      // Build title from first file name. Fallback to "New Project" if name is empty/numeric.
-      const firstFile = r2Entries[0]?.filename || ""
+      const firstFile = sourceEntries[0]?.filename || ""
       const baseName = firstFile.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ").trim()
-      const epCount = r2Entries.length
+      const epCount = sourceEntries.length
       const isValidName = baseName.length > 0 && !/^\d+$/.test(baseName)
       const projectTitle = isValidName
         ? `${baseName}${epCount > 1 ? ` +${epCount - 1} EP` : ""}`
         : `New Project (${epCount} EP)`
 
-      // Parse dispatch response -- try ALL possible field names for record ID
       let airtableRecordId = ""
       let numericJobId: number | undefined
       try {
@@ -356,7 +347,6 @@ const [params, setParams] = useState<Record<ParamKey, string>>({
         const resJson = JSON.parse(resText)
         console.log("[v0] Dispatch webhook parsed JSON:", resJson)
 
-        // Try every possible field name the webhook might use
         const possibleRecordFields = [
           "Job_Record_ID", "job_record_id", "Record_ID", "record_id",
           "recordId", "airtable_record_id", "id",
@@ -370,17 +360,16 @@ const [params, setParams] = useState<Record<ParamKey, string>>({
           }
         }
 
-        // If top-level doesn't have it, check nested objects
         if (!airtableRecordId) {
           for (const val of Object.values(resJson)) {
-            if (val && typeof val === "string" && (val as string).startsWith("rec")) {
+            if (val && typeof val === "string" && val.startsWith("rec")) {
               airtableRecordId = val as string
               console.log(`[v0] Found airtableRecordId in value scan: ${val}`)
               break
             }
             if (val && typeof val === "object" && !Array.isArray(val)) {
               for (const innerVal of Object.values(val as Record<string, unknown>)) {
-                if (innerVal && typeof innerVal === "string" && (innerVal as string).startsWith("rec")) {
+                if (innerVal && typeof innerVal === "string" && innerVal.startsWith("rec")) {
                   airtableRecordId = innerVal as string
                   console.log(`[v0] Found airtableRecordId in nested value: ${innerVal}`)
                   break
@@ -391,7 +380,6 @@ const [params, setParams] = useState<Record<ParamKey, string>>({
           }
         }
 
-        // Try to find numeric Job_ID
         const possibleJobIdFields = ["Job_ID", "job_id", "jobId", "JobID"]
         for (const key of possibleJobIdFields) {
           if (resJson[key] && !isNaN(Number(resJson[key]))) {
@@ -423,20 +411,19 @@ const [params, setParams] = useState<Record<ParamKey, string>>({
         progress: 0,
         date: new Date().toISOString().slice(0, 10),
         thumbnail: null,
-        episodes: r2Entries.length,
+        episodes: sourceEntries.length,
         airtableRecordId,
         supabaseUserId,
         numericJobId,
       }
       onProjectInsert?.(newProject)
 
-      // Poll Airtable Jobs table via /api/job-status for status changes
       if (airtableRecordId) {
         let failCount = 0
         const MAX_FAILS = 5
         const MAX_POLLS = 120
         let pollCount = 0
-        let consecutiveHits = 0 // debounce: need 2 consecutive hits to trigger
+        let consecutiveHits = 0
 
         const stageProgress: Record<string, number> = {
           S1_Ingestion: 10, S2_Brain: 30, S3_Bible_Check: 100,
@@ -456,16 +443,11 @@ const [params, setParams] = useState<Record<ParamKey, string>>({
             const job = await pollRes.json()
             failCount = 0
 
-            // Debug: print every poll result + raw Airtable fields
             console.log(`[v0] Poll #${pollCount} | Status: ${job.Status} | Bible_R2_Key: ${job.Bible_R2_Key || "null"} | Lock_Token: ${job.Lock_Token || "null"}`)
 
-
-            // Update card progress
             const progress = stageProgress[job.Status] ?? 50
             onProjectUpdate?.(jobId, { progress })
 
-            // Check for review-check status with R2 Key
-            // R2 key is now constructed server-side in job-status API from Folder_A0_ID
             const isReviewCheck = ["S3_Bible_Check", "S5_Script_Check"].includes(job.Status)
             const r2Key = job.Bible_R2_Key || job.Script_R2_Key
             if (isReviewCheck && !r2Key) {
@@ -473,7 +455,6 @@ const [params, setParams] = useState<Record<ParamKey, string>>({
             }
             if (isReviewCheck && r2Key) {
               consecutiveHits++
-              // Debounce: only trigger after 2 consecutive hits (防止 Airtable 写 Key 慢半拍)
               if (consecutiveHits >= 2) {
                 clearInterval(pollInterval)
                 onProjectUpdate?.(jobId, { status: "pending_review", progress: 100 })
@@ -491,7 +472,6 @@ const [params, setParams] = useState<Record<ParamKey, string>>({
               consecutiveHits = 0
             }
 
-            // Done or failed -> stop polling, update card
             if (["S9_Done", "Error", "Failed"].includes(job.Status)) {
               clearInterval(pollInterval)
               onProjectUpdate?.(jobId, {
@@ -522,7 +502,6 @@ const [params, setParams] = useState<Record<ParamKey, string>>({
 
   return (
     <div className="flex h-full flex-col gap-3">
-      {/* Mode Toggle - Premium segmented control */}
       <div className="flex rounded-lg border border-border/40 bg-secondary/20 p-0.5">
         <button
           onClick={() => setMode("full_auto")}
@@ -550,9 +529,7 @@ const [params, setParams] = useState<Record<ParamKey, string>>({
         </button>
       </div>
 
-      {/* Parameter tiles grid - compact, converged */}
       <div className="grid grid-cols-3 gap-2">
-        {/* Render params before hook */}
         {PARAMS.filter(p => p.key !== "hook" && p.key !== "energy_level").map((p) => (
           <ParamTile
             key={p.key}
@@ -564,7 +541,6 @@ const [params, setParams] = useState<Record<ParamKey, string>>({
             required={"required" in p && p.required}
           />
         ))}
-        {/* Target Parts - number input tile (before Hook) */}
         <div
           className={cn(
             "flex items-center gap-2 rounded-md border px-2.5 py-2",
@@ -599,7 +575,6 @@ const [params, setParams] = useState<Record<ParamKey, string>>({
             ))}
           </select>
         </div>
-        {/* Hook and Energy Level - after Target Parts */}
         {PARAMS.filter(p => p.key === "hook" || p.key === "energy_level").map((p) => (
           <ParamTile
             key={p.key}
@@ -612,7 +587,6 @@ const [params, setParams] = useState<Record<ParamKey, string>>({
         ))}
       </div>
 
-      {/* Audio Slots - expanded cards with waveform hint */}
       <div className="grid grid-cols-2 gap-2">
         <button
           onClick={() => setVoiceDrawerOpen(true)}
@@ -626,7 +600,6 @@ const [params, setParams] = useState<Record<ParamKey, string>>({
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary/50">
             <Mic className="h-4.5 w-4.5 text-[var(--brand-pink)]" />
           </div>
-          {/* Mini waveform decoration */}
           <div className="flex items-end gap-[2px]">
             {[3, 5, 8, 12, 8, 10, 6, 4, 7, 11, 6, 3].map((h, i) => (
               <div
@@ -659,7 +632,6 @@ const [params, setParams] = useState<Record<ParamKey, string>>({
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary/50">
             <Music className="h-4.5 w-4.5 text-[var(--brand-purple)]" />
           </div>
-          {/* Mini waveform decoration */}
           <div className="flex items-end gap-[2px]">
             {[4, 7, 5, 10, 13, 8, 6, 11, 5, 9, 4, 6].map((h, i) => (
               <div
@@ -681,10 +653,8 @@ const [params, setParams] = useState<Record<ParamKey, string>>({
         </button>
       </div>
 
-      {/* Spacer fills remaining vertical space, pinning button to bottom */}
       <div className="flex-1" />
 
-      {/* Launch button -- disabled until all uploads have r2_key */}
       <button
         onClick={handleSubmit}
         disabled={submitting || submitted || !allUploaded}
@@ -714,21 +684,18 @@ const [params, setParams] = useState<Record<ParamKey, string>>({
                 : "Start Generation"}
       </button>
 
-      {/* Success message */}
       {submitted && (
         <p className="mt-1.5 text-center text-sm font-medium text-emerald-400">
-          {"\uD83D\uDE80 Mission Accepted"}
+          {"🚀 Mission Accepted"}
         </p>
       )}
 
-      {/* Error message -- allows retry, no redirect, no page reset */}
       {errorMsg && !submitted && (
         <p className="mt-1.5 text-center text-sm text-red-500">
           {errorMsg}
         </p>
       )}
 
-      {/* Audio Drawers */}
       <AudioDrawer
         type="voice"
         open={voiceDrawerOpen}
@@ -738,7 +705,6 @@ const [params, setParams] = useState<Record<ParamKey, string>>({
           setSelectedVoice(id)
           setSelectedVoiceName(name)
           setSelectedVoiceProvider(provider || "ElevenLabs")
-          // Do NOT close drawer -- let user preview and browse freely
         }}
       />
       <AudioDrawer
@@ -752,11 +718,8 @@ const [params, setParams] = useState<Record<ParamKey, string>>({
           setSelectedBgm(id)
           setSelectedBgmName(name)
           if (volume !== undefined) setBgmVolume(volume)
-          // Do NOT close drawer -- let user preview and browse freely
         }}
       />
-
-
     </div>
   )
 }
