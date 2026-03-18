@@ -280,7 +280,8 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const videosLoadedRef = useRef(false) // prevent duplicate video loads
   // Full Auto progress tracking
   const [fullAutoStatus, setFullAutoStatus] = useState<string>("") // Current backend status for Full Auto mode
-  const [fullAutoProgress, setFullAutoProgress] = useState(0) // 0-100 progress percentage
+  const [fullAutoProgress, setFullAutoProgress] = useState(0) // 0-100 target progress percentage
+  const [fullAutoAnimatedPct, setFullAutoAnimatedPct] = useState(0) // Smoothly animated display percentage
   // Work mode: "Full_Auto" disables all approval buttons; "Step_Review" enables them
   const [workMode, setWorkMode] = useState<"Full_Auto" | "Step_Review">(
     isStepReview ? ((props as StepReviewProps).workMode || "Step_Review") : "Step_Review"
@@ -1085,13 +1086,14 @@ export function ReviewRoom(props: ReviewRoomProps) {
         // Update progress based on status
         const status = job.Status || ""
         setFullAutoStatus(status)
-        // Map status to progress percentage
+        // Map status to progress percentage (S7/S8 now split for better granularity)
         let progress = 10
         if (/S3|Bible/i.test(status)) progress = 20
         else if (/S4|Visual/i.test(status)) progress = 35
         else if (/S5|Script/i.test(status)) progress = 50
         else if (/S6|Audio|Voice/i.test(status)) progress = 65
-        else if (/S7|S8|Render/i.test(status)) progress = 80
+        else if (/S7_Render/i.test(status)) progress = 85
+        else if (/S8_Render/i.test(status)) progress = 92
         else if (/S9|Done|ALL_DONE/i.test(status)) progress = 100
         setFullAutoProgress(progress)
         
@@ -1160,6 +1162,35 @@ export function ReviewRoom(props: ReviewRoomProps) {
     return () => { stopped = true; clearInterval(interval); console.log("[v0] Full_Auto poller STOPPED") }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isStepReview, isFullAuto, isCompleted])
+
+  // Full Auto: animated progress bar - smoothly creeps toward target
+  useEffect(() => {
+    if (!isFullAuto || isCompleted) return
+
+    const maxAllowed = fullAutoProgress >= 100 ? 100 : Math.min(fullAutoProgress + 6, 99)
+
+    const interval = setInterval(() => {
+      setFullAutoAnimatedPct((prev) => {
+        // Catch up to target quickly
+        if (prev < fullAutoProgress) {
+          const step = Math.max(1, Math.ceil((fullAutoProgress - prev) / 4))
+          return Math.min(prev + step, fullAutoProgress)
+        }
+        // Slow creep beyond target (but not past maxAllowed)
+        if (prev < maxAllowed) {
+          return Math.min(prev + 1, maxAllowed)
+        }
+        return prev
+      })
+    }, 500)
+
+    return () => clearInterval(interval)
+  }, [isFullAuto, isCompleted, fullAutoProgress])
+
+  // Full Auto: sync to 100% when completed
+  useEffect(() => {
+    if (isCompleted) setFullAutoAnimatedPct(100)
+  }, [isCompleted])
 
   // ── Final Preview: Video Polling (after VO Approve or S8_Render auto-detect) ──
   useEffect(() => {
@@ -1947,12 +1978,12 @@ export function ReviewRoom(props: ReviewRoomProps) {
                       <span className="font-medium text-foreground/80">
                         Full Auto Processing: <span className="text-[var(--brand-pink)]">{fullAutoStatus}</span>
                       </span>
-                      <span className="text-muted-foreground">{fullAutoProgress}%</span>
+                      <span className="text-muted-foreground">{fullAutoAnimatedPct}%</span>
                     </div>
                     <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary/40">
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-[var(--brand-pink)] to-[var(--brand-purple)] transition-all duration-500"
-                        style={{ width: `${fullAutoProgress}%` }}
+                        style={{ width: `${fullAutoAnimatedPct}%` }}
                       />
                     </div>
                   </div>
