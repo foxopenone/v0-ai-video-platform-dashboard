@@ -225,17 +225,7 @@ export function UploadZone({ onSourceEntriesChange, onTotalCountChange, onClearR
 
       if (videoFiles.length === 0) return
 
-      // Filter out duplicates (same filename already exists)
-      const existingNames = new Set(files.map((f) => f.name.toLowerCase()))
-      const uniqueFiles = videoFiles.filter(
-        (f) => !existingNames.has(f.name.toLowerCase())
-      )
-      if (uniqueFiles.length === 0) {
-        console.log("[v0] All files are duplicates, skipping")
-        return
-      }
-
-      const uploadFiles: UploadFile[] = uniqueFiles.map((file) => ({
+      const uploadFiles: UploadFile[] = videoFiles.map((file) => ({
         id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
         file,
         name: file.name,
@@ -316,13 +306,6 @@ export function UploadZone({ onSourceEntriesChange, onTotalCountChange, onClearR
 
     if (files.length >= 15) {
       setUrlError("Maximum 15 videos.")
-      return
-    }
-
-    // Check for duplicate URL
-    const existingUrls = new Set(files.filter((f) => f.sourceUrl).map((f) => f.sourceUrl))
-    if (existingUrls.has(raw)) {
-      setUrlError("This URL has already been added.")
       return
     }
 
