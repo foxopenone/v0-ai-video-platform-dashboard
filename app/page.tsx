@@ -55,82 +55,83 @@ export default function Page() {
     } catch {}
   }, [])
 
-  // On mount: refresh status of all tracked cards from Airtable
-  // Uses a ref to only run once, after localStorage restore has populated state
-  const hasRefreshed = useRef(false)
+  // Continuously refresh tracked cards from Airtable so homepage stays in sync
   useEffect(() => {
-    if (hasRefreshed.current) return
     if (insertedProjects.length === 0) return
-    hasRefreshed.current = true
 
-    // Track ALL cards with airtableRecordId, not just "processing" ones
-    // This ensures stopped/completed cards get updated if backend state changed
     const trackedCards = insertedProjects.filter((p) => p.airtableRecordId)
     if (trackedCards.length === 0) return
 
-    console.log(`[v0] Refreshing ${trackedCards.length} tracked cards from Airtable...`)
-    trackedCards.forEach(async (card) => {
-      try {
-        const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(card.airtableRecordId!)}`)
-        if (!res.ok) {
-          // API error (403, 404, etc.) -- mark as completed/stale so it stops spinning
-          console.log(`[v0] Refresh card ${card.id}: API returned ${res.status}, marking stale`)
-          setInsertedProjects((prev) =>
-            prev.map((p) => p.id === card.id ? { ...p, status: "completed" as const, progress: 0 } : p)
-          )
-          return
-        }
-        const job = await res.json()
-        console.log(`[v0] Refresh card ${card.id}: Airtable Status=${job.Status}, Bible_R2_Key=${job.Bible_R2_Key || "null"}`)
+    let cancelled = false
 
-        // Update title from Airtable data if we only have the default name
-        const betterTitle = job.Job_ID ? `Job #${job.Job_ID}${job.Total_Episodes ? ` (${job.Total_Episodes} EP)` : ""}` : null
+    const refreshCards = async () => {
+      console.log(`[v0] Refreshing ${trackedCards.length} tracked cards from Airtable...`)
 
-        // Use Bible_R2_Key presence as the real indicator for review-ready
-        const hasR2Key = !!job.Bible_R2_Key
-        const isDone = job.Status === "S9_Done" || job.Status === "ALL_DONE"
-        const isPosted = card.status === "posted"
+      await Promise.all(
+        trackedCards.map(async (card) => {
+          try {
+            const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(card.airtableRecordId!)}`)
+            if (!res.ok || cancelled) return
 
-        if (hasR2Key && !isDone) {
-          // Has Bible but not fully done - ready for review
-          setInsertedProjects((prev) =>
-            prev.map((p) => p.id === card.id ? {
-              ...p,
-              status: "pending_review" as const,
-              progress: 100,
-              ...(betterTitle && p.title.startsWith("New Project") ? { title: betterTitle } : {}),
-              ...(job.Total_Episodes ? { episodes: Number(job.Total_Episodes) } : {}),
-            } : p)
-          )
-        } else if (isDone) {
-          // Project is completely done - preserve "posted" status if already posted
-          setInsertedProjects((prev) =>
-            prev.map((p) => p.id === card.id ? {
-              ...p,
-              status: isPosted ? "posted" as const : "completed" as const,
-              progress: 100,
-              ...(betterTitle && p.title.startsWith("New Project") ? { title: betterTitle } : {}),
-              ...(job.Total_Episodes ? { episodes: Number(job.Total_Episodes) } : {}),
-            } : p)
-          )
-        } else if (["Error", "Failed", "Stopped"].includes(job.Status)) {
-          // Error/Stopped state
-          setInsertedProjects((prev) =>
-            prev.map((p) => p.id === card.id ? {
-              ...p,
-              status: job.Status === "Stopped" ? "stopped" as const : "completed" as const,
-              progress: job.Status === "Stopped" ? p.progress : 0,
-            } : p)
-          )
-        }
-        // else: still genuinely processing, leave as-is
-      } catch {
-        // Network error -- mark stale so it stops spinning
-        setInsertedProjects((prev) =>
-          prev.map((p) => p.id === card.id ? { ...p, status: "completed" as const, progress: 0 } : p)
-        )
-      }
-    })
+            const job = await res.json()
+            if (cancelled) return
+
+            const betterTitle = job.Job_ID ? `Job #${job.Job_ID}${job.Total_Episodes ? ` (${job.Total_Episodes} EP)` : ""}` : null
+            const status = String(job.Status || "").trim()
+            const hasR2Key = !!job.Bible_R2_Key
+            const finalVideosRaw = job.Final_Video
+
+            let finalVideos: Array<{ part?: string; url?: string }> = []
+            if (Array.isArray(finalVideosRaw)) {
+              finalVideos = finalVideosRaw
+            } else if (typeof finalVideosRaw === "string" && finalVideosRaw.trim()) {
+              try {
+                const parsed = JSON.parse(finalVideosRaw)
+                if (Array.isArray(parsed)) finalVideos = parsed
+              } catch {}
+            }
+
+            const readyVideoCount = finalVideos.filter((v) => typeof v?.url === "string" && v.url.trim()).length
+            const totalEpisodes = Number(job.Total_Episodes || 0)
+            const allVideosReady = totalEpisodes > 0 ? readyVideoCount >= totalEpisodes : readyVideoCount > 0
+            const isDone = /S9_Done|ALL_DONE|DONE|COMPLETE/i.test(status) || allVideosReady
+            const isFailed = ["Error", "Failed", "Stopped"].includes(status) || /error|failed|stopped|fatal|abort|cancel/i.test(status)
+
+            setInsertedProjects((prev) =>
+              prev.map((p) => {
+                if (p.id !== card.id) return p
+
+                const nextStatus =
+                  p.status === "posted" ? "posted" as const :
+                  isDone ? "completed" as const :
+                  isFailed && status === "Stopped" ? "stopped" as const :
+                  isFailed ? "completed" as const :
+                  hasR2Key ? "pending_review" as const :
+                  "processing" as const
+
+                return {
+                  ...p,
+                  status: nextStatus,
+                  progress: isDone || hasR2Key ? 100 : p.progress,
+                  ...(betterTitle && p.title.startsWith("New Project") ? { title: betterTitle } : {}),
+                  ...(totalEpisodes > 0 ? { episodes: totalEpisodes } : {}),
+                }
+              })
+            )
+          } catch {
+            // Keep current card state on transient network failure
+          }
+        })
+      )
+    }
+
+    refreshCards()
+    const interval = window.setInterval(refreshCards, 15000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
   }, [insertedProjects])
 
   // Persist insertedProjects to localStorage on every change (skip first render)
