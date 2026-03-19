@@ -309,6 +309,43 @@ export function ReviewRoom(props: ReviewRoomProps) {
     return detail ? `[${status}] ${detail}` : `Job ended with status: ${status}`
   }, [])
 
+  const applyUiStateForStatus = useCallback((statusRaw: unknown) => {
+    const status = String(statusRaw || "").trim()
+    const isDone = /S9_Done|S9|ALL_DONE|DONE|COMPLETE/i.test(status)
+    const isPreviewPhase = isDone || /S7|S8|Render/i.test(status)
+    const isVoicePhase = /S5|S6|Audio|Voice|Script/i.test(status)
+    const isBibleApproved = isDone || isPreviewPhase || isVoicePhase || /S4|Visual/i.test(status)
+    const isVoApproved = isDone || isPreviewPhase
+
+    if (isDone) {
+      setApprovedPhases(new Set(["bible", "voiceover", "preview"]))
+      setIsCompleted(true)
+      setActiveTab("preview")
+      return
+    }
+
+    if (isPreviewPhase) {
+      setApprovedPhases(new Set(["bible", "voiceover"]))
+      setActiveTab("preview")
+      return
+    }
+
+    if (isVoicePhase) {
+      setApprovedPhases(new Set(isBibleApproved ? ["bible"] : []))
+      setActiveTab("voiceover")
+      return
+    }
+
+    if (isBibleApproved) {
+      setApprovedPhases(new Set(["bible"]))
+      setActiveTab("bible")
+      return
+    }
+
+    setApprovedPhases(new Set())
+    setActiveTab("bible")
+  }, [])
+
   // Auto-select first video part with a URL when videos arrive (only once)
   useEffect(() => {
     if (videoParts.length > 0 && !selectedVideoPartId) {
@@ -471,22 +508,8 @@ export function ReviewRoom(props: ReviewRoomProps) {
     // S9_Done -> All done
     
     console.log("[v0] ReviewRoom init - currentStatus:", currentStatus, "statusStr:", statusStr, "workMode:", workMode)
-    const isDone = /S9_Done|S9|ALL_DONE|DONE|COMPLETE/i.test(statusStr)
-    const isBibleApproved = isDone || /S[4-9]|S4|S5|S6|S7|S8/i.test(statusStr)
-    const isVoApproved = isDone || /S[7-9]|S7|S8/i.test(statusStr)
-    console.log("[v0] Status check - isDone:", isDone, "isBibleApproved:", isBibleApproved, "isVoApproved:", isVoApproved)
-    console.log("[v0] isDone test on statusStr:", statusStr, "-> result:", /S9_Done|S9|ALL_DONE|DONE|COMPLETE/i.test(statusStr))
-    
-
-    
-    if (isDone) {
-      setApprovedPhases(new Set(["bible", "voiceover", "preview"]))
-      setIsCompleted(true)
-    } else if (isVoApproved) {
-      setApprovedPhases(new Set(["bible", "voiceover"]))
-    } else if (isBibleApproved) {
-      setApprovedPhases(new Set(["bible"]))
-    }
+    console.log("[v0] Status check init:", statusStr)
+    applyUiStateForStatus(statusStr)
 
     // Always load bible (it's the base data)
     setBibleLoading(true)
@@ -503,19 +526,8 @@ export function ReviewRoom(props: ReviewRoomProps) {
       })
       .finally(() => setBibleLoading(false))
 
-    // Set initial tab based on current status
-    // S9_Done/ALL_DONE or S8_Render -> Final Preview
-    // S6_VO/S7_Render -> Voice Over
-    // Otherwise -> Bible
-    if (isDone || /S8|S9/i.test(statusStr)) {
-      setActiveTab("preview")
-    } else if (/S6|S7/i.test(statusStr)) {
-      setActiveTab("voiceover")
-    } else {
-      setActiveTab("bible")
-    }
-    
-    if (isDone || /S8|S9/i.test(statusStr)) {
+    const isDone = /S9_Done|S9|ALL_DONE|DONE|COMPLETE/i.test(statusStr)
+    if (/S9_Done|S9|ALL_DONE|DONE|COMPLETE|S8/i.test(statusStr)) {
       if (isDone && !videosLoadedRef.current) {
         videosLoadedRef.current = true
         // S9_Done: videos are already rendered, just fetch them once (no polling)
@@ -1122,6 +1134,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
         // Update progress based on status
         const status = job.Status || ""
         setFullAutoStatus(status)
+        applyUiStateForStatus(status)
         // Map status to progress percentage
         let progress = 10
         if (/S3|Bible/i.test(status)) progress = 20
@@ -1916,100 +1929,80 @@ export function ReviewRoom(props: ReviewRoomProps) {
             activeTab === "preview" ? "w-full" : "w-3/5"
           )}>
             {/* Phase step tabs with checkmarks and connectors */}
-            {(() => {
-              // Determine current phase based on fullAutoStatus for Full Auto mode
-              // S3 = Bible, S4/S5/S6 = Voice Over, S7/S8/S9 = Final Preview
-              const status = fullAutoStatus || ""
-              const inVoiceOverPhase = /S4|S5|S6|Visual|Script|Audio|Voice/i.test(status)
-              const inFinalPreviewPhase = /S7|S8|S9|Render|Done|ALL_DONE/i.test(status)
-              
-              // For Full Auto: determine which phase is "active" based on backend status
-              const effectiveActivePhase = isFullAuto && !isCompleted
-                ? (inFinalPreviewPhase ? "preview" : inVoiceOverPhase ? "voiceover" : "bible")
-                : activeTab
-              
-              // Bible is approved if we're past it (in voiceover or preview phase) in Full Auto
-              const bibleApprovedOrPast = approvedPhases.has("bible") || (isFullAuto && (inVoiceOverPhase || inFinalPreviewPhase))
-              // VoiceOver is approved if we're in preview phase in Full Auto
-              const voiceoverApprovedOrPast = approvedPhases.has("voiceover") || (isFullAuto && inFinalPreviewPhase)
-              
-              return (
-                <div className="flex shrink-0 items-center gap-0 border-b border-border/20 px-5 py-3">
-                  {/* Step 1: Story Bible */}
-                  <button
-                    onClick={() => setActiveTab("bible")}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-                      effectiveActivePhase === "bible" ? "bg-secondary/60 text-foreground" : "text-muted-foreground hover:text-foreground/70"
-                    )}
-                  >
-                    {bibleApprovedOrPast ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                    ) : (
-                      <FileText className="h-3.5 w-3.5" />
-                    )}
-                    Story Bible
-                    {bibleApprovedOrPast && effectiveActivePhase !== "bible" && (
-                      <span className="ml-1 text-[9px] text-emerald-400/70">{approvedPhases.has("bible") ? "Approved" : "Done"}</span>
-                    )}
-                  </button>
+            <div className="flex shrink-0 items-center gap-0 border-b border-border/20 px-5 py-3">
+              {/* Step 1: Story Bible */}
+              <button
+                onClick={() => setActiveTab("bible")}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                  activeTab === "bible" ? "bg-secondary/60 text-foreground" : "text-muted-foreground hover:text-foreground/70"
+                )}
+              >
+                {approvedPhases.has("bible") ? (
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                ) : (
+                  <FileText className="h-3.5 w-3.5" />
+                )}
+                Story Bible
+                {approvedPhases.has("bible") && activeTab !== "bible" && (
+                  <span className="ml-1 text-[9px] text-emerald-400/70">Done</span>
+                )}
+              </button>
 
-                  {/* Connector 1->2 */}
-                  <div className={cn(
-                    "mx-1.5 h-px w-6 transition-colors",
-                    bibleApprovedOrPast ? "bg-emerald-500/40" : "bg-border/30"
-                  )} />
+              {/* Connector 1->2 */}
+              <div className={cn(
+                "mx-1.5 h-px w-6 transition-colors",
+                approvedPhases.has("bible") ? "bg-emerald-500/40" : "bg-border/30"
+              )} />
 
-                  {/* Step 2: Voice Over */}
-                  <button
-                    onClick={() => { if (scriptData || scriptPolling || scriptError || approvedPhases.has("bible") || inVoiceOverPhase || inFinalPreviewPhase) setActiveTab("voiceover") }}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-                      effectiveActivePhase === "voiceover" ? "bg-secondary/60 text-foreground" : "text-muted-foreground hover:text-foreground/70",
-                      !scriptData && !scriptPolling && !scriptError && !approvedPhases.has("bible") && !inVoiceOverPhase && !inFinalPreviewPhase && "cursor-not-allowed opacity-50"
-                    )}
-                  >
-                    {voiceoverApprovedOrPast ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                    ) : (
-                      <Mic className="h-3.5 w-3.5" />
-                    )}
-                    Voice Over
-                    {(scriptPolling || (isFullAuto && inVoiceOverPhase)) && <Loader2 className="ml-1 h-3 w-3 animate-spin text-[var(--brand-pink)]" />}
-                    {voiceoverApprovedOrPast && effectiveActivePhase !== "voiceover" && (
-                      <span className="ml-1 text-[9px] text-emerald-400/70">{approvedPhases.has("voiceover") ? "Approved" : "Done"}</span>
-                    )}
-                  </button>
+              {/* Step 2: Voice Over */}
+              <button
+                onClick={() => { if (scriptData || scriptPolling || scriptError || approvedPhases.has("bible")) setActiveTab("voiceover") }}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                  activeTab === "voiceover" ? "bg-secondary/60 text-foreground" : "text-muted-foreground hover:text-foreground/70",
+                  !scriptData && !scriptPolling && !scriptError && !approvedPhases.has("bible") && "cursor-not-allowed opacity-50"
+                )}
+              >
+                {approvedPhases.has("voiceover") ? (
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                ) : (
+                  <Mic className="h-3.5 w-3.5" />
+                )}
+                Voice Over
+                {scriptPolling && <Loader2 className="ml-1 h-3 w-3 animate-spin text-[var(--brand-pink)]" />}
+                {approvedPhases.has("voiceover") && activeTab !== "voiceover" && (
+                  <span className="ml-1 text-[9px] text-emerald-400/70">Done</span>
+                )}
+              </button>
 
-                  {/* Connector 2->3 */}
-                  <div className={cn(
-                    "mx-1.5 h-px w-6 transition-colors",
-                    voiceoverApprovedOrPast ? "bg-emerald-500/40" : "bg-border/30"
-                  )} />
+              {/* Connector 2->3 */}
+              <div className={cn(
+                "mx-1.5 h-px w-6 transition-colors",
+                approvedPhases.has("voiceover") ? "bg-emerald-500/40" : "bg-border/30"
+              )} />
 
-                  {/* Step 3: Final Preview */}
-                  <button
-                    onClick={() => { if (videoParts.length > 0 || videoPolling || videoError || approvedPhases.has("voiceover") || isCompleted || inFinalPreviewPhase) setActiveTab("preview") }}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-                      effectiveActivePhase === "preview" ? "bg-secondary/60 text-foreground" : "text-muted-foreground hover:text-foreground/70",
-                      !videoParts.length && !videoPolling && !videoError && !approvedPhases.has("voiceover") && !isCompleted && !inFinalPreviewPhase && "cursor-not-allowed opacity-50"
-                    )}
-                  >
-                    {approvedPhases.has("preview") ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                    ) : (
-                      <Film className="h-3.5 w-3.5" />
-                    )}
-                    Final Preview
-                    {approvedPhases.has("preview") && effectiveActivePhase !== "preview" && (
-                      <span className="ml-1 text-[9px] text-emerald-400/70">Approved</span>
-                    )}
-                    {(videoPolling || (isFullAuto && inFinalPreviewPhase && !isCompleted)) && <Loader2 className="ml-1 h-3 w-3 animate-spin text-[var(--brand-pink)]" />}
-                  </button>
-                </div>
-              )
-            })()}
+              {/* Step 3: Final Preview */}
+              <button
+                onClick={() => { if (videoParts.length > 0 || videoPolling || videoError || approvedPhases.has("voiceover") || isCompleted) setActiveTab("preview") }}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                  activeTab === "preview" ? "bg-secondary/60 text-foreground" : "text-muted-foreground hover:text-foreground/70",
+                  !videoParts.length && !videoPolling && !videoError && !approvedPhases.has("voiceover") && !isCompleted && "cursor-not-allowed opacity-50"
+                )}
+              >
+                {approvedPhases.has("preview") ? (
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                ) : (
+                  <Film className="h-3.5 w-3.5" />
+                )}
+                Final Preview
+                {approvedPhases.has("preview") && activeTab !== "preview" && (
+                  <span className="ml-1 text-[9px] text-emerald-400/70">Done</span>
+                )}
+                {videoPolling && <Loader2 className="ml-1 h-3 w-3 animate-spin text-[var(--brand-pink)]" />}
+              </button>
+            </div>
 
             {/* Full Auto Progress Bar - only show when Full Auto is processing */}
             {isFullAuto && !isCompleted && fullAutoStatus && (
