@@ -149,8 +149,15 @@ function FilmStripItem({
               ? "border-destructive/30 bg-destructive/5"
               : "border-border/30 bg-secondary/30"
         )}
-        title={file.status === "error" && file.errorMsg ? file.errorMsg : undefined}
+        title={file.status === "error" && file.errorMsg ? `Error: ${file.errorMsg}` : undefined}
       >
+        {/* Show error message tooltip on hover */}
+        {file.status === "error" && file.errorMsg && (
+          <div className="pointer-events-none absolute -top-16 left-1/2 z-50 hidden w-48 -translate-x-1/2 rounded-md bg-destructive/90 px-2 py-1.5 text-[9px] text-destructive-foreground shadow-lg group-hover:block">
+            {file.errorMsg}
+            <div className="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-destructive/90" />
+          </div>
+        )}
         {isUploading && (
           <div
             className="absolute inset-x-0 bottom-0 rounded-b-lg bg-[var(--brand-pink)]/15 transition-all"
