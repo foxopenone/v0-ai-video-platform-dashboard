@@ -78,6 +78,7 @@ export async function GET(req: NextRequest) {
       Total_Episodes: f.Total_Episodes ?? null,
       Ep_Assets: f.Ep_Assets ?? null,
       Last_Action: t(f.Last_Action),
+      Last_Error: t(f.Last_Error) || t(f.Error_Message) || t(f.Error),
       // Final_Video: JSON array string e.g. [{"part":"1","url":"https://..."}]
       Final_Video: f.Final_Video ?? null,
     })
