@@ -313,7 +313,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
     const status = String(statusRaw || "").trim()
     const isDone = /S9_Done|S9|ALL_DONE|DONE|COMPLETE/i.test(status)
     const isPreviewPhase = isDone || /S7|S8|Render/i.test(status)
-    const isVoicePhase = /S5|S6|Audio|Voice|Script/i.test(status)
+    const isVoicePhase = /S4|S5|S6|Visual|Audio|Voice|Script/i.test(status)
     const isBibleApproved = isDone || isPreviewPhase || isVoicePhase || /S4|Visual/i.test(status)
     const isVoApproved = isDone || isPreviewPhase
 
@@ -1542,37 +1542,11 @@ export function ReviewRoom(props: ReviewRoomProps) {
         // No R2 key yet -- keep polling
         consecutiveHits++
         
-        // Dynamic timeout based on stage and video count
-        // Stage 1 (S1/S2): 22s per video, minimum 60s
-        // VO stage (S5/S6): 50s per video, minimum 120s  
-        // Final stage (S7/S8): 15s per video, minimum 45s
-        // Default/unknown: generous 90s per video
-        const videoCount = (props as ProgressProps).videoCount || 3 // Default to 3 if unknown
-        let maxWaitSeconds: number
-        const status = job.Status || ""
-        
-        if (/S1|S2|Preproc|Ingestion|Upload/i.test(status)) {
-          // Stage 1: Bible generation - 22s per video, min 60s
-          maxWaitSeconds = Math.max(videoCount * 25, 60) // 25s to be safe (22 + buffer)
-        } else if (/S5|S6|VO|Voice|Script/i.test(status)) {
-          // VO stage - 50s per video, min 120s
-          maxWaitSeconds = Math.max(videoCount * 55, 120) // 55s to be safe
-        } else if (/S7|S8|Render/i.test(status)) {
-          // Final render stage - 15s per video, min 45s
-          maxWaitSeconds = Math.max(videoCount * 20, 45) // 20s to be safe
-        } else {
-          // Unknown/other stages - be generous
-          maxWaitSeconds = Math.max(videoCount * 60, 180) // 60s per video, min 3 minutes
-        }
-        
-        // Convert to poll count (4s per poll)
-        const maxPolls = Math.ceil(maxWaitSeconds / 4)
-        
-        if (consecutiveHits >= maxPolls) {
-          stopped = true
-          setProgressPolling(false)
-          setProgressError(`Waited too long (${Math.round(consecutiveHits * 4)}s). Status: ${job.Status}. Please close and try again later.`)
-          return
+        // Do not auto-fail long-running backend stages.
+        // Preproc / Brain / Render can legitimately take much longer than a frontend estimate.
+        // We keep polling until explicit success/failure/network failure.
+        if (consecutiveHits % 15 === 0) {
+          console.log(`[v0] Progress poll still waiting: ${Math.round(consecutiveHits * 4)}s | Status: ${job.Status}`)
         }
       } catch (err) {
         failCount++
