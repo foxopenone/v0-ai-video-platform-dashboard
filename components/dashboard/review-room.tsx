@@ -1503,23 +1503,35 @@ export function ReviewRoom(props: ReviewRoomProps) {
         console.log(`[v0] Progress poll | Status: ${job.Status} | Bible_R2_Key: ${job.Bible_R2_Key || "null"} | Script_R2_Key: ${job.Script_R2_Key || "null"}`)
         setProgressStatus(job.Status || "Unknown")
 
-        // If done, stop polling and mark completed
-        if (job.Status === "S9_Done") {
+        let finalVideos: Array<{ part: string; url: string }> = []
+        if (job.Final_Video) {
+          try {
+            finalVideos = typeof job.Final_Video === "string"
+              ? JSON.parse(job.Final_Video)
+              : job.Final_Video
+          } catch {
+            finalVideos = []
+          }
+        }
+        const deletedKey = `deleted_parts_${jobRecordId}`
+        const deletedParts: string[] = JSON.parse(localStorage.getItem(deletedKey) || "[]")
+        const filteredVideos = (finalVideos || []).filter((v: { part: string; url: string }) =>
+          v && v.url && !deletedParts.includes(String(v.part))
+        )
+        const expectedParts = Math.max(
+          Number(job.Total_Episodes || 0),
+          Number((props as ProgressProps).videoCount || 0),
+          1
+        )
+        const allVideosReady = filteredVideos.length >= expectedParts
+        const isDoneStatus = /S9_Done|ALL_DONE|DONE|COMPLETE/i.test(String(job.Status || ""))
+
+        // If done, or if all final video URLs are already present, mark completed immediately
+        if (isDoneStatus || allVideosReady) {
           stopped = true
           setProgressPolling(false)
           setProgressCompleted(true)
-          // Fetch video parts (filter deleted)
-          if (job.Final_Video) {
-            try {
-              const videos = typeof job.Final_Video === "string"
-                ? JSON.parse(job.Final_Video)
-                : job.Final_Video
-              const deletedKey = `deleted_parts_${jobRecordId}`
-              const deletedParts: string[] = JSON.parse(localStorage.getItem(deletedKey) || "[]")
-              const filteredVideos = (videos || []).filter((v: { part: string }) => !deletedParts.includes(String(v.part)))
-              setProgressVideoParts(filteredVideos)
-            } catch { /* ignore parse errors */ }
-          }
+          setProgressVideoParts(filteredVideos)
           return
         }
         if (isFailedBackendStatus(job.Status)) {
