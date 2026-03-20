@@ -297,10 +297,16 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
   const isFailedBackendStatus = useCallback((status: unknown) => {
     const normalized = String(status || "").trim()
-    return (
-      ["Error", "Failed", "Stopped"].includes(normalized) ||
-      /error|failed|stopped|fatal|abort|cancel/i.test(normalized)
-    )
+    // Only match exact error statuses or statuses that START with error keywords
+    // Don't match normal processing stages like S2_Preproc, S3_Bible, etc.
+    if (!normalized) return false
+    // Exact matches for known error statuses
+    if (["Error", "Failed", "Stopped", "Cancelled", "Aborted"].includes(normalized)) return true
+    // Match if status STARTS with error-related words (not contains)
+    if (/^(error|failed|stopped|fatal|abort|cancel)/i.test(normalized)) return true
+    // Match explicit error suffix pattern like "S3_Error" or "Bible_Failed"
+    if (/_error$|_failed$|_stopped$/i.test(normalized)) return true
+    return false
   }, [])
 
   const buildJobErrorMessage = useCallback((job: { Status?: string; Last_Error?: string | null; Last_Action?: string | null }) => {
@@ -1192,8 +1198,10 @@ export function ReviewRoom(props: ReviewRoomProps) {
           return
         }
         
-        // Check for error
-        if (isFailedBackendStatus(job.Status)) {
+        // Check for error - only real error statuses, not processing stages like S2_Preproc
+        const isFailed = isFailedBackendStatus(job.Status)
+        console.log("[v0] Full_Auto: Checking status:", job.Status, "| isFailedBackendStatus:", isFailed)
+        if (isFailed) {
           stopped = true
           const message = buildJobErrorMessage(job)
           console.log("[v0] Full_Auto: Job failed with status:", job.Status, "| detail:", job.Last_Error || "none")
