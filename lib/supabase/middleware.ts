@@ -48,6 +48,28 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  if (request.nextUrl.pathname.startsWith('/admin')) {
+    if (!user) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      url.searchParams.set('next', '/admin')
+      return NextResponse.redirect(url)
+    }
+
+    const adminEmails = (process.env.ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAIL || '')
+      .split(',')
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean)
+
+    const userEmail = String(user.email || '').trim().toLowerCase()
+
+    if (adminEmails.length === 0 || !userEmail || !adminEmails.includes(userEmail)) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/'
+      return NextResponse.redirect(url)
+    }
+  }
+
   // All other pages (including /) are accessible without login
 
   return supabaseResponse
