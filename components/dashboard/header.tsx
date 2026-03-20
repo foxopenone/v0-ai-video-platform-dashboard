@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
@@ -28,23 +28,17 @@ export function Header() {
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
-  // Use singleton Supabase client to prevent session instability
-  const supabase = useMemo(() => createClient(), [])
-
   useEffect(() => {
-    // Initial session check
+    const supabase = createClient()
     supabase.auth.getSession().then(({ data }) => {
       setUser(data.session?.user ?? null)
       setLoading(false)
     })
-
-    // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
     })
-
     return () => subscription.unsubscribe()
-  }, [supabase])
+  }, [])
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/40 bg-background/80 backdrop-blur-xl">
@@ -151,6 +145,7 @@ export function Header() {
               <DropdownMenuItem
                 className="text-destructive"
                 onClick={async () => {
+                  const supabase = createClient()
                   await supabase.auth.signOut()
                   setUser(null)
                   router.push("/login")

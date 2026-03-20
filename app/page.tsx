@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect, useRef } from "react"
+import { useState, useCallback, useEffect, useMemo, useRef } from "react"
 import { Header } from "@/components/dashboard/header"
 import { WorkspaceSection } from "@/components/dashboard/workspace-section"
 import { ProjectsSection } from "@/components/dashboard/projects-section"
@@ -55,26 +55,63 @@ export default function Page() {
     } catch {}
   }, [])
 
-  // Continuously refresh tracked cards from Airtable so homepage stays in sync
-  useEffect(() => {
-    if (insertedProjects.length === 0) return
+  const pollableProjects = useMemo(
+    () =>
+      insertedProjects.filter(
+        (p) =>
+          !!p.airtableRecordId &&
+          !["completed", "posted", "stopped"].includes(p.status)
+      ),
+    [insertedProjects]
+  )
 
-    const trackedCards = insertedProjects.filter((p) => p.airtableRecordId)
-    if (trackedCards.length === 0) return
+  const pollableKey = useMemo(
+    () =>
+      pollableProjects
+        .map((p) => `${p.id}:${p.airtableRecordId}:${p.status}`)
+        .sort()
+        .join("|"),
+    [pollableProjects]
+  )
+
+  // Continuously refresh only active cards, using one bulk API call.
+  useEffect(() => {
+    if (pollableProjects.length === 0) return
 
     let cancelled = false
 
     const refreshCards = async () => {
-      console.log(`[v0] Refreshing ${trackedCards.length} tracked cards from Airtable...`)
+      if (document.visibilityState !== "visible") return
 
-      await Promise.all(
-        trackedCards.map(async (card) => {
-          try {
-            const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(card.airtableRecordId!)}`)
-            if (!res.ok || cancelled) return
+      try {
+        const res = await fetch("/api/job-status-bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            record_ids: pollableProjects
+              .map((p) => p.airtableRecordId)
+              .filter(Boolean),
+          }),
+        })
 
-            const job = await res.json()
-            if (cancelled) return
+        if (!res.ok || cancelled) return
+
+        const payload = await res.json()
+        if (cancelled) return
+
+        const jobs = Array.isArray(payload?.records) ? payload.records : []
+        const jobMap = new Map<string, Record<string, unknown>>(
+          jobs.map((job: Record<string, unknown>) => [String(job.Job_Record_ID || ""), job])
+        )
+
+        setInsertedProjects((prev) =>
+          prev.map((p) => {
+            if (!p.airtableRecordId || ["completed", "posted", "stopped"].includes(p.status)) {
+              return p
+            }
+
+            const job = jobMap.get(p.airtableRecordId)
+            if (!job) return p
 
             const betterTitle = job.Job_ID ? `Job #${job.Job_ID}${job.Total_Episodes ? ` (${job.Total_Episodes} EP)` : ""}` : null
             const status = String(job.Status || "").trim()
@@ -97,42 +134,35 @@ export default function Page() {
             const isDone = /S9_Done|ALL_DONE|DONE|COMPLETE/i.test(status) || allVideosReady
             const isFailed = ["Error", "Failed", "Stopped"].includes(status) || /error|failed|stopped|fatal|abort|cancel/i.test(status)
 
-            setInsertedProjects((prev) =>
-              prev.map((p) => {
-                if (p.id !== card.id) return p
+            const nextStatus =
+              isDone ? "completed" as const :
+              isFailed && status === "Stopped" ? "stopped" as const :
+              isFailed ? "completed" as const :
+              hasR2Key ? "pending_review" as const :
+              "processing" as const
 
-                const nextStatus =
-                  p.status === "posted" ? "posted" as const :
-                  isDone ? "completed" as const :
-                  isFailed && status === "Stopped" ? "stopped" as const :
-                  isFailed ? "completed" as const :
-                  hasR2Key ? "pending_review" as const :
-                  "processing" as const
-
-                return {
-                  ...p,
-                  status: nextStatus,
-                  progress: isDone || hasR2Key ? 100 : p.progress,
-                  ...(betterTitle && p.title.startsWith("New Project") ? { title: betterTitle } : {}),
-                  ...(totalEpisodes > 0 ? { episodes: totalEpisodes } : {}),
-                }
-              })
-            )
-          } catch {
-            // Keep current card state on transient network failure
-          }
-        })
-      )
+            return {
+              ...p,
+              status: p.status === "posted" ? "posted" : nextStatus,
+              progress: isDone || hasR2Key ? 100 : p.progress,
+              ...(betterTitle && p.title.startsWith("New Project") ? { title: betterTitle } : {}),
+              ...(totalEpisodes > 0 ? { episodes: totalEpisodes } : {}),
+            }
+          })
+        )
+      } catch {
+        // Keep current card state on transient failure
+      }
     }
 
     refreshCards()
-    const interval = window.setInterval(refreshCards, 15000)
+    const interval = window.setInterval(refreshCards, 30000)
 
     return () => {
       cancelled = true
       window.clearInterval(interval)
     }
-  }, [insertedProjects])
+  }, [pollableKey, pollableProjects])
 
   // Persist insertedProjects to localStorage on every change (skip first render)
   const hasMounted = useRef(false)

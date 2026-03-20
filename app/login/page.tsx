@@ -37,7 +37,8 @@ export default function LoginPage() {
         password,
       })
       if (error) throw error
-      router.push("/")
+      router.replace("/")
+      router.refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Login failed")
     } finally {

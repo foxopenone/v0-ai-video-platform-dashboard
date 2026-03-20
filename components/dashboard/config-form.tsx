@@ -432,6 +432,9 @@ export function ConfigForm({
         }
 
         const pollInterval = setInterval(async () => {
+          if (typeof document !== "undefined" && document.visibilityState !== "visible") {
+            return
+          }
           pollCount++
           if (pollCount > MAX_POLLS) {
             clearInterval(pollInterval)
@@ -485,7 +488,7 @@ export function ConfigForm({
               clearInterval(pollInterval)
             }
           }
-        }, 10000)
+        }, 20000)
       }
 
       setTimeout(() => {
