@@ -18,11 +18,7 @@ function GoogleIcon({ className }: { className?: string }) {
 
 function getPublicAppUrl() {
   if (typeof window !== "undefined") {
-    const host = window.location.hostname.toLowerCase()
-    if (host === "localhost" || host === "127.0.0.1") {
-      return window.location.origin.replace(/\/$/, "")
-    }
-    return "https://www.shortee.tv"
+    return window.location.origin.replace(/\/$/, "")
   }
 
   return "https://www.shortee.tv"
