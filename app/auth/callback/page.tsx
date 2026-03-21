@@ -14,22 +14,39 @@ export default function AuthCallbackPage() {
 
   useEffect(() => {
     const run = async () => {
+      const supabase = createClient()
       const params = new URLSearchParams(window.location.search)
       const code = params.get("code")
       const next = getSafeNext(params.get("next"))
+      const errorFromProvider = params.get("error_description") || params.get("error")
 
-      if (!code) {
-        router.replace("/auth/error?error=Could+not+authenticate")
+      if (errorFromProvider) {
+        router.replace(`/auth/error?error=${encodeURIComponent(errorFromProvider)}`)
         return
       }
 
-      try {
-        const supabase = createClient()
-        const { error } = await supabase.auth.exchangeCodeForSession(code)
+      const waitForSession = async (tries = 20, delayMs = 150) => {
+        for (let i = 0; i < tries; i += 1) {
+          const { data } = await supabase.auth.getSession()
+          if (data.session) return true
+          await new Promise((resolve) => setTimeout(resolve, delayMs))
+        }
+        return false
+      }
 
-        if (error) {
-          const msg = encodeURIComponent(error.message || "Could not authenticate")
-          router.replace(`/auth/error?error=${msg}`)
+      try {
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code)
+          if (error) {
+            const msg = encodeURIComponent(error.message || "Could not authenticate")
+            router.replace(`/auth/error?error=${msg}`)
+            return
+          }
+        }
+
+        const ok = await waitForSession()
+        if (!ok) {
+          router.replace("/auth/error?error=Could+not+authenticate")
           return
         }
 
