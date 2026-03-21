@@ -90,6 +90,9 @@ export async function updateSession(request: NextRequest) {
   }
 
   // All other pages (including /) are accessible without login
-
+  supabaseResponse.headers.set(
+    'Cache-Control',
+    'no-store, no-cache, must-revalidate, proxy-revalidate'
+  )
   return supabaseResponse
 }
