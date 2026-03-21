@@ -2,6 +2,15 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function updateSession(request: NextRequest) {
+  const requestHost = request.nextUrl.hostname.toLowerCase()
+
+  if (requestHost === 'shortee.tv') {
+    const redirectUrl = new URL(request.url)
+    redirectUrl.protocol = 'https:'
+    redirectUrl.host = 'www.shortee.tv'
+    return NextResponse.redirect(redirectUrl)
+  }
+
   let supabaseResponse = NextResponse.next({
     request,
   })

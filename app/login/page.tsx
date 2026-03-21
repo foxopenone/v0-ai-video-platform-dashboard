@@ -16,7 +16,17 @@ function GoogleIcon({ className }: { className?: string }) {
   )
 }
 
+function getPublicAppUrl() {
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname.toLowerCase()
+    if (host === "localhost" || host === "127.0.0.1") {
+      return window.location.origin.replace(/\/$/, "")
+    }
+    return "https://www.shortee.tv"
+  }
 
+  return "https://www.shortee.tv"
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -51,7 +61,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${getPublicAppUrl()}/auth/callback`,
       },
     })
     if (error) setError(error.message)
