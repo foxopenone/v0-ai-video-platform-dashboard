@@ -30,7 +30,7 @@ const PARAMS = [
     key: "asr_language",
     label: "ASR_Language",
     icon: Globe2,
-    options: ["Auto", "EN", "ZH", "YUE", "KO", "FR", "RU", "HI", "JA", "ES"],
+    options: ["EN", "ZH", "YUE", "KO", "FR", "RU", "HI", "JA", "ES"],
     required: true,
   },
   {
@@ -185,7 +185,7 @@ export function ConfigForm({
 
   const [mode, setMode] = useState<"full_auto" | "step_review">("full_auto")
   const [params, setParams] = useState<Record<ParamKey, string>>({
-    platform: "", asr_language: "Auto", language: "", pov: "", tone: "", style: "", hook: "", energy_level: "Medium",
+    platform: "", asr_language: "", language: "", pov: "", tone: "", style: "", hook: "", energy_level: "Medium",
   })
   const [voiceDrawerOpen, setVoiceDrawerOpen] = useState(false)
   const [bgmDrawerOpen, setBgmDrawerOpen] = useState(false)
@@ -202,7 +202,14 @@ export function ConfigForm({
       const m = localStorage.getItem("cfg_mode")
       if (m) setMode(JSON.parse(m))
       const p = localStorage.getItem("cfg_params")
-      if (p) setParams(JSON.parse(p))
+      if (p) {
+        const parsed = JSON.parse(p) as Record<ParamKey, string>
+        // Backward compatibility: old saved value "Auto" is no longer valid.
+        if (parsed.asr_language === "Auto") {
+          parsed.asr_language = ""
+        }
+        setParams(parsed)
+      }
       const v = localStorage.getItem("cfg_voice")
       if (v) setSelectedVoice(JSON.parse(v))
       const vn = localStorage.getItem("cfg_voiceName")
