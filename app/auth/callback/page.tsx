@@ -35,9 +35,20 @@ export default function AuthCallbackPage() {
       }
 
       try {
+        const { data: pre } = await supabase.auth.getSession()
+        if (pre.session) {
+          router.replace(next)
+          return
+        }
+
         if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code)
           if (error) {
+            const { data: postErrorSession } = await supabase.auth.getSession()
+            if (postErrorSession.session) {
+              router.replace(next)
+              return
+            }
             const msg = encodeURIComponent(error.message || "Could not authenticate")
             router.replace(`/auth/error?error=${msg}`)
             return

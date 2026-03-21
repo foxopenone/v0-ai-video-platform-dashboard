@@ -18,10 +18,14 @@ function GoogleIcon({ className }: { className?: string }) {
 
 function getPublicAppUrl() {
   if (typeof window !== "undefined") {
-    return window.location.origin.replace(/\/$/, "")
+    const hostname = window.location.hostname.toLowerCase()
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      return window.location.origin.replace(/\/$/, "")
+    }
+    return "https://www.shortee.tv"
   }
 
-  return "https://shortee.tv"
+  return "https://www.shortee.tv"
 }
 
 export default function LoginPage() {
@@ -54,6 +58,12 @@ export default function LoginPage() {
 
   const handleGoogleLogin = async () => {
     const supabase = createClient()
+    const { data: existing } = await supabase.auth.getSession()
+    if (existing.session) {
+      router.replace("/")
+      router.refresh()
+      return
+    }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
