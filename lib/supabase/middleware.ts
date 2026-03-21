@@ -8,6 +8,19 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(redirectUrl)
   }
 
+  if (request.nextUrl.hostname.toLowerCase() === 'shortee.tv') {
+    const redirectUrl = request.nextUrl.clone()
+    redirectUrl.protocol = 'https:'
+    redirectUrl.hostname = 'www.shortee.tv'
+    return NextResponse.redirect(redirectUrl)
+  }
+
+  if (request.nextUrl.pathname === '/' && request.nextUrl.searchParams.has('code')) {
+    const redirectUrl = request.nextUrl.clone()
+    redirectUrl.pathname = '/auth/callback'
+    return NextResponse.redirect(redirectUrl)
+  }
+
   let supabaseResponse = NextResponse.next({
     request,
   })
