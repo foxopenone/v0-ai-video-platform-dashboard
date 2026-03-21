@@ -17,8 +17,7 @@ import { AudioDrawer } from "@/components/dashboard/audio-drawer"
 import { cn } from "@/lib/utils"
 import type { SourceVideoEntry } from "@/components/dashboard/upload-zone"
 
-const DISPATCHER_URL = "https://n8n-production-8abb.up.railway.app/webhook/job-ingestion-final"
-const API_KEY = "7043cdf229ea2c813b1ec646264cda891c047a69"
+const DISPATCHER_URL = "/api/job-dispatch"
 
 const PARAMS = [
   {
@@ -303,7 +302,6 @@ export function ConfigForm({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-API-KEY": API_KEY,
         },
         body: JSON.stringify(payload),
       })
