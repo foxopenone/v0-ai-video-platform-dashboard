@@ -82,12 +82,18 @@ export default function SignupPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
       {/* Background glow */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+      <div
+        className="pointer-events-none fixed inset-0 overflow-hidden"
+        style={{ pointerEvents: "none" }}
+      >
         <div className="absolute left-1/2 top-1/3 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--brand-pink)]/[0.06] blur-[120px]" />
         <div className="absolute right-1/4 top-2/3 h-[400px] w-[400px] rounded-full bg-[var(--brand-purple)]/[0.05] blur-[100px]" />
       </div>
 
-      <div className="relative z-10 w-full max-w-[400px]">
+      <div
+        className="relative z-10 w-full max-w-[400px]"
+        style={{ position: "relative", zIndex: 20, pointerEvents: "auto" }}
+      >
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center gap-3">
           <div className="flex items-center gap-2.5">
