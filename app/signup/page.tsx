@@ -18,14 +18,10 @@ function GoogleIcon({ className }: { className?: string }) {
 
 function getPublicAppUrl() {
   if (typeof window !== "undefined") {
-    const hostname = window.location.hostname.toLowerCase()
-    if (hostname === "localhost" || hostname === "127.0.0.1") {
-      return window.location.origin.replace(/\/$/, "")
-    }
-    return "https://www.shortee.tv"
+    return window.location.origin.replace(/\/$/, "")
   }
 
-  return "https://www.shortee.tv"
+  return "https://shortee.tv"
 }
 
 export default function SignupPage() {
