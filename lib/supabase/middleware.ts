@@ -2,6 +2,12 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function updateSession(request: NextRequest) {
+  if (request.nextUrl.protocol === 'http:' && request.nextUrl.hostname !== 'localhost' && request.nextUrl.hostname !== '127.0.0.1') {
+    const redirectUrl = request.nextUrl.clone()
+    redirectUrl.protocol = 'https:'
+    return NextResponse.redirect(redirectUrl)
+  }
+
   let supabaseResponse = NextResponse.next({
     request,
   })
