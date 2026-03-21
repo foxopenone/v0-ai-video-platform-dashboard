@@ -104,8 +104,9 @@ export default function Page() {
           jobs.map((job: Record<string, unknown>) => [String(job.Job_Record_ID || ""), job])
         )
 
-        setInsertedProjects((prev) =>
-          prev.map((p) => {
+        setInsertedProjects((prev) => {
+          let changed = false
+          const next = prev.map((p) => {
             if (!p.airtableRecordId || ["completed", "posted", "stopped"].includes(p.status)) {
               return p
             }
@@ -141,22 +142,33 @@ export default function Page() {
               hasR2Key ? "pending_review" as const :
               "processing" as const
 
-            return {
+            const nextProject = {
               ...p,
               status: p.status === "posted" ? "posted" : nextStatus,
               progress: isDone || hasR2Key ? 100 : p.progress,
               ...(betterTitle && p.title.startsWith("New Project") ? { title: betterTitle } : {}),
               ...(totalEpisodes > 0 ? { episodes: totalEpisodes } : {}),
             }
+            if (
+              nextProject.status !== p.status ||
+              nextProject.progress !== p.progress ||
+              nextProject.title !== p.title ||
+              nextProject.episodes !== p.episodes
+            ) {
+              changed = true
+              return nextProject
+            }
+            return p
           })
-        )
+          return changed ? next : prev
+        })
       } catch {
         // Keep current card state on transient failure
       }
     }
 
     refreshCards()
-    const interval = window.setInterval(refreshCards, 30000)
+    const interval = window.setInterval(refreshCards, 60000)
 
     return () => {
       cancelled = true

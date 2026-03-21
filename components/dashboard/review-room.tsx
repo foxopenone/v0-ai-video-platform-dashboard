@@ -228,6 +228,9 @@ function CharacterCard({
 
 // ========== Main Component ==========
 export function ReviewRoom(props: ReviewRoomProps) {
+  const STATUS_POLL_INTERVAL_MS = 15000
+  const PROGRESS_POLL_INTERVAL_MS = 15000
+  const ANIMATION_TICK_MS = 500
   const isStepReview = props.mode === "step_review"
   const isProgress = props.mode === "progress"
   const onClose = props.onClose
@@ -346,6 +349,11 @@ export function ReviewRoom(props: ReviewRoomProps) {
     setActiveTab("bible")
   }, [])
 
+  const canPollNow = useCallback(() => {
+    if (typeof document === "undefined") return true
+    return document.visibilityState === "visible"
+  }, [])
+
   // Auto-select first video part with a URL when videos arrive (only once)
   useEffect(() => {
     if (videoParts.length > 0 && !selectedVideoPartId) {
@@ -384,7 +392,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
       const ratio = Math.min(elapsed / ESTIMATED_MS, 1)
       const pct = Math.min(92, Math.round(ratio * 120 * (1 - ratio * 0.3)))
       setVideoRenderProgress(pct)
-    }, 400)
+    }, ANIMATION_TICK_MS)
     return () => clearInterval(interval)
   }, [videoPolling, videoRenderStartTime, episodeCount])
 
@@ -425,7 +433,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
       const ratio = Math.min(elapsed / TIMEOUT_MS, 1)
       const pct = Math.min(95, Math.round(ratio * 120 * (1 - ratio * 0.3)))
       setFakeProgress(pct)
-    }, 500)
+    }, ANIMATION_TICK_MS)
     return () => clearInterval(interval)
   }, [actionLocked, lockStartTime, tabBeforeAction, estimateTimeoutMs, approvedPhases])
 
@@ -1033,6 +1041,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
     const poll = async () => {
       if (stopped) return
+      if (!canPollNow()) return
 
       // Timeout check
       if (Date.now() - startTime > TIMEOUT_MS) {
@@ -1097,9 +1106,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
     }
 
     poll()
-    const interval = setInterval(poll, 10000) // 10 seconds per spec
+    const interval = setInterval(poll, STATUS_POLL_INTERVAL_MS)
     return () => { stopped = true; clearInterval(interval); console.log("[v0] Script poller STOPPED") }
-  }, [scriptPolling, isStepReview])
+  }, [scriptPolling, isStepReview, canPollNow])
 
   // ── Full_Auto Mode: Continuous Status Polling ──
   // In Full_Auto mode, we need to poll for status updates until ALL_DONE
@@ -1116,6 +1125,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
     
     const poll = async () => {
       if (stopped) return
+      if (!canPollNow()) return
       pollCount++
       
       if (pollCount > MAX_POLLS) {
@@ -1211,12 +1221,12 @@ export function ReviewRoom(props: ReviewRoomProps) {
       }
     }
     
-    // Start polling immediately and then every 3 seconds
+    // Start polling immediately and then on a calmer interval
     poll()
-    const interval = setInterval(poll, 3000)
+    const interval = setInterval(poll, STATUS_POLL_INTERVAL_MS)
     return () => { stopped = true; clearInterval(interval); console.log("[v0] Full_Auto poller STOPPED") }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isStepReview, isFullAuto, isCompleted])
+  }, [isStepReview, isFullAuto, isCompleted, canPollNow])
 
   // ── Final Preview: Video Polling (after VO Approve or S8_Render auto-detect) ──
   useEffect(() => {
@@ -1231,6 +1241,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
     const poll = async () => {
       if (stopped) return
+      if (!canPollNow()) return
 
       if (Date.now() - startTime > TIMEOUT_MS) {
         stopped = true
@@ -1351,9 +1362,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
     }
 
     poll()
-    const interval = setInterval(poll, 10000) // 10 seconds
+    const interval = setInterval(poll, STATUS_POLL_INTERVAL_MS)
     return () => { stopped = true; clearInterval(interval); console.log("[v0] Video poller STOPPED") }
-  }, [videoPolling, isStepReview])
+  }, [videoPolling, isStepReview, canPollNow])
 
   // ── Legacy mode: no more mock data. Show loading=false immediately. ──
   useEffect(() => {
@@ -1473,7 +1484,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
         }
         return prev
       })
-    }, 150) // Slightly slower tick for more natural feel
+    }, ANIMATION_TICK_MS)
     return () => clearInterval(interval)
   }, [isProgress, progressPolling, progressStatus])
 
@@ -1486,6 +1497,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
     const poll = async () => {
       if (stopped) return
+      if (!canPollNow()) return
       try {
         const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}`)
         if (!res.ok) {
@@ -1573,10 +1585,10 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
     console.log("[v0] Progress poller STARTED for record:", jobRecordId)
     poll()
-    const interval = setInterval(poll, 4000)
+    const interval = setInterval(poll, PROGRESS_POLL_INTERVAL_MS)
     return () => { stopped = true; clearInterval(interval); console.log("[v0] Progress poller STOPPED") }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isProgress])
+  }, [isProgress, canPollNow])
 
   if (isProgress) {
     const { projectTitle, jobRecordId } = props as ProgressProps
