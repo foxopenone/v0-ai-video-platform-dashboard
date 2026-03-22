@@ -306,9 +306,23 @@ export function ReviewRoom(props: ReviewRoomProps) {
     )
   }, [])
 
-  const buildJobErrorMessage = useCallback((job: { Status?: string; Last_Error?: string | null; Last_Action?: string | null }) => {
+  const hasBackendErrorSignal = useCallback((job: Record<string, unknown> | null | undefined) => {
+    const status = String(job?.Status || "").trim()
+    if (isFailedBackendStatus(status)) return true
+
+    const callbackStatus = String(job?.Callback_Status || "").trim().toLowerCase()
+    if (callbackStatus === "failed") return true
+
+    if (job?.Process_Success === false) return true
+
+    const detail = String(job?.Last_Error ?? job?.Callback_Error ?? job?.error ?? "").trim()
+    if (!detail) return false
+    return /error|failed|fatal|exception|invalid|permission|denied|timeout|timed\s*out/i.test(detail)
+  }, [isFailedBackendStatus])
+
+  const buildJobErrorMessage = useCallback((job: { Status?: string; Last_Error?: string | null; Last_Action?: string | null; Callback_Error?: string | null; error?: string | null }) => {
     const status = String(job?.Status || "").trim() || "Unknown"
-    const detail = String(job?.Last_Error || "").trim()
+    const detail = String(job?.Last_Error || job?.Callback_Error || job?.error || "").trim()
     return detail ? `[${status}] ${detail}` : `Job ended with status: ${status}`
   }, [])
 
@@ -352,6 +366,22 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const canPollNow = useCallback(() => {
     if (typeof document === "undefined") return true
     return document.visibilityState === "visible"
+  }, [])
+
+  const stopPollingWithBackendError = useCallback((message: string) => {
+    setScriptPolling(false)
+    setVideoPolling(false)
+    setProgressPolling(false)
+    setVideoRenderStartTime(null)
+    setActionLocked(false)
+    setLockStartTime(null)
+    setFakeProgress(0)
+    setActionStatus("error")
+    setActionMessage(message)
+    setScriptError(message)
+    setVideoError(message)
+    setProgressError(message)
+    setFullAutoStatus("Failed")
   }, [])
 
   // Auto-select first video part with a URL when videos arrive (only once)
@@ -1068,11 +1098,10 @@ export function ReviewRoom(props: ReviewRoomProps) {
         // Update workMode from backend (in case it changed or was not passed initially)
         if (job.Work_Mode) setWorkMode(job.Work_Mode as "Full_Auto" | "Step_Review")
 
-        // Check for error/failed
-        if (isFailedBackendStatus(job.Status)) {
+        // Check for backend failure signals and stop polling immediately
+        if (hasBackendErrorSignal(job)) {
           stopped = true
-          setScriptPolling(false)
-          setScriptError(buildJobErrorMessage(job))
+          stopPollingWithBackendError(buildJobErrorMessage(job))
           return
         }
 
@@ -1108,7 +1137,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
     poll()
     const interval = setInterval(poll, STATUS_POLL_INTERVAL_MS)
     return () => { stopped = true; clearInterval(interval); console.log("[v0] Script poller STOPPED") }
-  }, [scriptPolling, isStepReview, canPollNow])
+  }, [scriptPolling, isStepReview, canPollNow, hasBackendErrorSignal, buildJobErrorMessage, stopPollingWithBackendError])
 
   // ── Full_Auto Mode: Continuous Status Polling ──
   // In Full_Auto mode, we need to poll for status updates until ALL_DONE
@@ -1119,6 +1148,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
     const { jobRecordId } = props as StepReviewProps
     let stopped = false
     let pollCount = 0
+    let doneButIncompleteHits = 0
     const MAX_POLLS = 300 // ~15 minutes at 3s intervals
     
     console.log("[v0] Full_Auto poller STARTED for record:", jobRecordId)
@@ -1141,8 +1171,18 @@ export function ReviewRoom(props: ReviewRoomProps) {
         const job = await res.json()
         console.log(`[v0] Full_Auto poll #${pollCount} | Status: ${job.Status} | Script_R2_Key: ${job.Script_R2_Key ? "present" : "null"} | Final_Video: ${job.Final_Video ? "present" : "null"}`)
         
-        // Update progress based on status
         const status = job.Status || ""
+
+        // Any backend failure must stop polling and exit loading state immediately
+        if (hasBackendErrorSignal(job)) {
+          stopped = true
+          const message = buildJobErrorMessage(job)
+          console.log("[v0] Full_Auto: Job failed with status:", job.Status, "| detail:", job.Last_Error || job.Callback_Error || job.error || "none")
+          stopPollingWithBackendError(message)
+          return
+        }
+
+        // Update progress based on status
         setFullAutoStatus(status)
         applyUiStateForStatus(status)
         // Map status to progress percentage
@@ -1168,7 +1208,14 @@ export function ReviewRoom(props: ReviewRoomProps) {
           }
         }
         
-        // Load Final Videos if available
+        // Load / merge Final Videos if available
+        let filteredVideos: Array<{ part: string; url: string }> = []
+        const expectedParts = Math.max(
+          Number(job.Total_Episodes || 0),
+          Number((bible?.episodes?.length || 0)),
+          1,
+        )
+
         if (job.Final_Video) {
           let finalVideos: Array<{ part: string; url: string }> = []
           try {
@@ -1177,17 +1224,40 @@ export function ReviewRoom(props: ReviewRoomProps) {
               : job.Final_Video
           } catch { /* ignore parse errors */ }
           
-          if (finalVideos.length > 0 && videoParts.length === 0) {
-            console.log("[v0] Full_Auto: Loading final videos")
+          if (finalVideos.length > 0) {
+            console.log("[v0] Full_Auto: Merging final videos")
             const deletedKey = `deleted_parts_${jobRecordId}`
             const deletedParts: string[] = JSON.parse(localStorage.getItem(deletedKey) || "[]")
-            const filteredVideos = finalVideos.filter((fv) => !deletedParts.includes(String(fv.part)))
-            setVideoParts(filteredVideos.map((fv) => ({
-              part: String(fv.part), url: fv.url, approved: true, redoing: false,
-            })))
+            filteredVideos = finalVideos
+              .filter((fv) => !deletedParts.includes(String(fv.part)))
+              .sort((a, b) => Number(a.part) - Number(b.part))
+
+            setVideoParts((prev) => {
+              const merged = filteredVideos.map((fv) => {
+                const existing = prev.find((p) => p.part === String(fv.part))
+                return {
+                  part: String(fv.part),
+                  url: fv.url || existing?.url || "",
+                  approved: existing?.approved ?? true,
+                  redoing: false,
+                }
+              })
+              if (
+                prev.length === merged.length &&
+                prev.every((p, i) =>
+                  p.part === merged[i]?.part &&
+                  p.url === merged[i]?.url &&
+                  p.approved === merged[i]?.approved &&
+                  p.redoing === merged[i]?.redoing
+                )
+              ) {
+                return prev
+              }
+              return merged
+            })
             setVideoRenderProgress(100)
             // Auto-select first video
-            if (filteredVideos.length > 0) {
+            if (filteredVideos.length > 0 && !selectedVideoPartId) {
               setSelectedVideoPartId(String(filteredVideos[0].part))
             }
           }
@@ -1195,24 +1265,19 @@ export function ReviewRoom(props: ReviewRoomProps) {
         
         // Check if done
         if (job.Status === "S9_Done" || job.Status === "ALL_DONE") {
+          // Prevent stale one-part UI when status flips before Final_Video is fully written.
+          if (filteredVideos.length < expectedParts && doneButIncompleteHits < 8) {
+            doneButIncompleteHits++
+            console.log(
+              `[v0] Full_Auto: done but waiting for all parts (${filteredVideos.length}/${expectedParts}), retry ${doneButIncompleteHits}/8`
+            )
+            return
+          }
+
           stopped = true
           console.log("[v0] Full_Auto: Job completed!")
           setIsCompleted(true)
           setApprovedPhases(new Set(["bible", "voiceover", "preview"]))
-          return
-        }
-        
-        // Check for error
-        if (isFailedBackendStatus(job.Status)) {
-          stopped = true
-          const message = buildJobErrorMessage(job)
-          console.log("[v0] Full_Auto: Job failed with status:", job.Status, "| detail:", job.Last_Error || "none")
-          setScriptPolling(false)
-          setVideoPolling(false)
-          setProgressPolling(false)
-          setScriptError(message)
-          setVideoError(message)
-          setProgressError(message)
           return
         }
         
@@ -1226,7 +1291,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
     const interval = setInterval(poll, STATUS_POLL_INTERVAL_MS)
     return () => { stopped = true; clearInterval(interval); console.log("[v0] Full_Auto poller STOPPED") }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isStepReview, isFullAuto, isCompleted, canPollNow])
+  }, [isStepReview, isFullAuto, isCompleted, canPollNow, hasBackendErrorSignal, buildJobErrorMessage, stopPollingWithBackendError, bible?.episodes?.length, selectedVideoPartId])
 
   // ── Final Preview: Video Polling (after VO Approve or S8_Render auto-detect) ──
   useEffect(() => {
@@ -1267,11 +1332,10 @@ export function ReviewRoom(props: ReviewRoomProps) {
         // Update workMode from backend
         if (job.Work_Mode) setWorkMode(job.Work_Mode as "Full_Auto" | "Step_Review")
 
-        // Check for error/failed
-        if (isFailedBackendStatus(job.Status)) {
+        // Check for backend failure signals and stop polling immediately
+        if (hasBackendErrorSignal(job)) {
           stopped = true
-          setVideoPolling(false)
-          setVideoError(buildJobErrorMessage(job))
+          stopPollingWithBackendError(buildJobErrorMessage(job))
           return
         }
 
@@ -1364,7 +1428,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
     poll()
     const interval = setInterval(poll, STATUS_POLL_INTERVAL_MS)
     return () => { stopped = true; clearInterval(interval); console.log("[v0] Video poller STOPPED") }
-  }, [videoPolling, isStepReview, canPollNow])
+  }, [videoPolling, isStepReview, canPollNow, hasBackendErrorSignal, buildJobErrorMessage, stopPollingWithBackendError])
 
   // ── Legacy mode: no more mock data. Show loading=false immediately. ──
   useEffect(() => {
@@ -1494,6 +1558,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
     let consecutiveHits = 0
     let stopped = false
     let failCount = 0
+    let doneButIncompleteHits = 0
 
     const poll = async () => {
       if (stopped) return
@@ -1538,7 +1603,16 @@ export function ReviewRoom(props: ReviewRoomProps) {
         const allVideosReady = filteredVideos.length >= expectedParts
         const isDoneStatus = /S9_Done|ALL_DONE|DONE|COMPLETE/i.test(String(job.Status || ""))
 
-        // If done, or if all final video URLs are already present, mark completed immediately
+        // Avoid stopping too early when Status is done but Final_Video is still partially synced.
+        if (isDoneStatus && !allVideosReady && doneButIncompleteHits < 8) {
+          doneButIncompleteHits++
+          console.log(
+            `[v0] Progress done-but-incomplete: ${filteredVideos.length}/${expectedParts}, retry ${doneButIncompleteHits}/8`
+          )
+          return
+        }
+
+        // If done (with enough retries) or all parts ready, mark completed
         if (isDoneStatus || allVideosReady) {
           stopped = true
           setProgressPolling(false)
@@ -1546,10 +1620,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
           setProgressVideoParts(filteredVideos)
           return
         }
-        if (isFailedBackendStatus(job.Status)) {
+        if (hasBackendErrorSignal(job)) {
           stopped = true
-          setProgressPolling(false)
-          setProgressError(buildJobErrorMessage(job))
+          stopPollingWithBackendError(buildJobErrorMessage(job))
           return
         }
 
@@ -1588,7 +1661,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
     const interval = setInterval(poll, PROGRESS_POLL_INTERVAL_MS)
     return () => { stopped = true; clearInterval(interval); console.log("[v0] Progress poller STOPPED") }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isProgress, canPollNow])
+  }, [isProgress, canPollNow, hasBackendErrorSignal, buildJobErrorMessage, stopPollingWithBackendError])
 
   if (isProgress) {
     const { projectTitle, jobRecordId } = props as ProgressProps
