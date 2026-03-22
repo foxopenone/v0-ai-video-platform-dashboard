@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react"
+import { useRouter } from "next/navigation"
 import { Header } from "@/components/dashboard/header"
 import { WorkspaceSection } from "@/components/dashboard/workspace-section"
 import { ProjectsSection } from "@/components/dashboard/projects-section"
@@ -11,6 +12,7 @@ import type { InsertedProject, StepReviewData } from "@/components/dashboard/con
 import { stopJob } from "@/lib/mock-api"
 
 export default function Page() {
+  const router = useRouter()
   const [stepReviewData, setStepReviewData] = useState<StepReviewData | null>(null)
   const [progressData, setProgressData] = useState<{ jobRecordId: string; projectTitle: string; videoCount?: number } | null>(null)
   const [insertedProjects, setInsertedProjects] = useState<InsertedProject[]>([])
@@ -54,6 +56,22 @@ export default function Page() {
       }
     } catch {}
   }, [])
+
+  // Some providers may return auth code on "/".
+  // Force it through /auth/callback so code exchange is handled in one place.
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (window.location.hostname.toLowerCase() === "shortee.tv") {
+      window.location.replace(`https://www.shortee.tv${window.location.pathname}${window.location.search}${window.location.hash}`)
+      return
+    }
+    const url = new URL(window.location.href)
+    const hasAuthCode = !!url.searchParams.get("code")
+    const hasAuthError = !!url.searchParams.get("error") || !!url.searchParams.get("error_description")
+    if (url.pathname === "/" && (hasAuthCode || hasAuthError)) {
+      router.replace(`/auth/callback${url.search}`)
+    }
+  }, [router])
 
   const pollableProjects = useMemo(
     () =>

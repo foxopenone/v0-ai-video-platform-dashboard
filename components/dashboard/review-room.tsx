@@ -1595,6 +1595,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
         const filteredVideos = (finalVideos || []).filter((v: { part: string; url: string }) =>
           v && v.url && !deletedParts.includes(String(v.part))
         )
+        setProgressVideoParts(filteredVideos)
         const expectedParts = Math.max(
           Number(job.Total_Episodes || 0),
           Number((props as ProgressProps).videoCount || 0),
@@ -1602,6 +1603,12 @@ export function ReviewRoom(props: ReviewRoomProps) {
         )
         const allVideosReady = filteredVideos.length >= expectedParts
         const isDoneStatus = /S9_Done|ALL_DONE|DONE|COMPLETE/i.test(String(job.Status || ""))
+
+        if (hasBackendErrorSignal(job)) {
+          stopped = true
+          stopPollingWithBackendError(buildJobErrorMessage(job))
+          return
+        }
 
         // Avoid stopping too early when Status is done but Final_Video is still partially synced.
         if (isDoneStatus && !allVideosReady && doneButIncompleteHits < 8) {
@@ -1618,11 +1625,6 @@ export function ReviewRoom(props: ReviewRoomProps) {
           setProgressPolling(false)
           setProgressCompleted(true)
           setProgressVideoParts(filteredVideos)
-          return
-        }
-        if (hasBackendErrorSignal(job)) {
-          stopped = true
-          stopPollingWithBackendError(buildJobErrorMessage(job))
           return
         }
 

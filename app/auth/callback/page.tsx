@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 
@@ -11,9 +11,18 @@ function getSafeNext(raw: string | null): string {
 
 export default function AuthCallbackPage() {
   const router = useRouter()
+  const hasRun = useRef(false)
 
   useEffect(() => {
+    if (hasRun.current) return
+    hasRun.current = true
+
     const run = async () => {
+      if (window.location.hostname.toLowerCase() === "shortee.tv") {
+        window.location.replace(`https://www.shortee.tv${window.location.pathname}${window.location.search}${window.location.hash}`)
+        return
+      }
+
       const supabase = createClient()
       const params = new URLSearchParams(window.location.search)
       const code = params.get("code")
@@ -49,8 +58,20 @@ export default function AuthCallbackPage() {
               router.replace(next)
               return
             }
+            if (/pkce code verifier not found/i.test(error.message || "")) {
+              router.replace(`/login?next=${encodeURIComponent(next)}`)
+              return
+            }
             const msg = encodeURIComponent(error.message || "Could not authenticate")
             router.replace(`/auth/error?error=${msg}`)
+            return
+          }
+        }
+
+        if (!code) {
+          const { data: noCodeSession } = await supabase.auth.getSession()
+          if (!noCodeSession.session) {
+            router.replace(`/login?next=${encodeURIComponent(next)}`)
             return
           }
         }

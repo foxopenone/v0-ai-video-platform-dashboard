@@ -22,7 +22,7 @@ function getPublicAppUrl() {
     if (hostname === "localhost" || hostname === "127.0.0.1") {
       return window.location.origin.replace(/\/$/, "")
     }
-    return window.location.origin.replace(/\/$/, "")
+    return "https://www.shortee.tv"
   }
 
   return "https://www.shortee.tv"
@@ -38,6 +38,11 @@ export default function SignupPage() {
   const router = useRouter()
 
   useEffect(() => {
+    if (typeof window !== "undefined" && window.location.hostname.toLowerCase() === "shortee.tv") {
+      window.location.replace(`https://www.shortee.tv${window.location.pathname}${window.location.search}${window.location.hash}`)
+      return
+    }
+
     let alive = true
     const run = async () => {
       const supabase = createClient()
