@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
@@ -22,7 +22,7 @@ function getPublicAppUrl() {
     if (hostname === "localhost" || hostname === "127.0.0.1") {
       return window.location.origin.replace(/\/$/, "")
     }
-    return "https://www.shortee.tv"
+    return window.location.origin.replace(/\/$/, "")
   }
 
   return "https://www.shortee.tv"
@@ -34,7 +34,25 @@ export default function SignupPage() {
   const [repeatPassword, setRepeatPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const router = useRouter()
+
+  useEffect(() => {
+    let alive = true
+    const run = async () => {
+      const supabase = createClient()
+      const { data } = await supabase.auth.getSession()
+      if (!alive) return
+      if (data.session) {
+        router.replace("/")
+        router.refresh()
+      }
+    }
+    void run()
+    return () => {
+      alive = false
+    }
+  }, [router])
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -67,11 +85,15 @@ export default function SignupPage() {
   }
 
   const handleGoogleLogin = async () => {
+    if (googleLoading) return
+    setGoogleLoading(true)
+    setError(null)
     const supabase = createClient()
     const { data: existing } = await supabase.auth.getSession()
     if (existing.session) {
       router.replace("/")
       router.refresh()
+      setGoogleLoading(false)
       return
     }
     const { error } = await supabase.auth.signInWithOAuth({
@@ -80,7 +102,10 @@ export default function SignupPage() {
         redirectTo: `${getPublicAppUrl()}/auth/callback`,
       },
     })
-    if (error) setError(error.message)
+    if (error) {
+      setError(error.message)
+      setGoogleLoading(false)
+    }
   }
 
 
@@ -124,10 +149,11 @@ export default function SignupPage() {
           <div className="flex flex-col gap-3">
             <button
               onClick={handleGoogleLogin}
+              disabled={googleLoading || loading}
               className="flex w-full items-center justify-center gap-3 rounded-xl border border-border/40 bg-secondary/20 py-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary/40"
             >
               <GoogleIcon className="h-5 w-5" />
-              Continue with Google
+              {googleLoading ? "Redirecting..." : "Continue with Google"}
             </button>
 
 

@@ -73,6 +73,15 @@ const PARAMS = [
 
 type ParamKey = (typeof PARAMS)[number]["key"]
 
+const ASR_OPTIONS = new Set(["EN", "ZH", "YUE", "KO", "FR", "RU", "HI", "JA", "ES"])
+
+function normalizeAsrLanguage(value: string): string {
+  const raw = String(value || "").trim().toUpperCase()
+  if (!raw) return ""
+  if (raw === "AUTO") return "EN"
+  return ASR_OPTIONS.has(raw) ? raw : ""
+}
+
 interface TileProps {
   label: string
   value: string
@@ -204,10 +213,8 @@ export function ConfigForm({
       const p = localStorage.getItem("cfg_params")
       if (p) {
         const parsed = JSON.parse(p) as Record<ParamKey, string>
-        // Backward compatibility: old saved value "Auto" is no longer valid.
-        if (parsed.asr_language === "Auto") {
-          parsed.asr_language = ""
-        }
+        // Backward compatibility: old saved value "Auto" maps to a valid option.
+        parsed.asr_language = normalizeAsrLanguage(parsed.asr_language)
         setParams(parsed)
       }
       const v = localStorage.getItem("cfg_voice")
@@ -262,7 +269,8 @@ export function ConfigForm({
       return
     }
 
-    if (!params.asr_language) {
+    const normalizedAsrLanguage = normalizeAsrLanguage(params.asr_language)
+    if (!normalizedAsrLanguage) {
       setErrorMsg("ASR_Language is required. Please select a language.")
       return
     }
@@ -289,7 +297,7 @@ export function ConfigForm({
       id: jobId,
       Video_Files: videoFiles,
       Platform: resolveParam("platform"),
-      ASR_Language: params.asr_language,
+      ASR_Language: normalizedAsrLanguage,
       Language: resolveParam("language"),
       POV: resolveParam("pov"),
       Tone: resolveParam("tone"),
