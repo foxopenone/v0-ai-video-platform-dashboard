@@ -10,7 +10,18 @@ const API_KEY =
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.text()
+    const rawBody = await req.text()
+    let body = rawBody
+    try {
+      const parsed = JSON.parse(rawBody) as Record<string, unknown>
+      const asr = String(parsed.ASR_Language ?? "").trim()
+      if (!asr || asr.toUpperCase() === "AUTO") {
+        parsed.ASR_Language = "EN"
+      }
+      body = JSON.stringify(parsed)
+    } catch {
+      // Keep raw body when payload is not valid JSON
+    }
 
     const upstream = await fetch(DISPATCHER_URL, {
       method: "POST",
@@ -41,4 +52,3 @@ export async function POST(req: NextRequest) {
     )
   }
 }
-
