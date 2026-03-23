@@ -1215,9 +1215,11 @@ export function ReviewRoom(props: ReviewRoomProps) {
         
         // Load / merge Final Videos if available
         let filteredVideos: Array<{ part: string; url: string }> = []
+        // Expected output parts should come from target parts / script parts, not source episodes.
         const expectedParts = Math.max(
-          Number(job.Total_Episodes || 0),
-          Number((bible?.episodes?.length || 0)),
+          Number(job.Target_Parts || 0),
+          Number((scriptData?.parts?.length || 0)),
+          Number((videoParts?.length || 0)),
           1,
         )
 
@@ -1296,7 +1298,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
     const interval = setInterval(poll, STATUS_POLL_INTERVAL_MS)
     return () => { stopped = true; clearInterval(interval); console.log("[v0] Full_Auto poller STOPPED") }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isStepReview, isFullAuto, isCompleted, canPollNow, hasBackendErrorSignal, buildJobErrorMessage, stopPollingWithBackendError, bible?.episodes?.length, selectedVideoPartId])
+  }, [isStepReview, isFullAuto, isCompleted, canPollNow, hasBackendErrorSignal, buildJobErrorMessage, stopPollingWithBackendError, scriptData?.parts?.length, videoParts?.length, selectedVideoPartId])
 
   // ── Final Preview: Video Polling (after VO Approve or S8_Render auto-detect) ──
   useEffect(() => {
@@ -1404,20 +1406,20 @@ export function ReviewRoom(props: ReviewRoomProps) {
             return newParts
           })
 
-          // Check if all parts have URLs (rendering complete)
-          const allReady = filteredFinalVideos.every((fv) => !!fv.url)
-          // Check if any part is being re-done
-          const anyRedoing = videoParts.some((vp) => vp.redoing)
-          if (allReady && !anyRedoing) {
-            // If status is S9_Done, stop polling entirely
-      if (job.Status === "S9_Done") {
-        console.log("[v0] All videos done, status S9_Done. Stopping video poller.")
-        stopped = true
-        setVideoPolling(false)
-        setVideoRenderStartTime(null)
-        setVideoRenderProgress(100)
-      }
-            // Otherwise keep polling for status updates
+          // Only stop when expected part count is fully present and all have URLs.
+          const expectedParts = Math.max(
+            Number(job.Target_Parts || 0),
+            Number((scriptData?.parts?.length || 0)),
+            Number((filteredFinalVideos?.length || 0)),
+            1,
+          )
+          const allReady = filteredFinalVideos.length >= expectedParts && filteredFinalVideos.every((fv) => !!fv.url)
+          if (allReady && job.Status === "S9_Done") {
+            console.log(`[v0] All videos done (${filteredFinalVideos.length}/${expectedParts}), status S9_Done. Stopping video poller.`)
+            stopped = true
+            setVideoPolling(false)
+            setVideoRenderStartTime(null)
+            setVideoRenderProgress(100)
           }
         }
       } catch (err) {
@@ -1433,7 +1435,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
     poll()
     const interval = setInterval(poll, STATUS_POLL_INTERVAL_MS)
     return () => { stopped = true; clearInterval(interval); console.log("[v0] Video poller STOPPED") }
-  }, [videoPolling, isStepReview, canPollNow, hasBackendErrorSignal, buildJobErrorMessage, stopPollingWithBackendError])
+  }, [videoPolling, isStepReview, canPollNow, hasBackendErrorSignal, buildJobErrorMessage, stopPollingWithBackendError, scriptData?.parts?.length])
 
   // ── Legacy mode: no more mock data. Show loading=false immediately. ──
   useEffect(() => {
