@@ -329,10 +329,11 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const applyUiStateForStatus = useCallback((statusRaw: unknown) => {
     const status = String(statusRaw || "").trim()
     const isDone = /S9_Done|S9|ALL_DONE|DONE|COMPLETE/i.test(status)
-    const isPreviewPhase = isDone || /S7|S8|Render/i.test(status)
-    const isVoicePhase = /S4|S5|S6|Visual|Audio|Voice|Script/i.test(status)
+    // S6_Audio and later should present Final Review as active in full-auto flow
+    const isPreviewPhase = isDone || /S6_Audio|S7|S8|Render/i.test(status)
+    // Keep VO phase focused on script/VO generation only (exclude S6_Audio)
+    const isVoicePhase = /S4|S5|S6_VO|Visual|Voice|Script/i.test(status)
     const isBibleApproved = isDone || isPreviewPhase || isVoicePhase || /S4|Visual/i.test(status)
-    const isVoApproved = isDone || isPreviewPhase
 
     if (isDone) {
       setApprovedPhases(new Set(["bible", "voiceover", "preview"]))
@@ -342,23 +343,27 @@ export function ReviewRoom(props: ReviewRoomProps) {
     }
 
     if (isPreviewPhase) {
+      setIsCompleted(false)
       setApprovedPhases(new Set(["bible", "voiceover"]))
       setActiveTab("preview")
       return
     }
 
     if (isVoicePhase) {
+      setIsCompleted(false)
       setApprovedPhases(new Set(isBibleApproved ? ["bible"] : []))
       setActiveTab("voiceover")
       return
     }
 
     if (isBibleApproved) {
+      setIsCompleted(false)
       setApprovedPhases(new Set(["bible"]))
       setActiveTab("bible")
       return
     }
 
+    setIsCompleted(false)
     setApprovedPhases(new Set())
     setActiveTab("bible")
   }, [])
