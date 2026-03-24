@@ -16,6 +16,7 @@ export default function Page() {
   const [stepReviewData, setStepReviewData] = useState<StepReviewData | null>(null)
   const [progressData, setProgressData] = useState<{ jobRecordId: string; projectTitle: string; videoCount?: number } | null>(null)
   const [insertedProjects, setInsertedProjects] = useState<InsertedProject[]>([])
+  const reviewStateStorageKey = "shortee_active_review_room"
   // Posted items for Discovery feed
   const [postedItems, setPostedItems] = useState<Array<{ id: string; title: string; author: string; videoParts: Array<{ part: string; url: string }> }>>(() => {
     try {
@@ -56,6 +57,35 @@ export default function Page() {
       }
     } catch {}
   }, [])
+
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(reviewStateStorageKey)
+      if (!saved) return
+      const parsed = JSON.parse(saved)
+      if (parsed?.mode === "step_review" && parsed?.data?.jobRecordId) {
+        setStepReviewData(parsed.data)
+        return
+      }
+      if (parsed?.mode === "progress" && parsed?.data?.jobRecordId) {
+        setProgressData(parsed.data)
+      }
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    try {
+      if (stepReviewData) {
+        sessionStorage.setItem(reviewStateStorageKey, JSON.stringify({ mode: "step_review", data: stepReviewData }))
+        return
+      }
+      if (progressData) {
+        sessionStorage.setItem(reviewStateStorageKey, JSON.stringify({ mode: "progress", data: progressData }))
+        return
+      }
+      sessionStorage.removeItem(reviewStateStorageKey)
+    } catch {}
+  }, [stepReviewData, progressData])
 
   // Some providers may return auth code on "/".
   // Force it through /auth/callback so code exchange is handled in one place.
@@ -148,8 +178,8 @@ export default function Page() {
             }
 
             const readyVideoCount = finalVideos.filter((v) => typeof v?.url === "string" && v.url.trim()).length
-            const totalEpisodes = Number(job.Total_Episodes || 0)
-            const allVideosReady = totalEpisodes > 0 ? readyVideoCount >= totalEpisodes : readyVideoCount > 0
+            const totalParts = Math.max(Number(job.Target_Parts || 0), Number(job.Total_Episodes || 0), 0)
+            const allVideosReady = totalParts > 0 ? readyVideoCount >= totalParts : readyVideoCount > 0
             const isDone = /S9_Done|ALL_DONE|DONE|COMPLETE/i.test(status) || allVideosReady
             const isFailed = ["Error", "Failed", "Stopped"].includes(status) || /error|failed|stopped|fatal|abort|cancel/i.test(status)
 
@@ -165,7 +195,7 @@ export default function Page() {
               status: p.status === "posted" ? "posted" : nextStatus,
               progress: isDone || hasR2Key ? 100 : p.progress,
               ...(betterTitle && p.title.startsWith("New Project") ? { title: betterTitle } : {}),
-              ...(totalEpisodes > 0 ? { episodes: totalEpisodes } : {}),
+              ...(totalParts > 0 ? { episodes: totalParts } : {}),
             }
             if (
               nextProject.status !== p.status ||

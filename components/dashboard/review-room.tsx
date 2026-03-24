@@ -284,7 +284,12 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const [videoRenderStartTime, setVideoRenderStartTime] = useState<number | null>(null)
   const [videoStopped, setVideoStopped] = useState(false) // true after user clicks Stop
   const [isCompleted, setIsCompleted] = useState(false) // true when project is S9_Done (read-only)
-  const videosLoadedRef = useRef(false) // prevent duplicate video loads
+  const [expectedVideoParts, setExpectedVideoParts] = useState(() => {
+    if (props.mode === "progress") {
+      return Math.max(Number((props as ProgressProps).videoCount || 0), 1)
+    }
+    return 1
+  })
   // Full Auto progress tracking
   const [fullAutoStatus, setFullAutoStatus] = useState<string>("") // Current backend status for Full Auto mode
   const [fullAutoProgress, setFullAutoProgress] = useState(0) // 0-100 progress percentage
@@ -388,6 +393,19 @@ export function ReviewRoom(props: ReviewRoomProps) {
     setProgressError(message)
     setFullAutoStatus("Failed")
   }, [])
+
+  const mergeExpectedVideoParts = useCallback((...counts: Array<number | string | null | undefined>) => {
+    const next = counts.reduce((max, value) => {
+      const num = Number(value || 0)
+      return Number.isFinite(num) && num > max ? num : max
+    }, 1)
+    setExpectedVideoParts((prev) => (next > prev ? next : prev))
+    return next
+  }, [])
+
+  useEffect(() => {
+    mergeExpectedVideoParts(scriptData?.parts?.length || 0)
+  }, [scriptData?.parts?.length, mergeExpectedVideoParts])
 
   // Auto-select first video part with a URL when videos arrive (only once)
   useEffect(() => {
@@ -571,43 +589,16 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
     const isDone = /S9_Done|S9|ALL_DONE|DONE|COMPLETE/i.test(statusStr)
     if (/S9_Done|S9|ALL_DONE|DONE|COMPLETE|S8/i.test(statusStr)) {
-      if (isDone && !videosLoadedRef.current) {
-        videosLoadedRef.current = true
-        // S9_Done: videos are already rendered, just fetch them once (no polling)
-        console.log("[v0] S9_Done -- loading final videos without polling")
-        fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}`)
-          .then((r) => r.ok ? r.json() : Promise.reject(new Error(`API ${r.status}`)))
-          .then((job: Record<string, unknown>) => {
-            let finalVideos: Array<{ part: string; url: string }> = []
-            if (job.Final_Video) {
-              try {
-                finalVideos = typeof job.Final_Video === "string"
-                  ? JSON.parse(job.Final_Video as string)
-                  : job.Final_Video as Array<{ part: string; url: string }>
-              } catch { /* ignore parse errors */ }
-            }
-            if (finalVideos.length > 0) {
-              // Filter out deleted parts from localStorage
-              const deletedKey = `deleted_parts_${jobRecordId}`
-              const deletedParts: string[] = JSON.parse(localStorage.getItem(deletedKey) || "[]")
-              const filteredVideos = finalVideos.filter((fv) => !deletedParts.includes(String(fv.part)))
-              setVideoParts(filteredVideos.map((fv) => ({
-                part: String(fv.part), url: fv.url, approved: true, redoing: false,
-              })))
-              setVideoRenderProgress(100)
-            }
-          })
-          .catch((err: Error) => setVideoError(err.message))
-      } else {
-        // S8_Render: still rendering, start polling
-        setVideoPolling(true)
-        setVideoRenderStartTime(Date.now())
-        setVideoRenderProgress(0)
-      }
+      // Always poll preview parts, including S9_Done.
+      // Final_Video can still be partially visible on the first read, and stopping here causes the one-part bug.
+      setVideoPolling(true)
+      setVideoRenderStartTime(Date.now())
+      setVideoRenderProgress(isDone ? 95 : 0)
       // Also load script data for VO tab browsing (critical for ALL_DONE state)
       fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}`)
         .then((r) => r.ok ? r.json() : Promise.reject(new Error(`API ${r.status}`)))
         .then((job) => {
+          mergeExpectedVideoParts(job.Target_Parts, job.Total_Episodes)
           if (job.Script_R2_Key) {
             console.log("[v0] ALL_DONE: Loading script from R2 for VO tab", job.Script_R2_Key)
             setScriptR2Key(job.Script_R2_Key)
@@ -1222,6 +1213,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
           Number((videoParts?.length || 0)),
           1,
         )
+        mergeExpectedVideoParts(expectedParts, filteredVideos.length)
 
         if (job.Final_Video) {
           let finalVideos: Array<{ part: string; url: string }> = []
@@ -1413,6 +1405,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
             Number((filteredFinalVideos?.length || 0)),
             1,
           )
+          mergeExpectedVideoParts(expectedParts, filteredFinalVideos.length)
           const allReady = filteredFinalVideos.length >= expectedParts && filteredFinalVideos.every((fv) => !!fv.url)
           if (allReady && job.Status === "S9_Done") {
             console.log(`[v0] All videos done (${filteredFinalVideos.length}/${expectedParts}), status S9_Done. Stopping video poller.`)
@@ -1604,6 +1597,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
         )
         setProgressVideoParts(filteredVideos)
         const expectedParts = Math.max(
+          Number(job.Target_Parts || 0),
           Number(job.Total_Episodes || 0),
           Number((props as ProgressProps).videoCount || 0),
           1
@@ -1910,6 +1904,12 @@ export function ReviewRoom(props: ReviewRoomProps) {
     }
 
     if (!bible) return null
+    const previewReadyCount = videoParts.filter((vp) => !!vp.url && !vp.redoing).length
+    const previewTotalParts = Math.max(expectedVideoParts, videoParts.length, 1)
+    const previewAllCompleted =
+      previewReadyCount >= previewTotalParts &&
+      videoParts.length >= previewTotalParts &&
+      videoParts.every((vp) => !!vp.url && !vp.redoing)
 
     return (
       <div className="fixed inset-0 z-50 flex flex-col bg-background">
@@ -2115,16 +2115,14 @@ export function ReviewRoom(props: ReviewRoomProps) {
               console.log("[v0] Preview Tab - videoParts:", videoParts.map(vp => ({ part: vp.part, url: vp.url?.substring(0, 80), redoing: vp.redoing })))
               console.log("[v0] Preview Tab - selectedVp:", selectedVp ? { part: selectedVp.part, url: selectedVp.url?.substring(0, 80), redoing: selectedVp.redoing } : null)
               const readyCount = videoParts.filter((vp) => !!vp.url && !vp.redoing).length
-              // Use actual videoParts count, not episodeCount (episodes != parts)
-              const totalParts = Math.max(videoParts.length, 1)
-              // If isCompleted (ALL_DONE), everything is done
-              const allDone = isCompleted || (videoParts.length > 0 && videoParts.every((vp) => !!vp.url && !vp.redoing))
+              const totalParts = Math.max(expectedVideoParts, videoParts.length, 1)
+              const allDone = readyCount >= totalParts && videoParts.length >= totalParts && videoParts.every((vp) => !!vp.url && !vp.redoing)
               const overallPct = isCompleted 
                 ? 100 
                 : videoParts.length === 0
                   ? videoRenderProgress
                   : Math.round((readyCount / totalParts) * 100)
-              const skeletonCount = Math.max(videoParts.length, 2)
+              const skeletonCount = Math.max(totalParts, 2)
 
               return (
                 <div className="flex flex-1 overflow-hidden">
@@ -2400,7 +2398,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
                         {videoParts.map((vp) => {
                           const isSelected = vp.part === selectedVideoPartId
                           const hasUrl = !!vp.url && !vp.redoing
-                          const partPct = vp.approved ? 100 : hasUrl ? 100 : vp.redoing ? 35 : 60
+                          const isManuallyApprovable = isStepReview
+                          const isSettled = isManuallyApprovable ? vp.approved : hasUrl
+                          const partPct = isSettled ? 100 : vp.redoing ? 35 : hasUrl ? 100 : 60
 
                           return (
                             <div
@@ -2418,11 +2418,11 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                 {/* Status icon */}
                                 <div className={cn(
                                   "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
-                                  vp.approved ? "bg-emerald-500/15" : hasUrl ? "bg-[var(--brand-pink)]/10" : "bg-secondary/20"
+                                  isSettled ? "bg-emerald-500/15" : hasUrl ? "bg-[var(--brand-pink)]/10" : "bg-secondary/20"
                                 )}>
                                   {vp.redoing ? (
                                     <Loader2 className="h-4.5 w-4.5 animate-spin text-amber-400" />
-                                  ) : vp.approved ? (
+                                  ) : isSettled ? (
                                     <CheckCircle2 className="h-4.5 w-4.5 text-emerald-400" />
                                   ) : hasUrl ? (
                                     <Play className="h-4.5 w-4.5 text-[var(--brand-pink)]" />
@@ -2437,7 +2437,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                     <span className="text-xs font-semibold text-foreground">Part {vp.part}</span>
                                     <span className={cn(
                                       "rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase",
-                                      vp.approved
+                                      isSettled
                                         ? "bg-emerald-500/15 text-emerald-400"
                                         : vp.redoing
                                           ? "bg-amber-500/15 text-amber-400"
@@ -2445,7 +2445,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                             ? "bg-[var(--brand-pink)]/10 text-[var(--brand-pink)]"
                                             : "bg-secondary/20 text-muted-foreground/60"
                                     )}>
-                                      {vp.approved ? "Approved" : vp.redoing ? "Redoing" : hasUrl ? "Ready" : "Rendering"}
+                                      {isManuallyApprovable
+                                        ? (vp.approved ? "Approved" : vp.redoing ? "Redoing" : hasUrl ? "Ready" : "Rendering")
+                                        : (vp.redoing ? "Redoing" : hasUrl ? "Completed" : "Rendering")}
                                     </span>
                                   </div>
 
@@ -2455,7 +2457,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                       className="relative h-full rounded-full transition-all duration-500 ease-out overflow-hidden"
                                       style={{
                                         width: `${partPct}%`,
-                                        background: vp.approved
+                                        background: isSettled
                                           ? "rgb(52 211 153)"
                                           : vp.redoing
                                             ? "rgb(251 191 36)"
@@ -2465,7 +2467,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                       }}
                                     >
                                       {/* CSS shimmer animation when processing */}
-                                      {!hasUrl && !vp.approved && !vp.redoing && (
+                                      {!hasUrl && !isSettled && !vp.redoing && (
                                         <div
                                           className="absolute inset-0 rr-shimmer"
                                           style={{ background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.5) 50%, transparent 100%)" }}
@@ -2480,7 +2482,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                               {/* Per-part action buttons */}
                               {hasUrl && (
                                 <div className="mt-2.5 flex flex-wrap items-center gap-2 pl-[52px]" onClick={(e) => e.stopPropagation()}>
-                                  {isCompleted || vp.approved ? (
+                                  {!isStepReview && (isCompleted || vp.approved) ? (
                                     <>
                                       <button
                                         onClick={() => handleVideoDownload(vp.url, vp.part)}
@@ -3135,14 +3137,25 @@ export function ReviewRoom(props: ReviewRoomProps) {
               {/* ---- Final Preview Tab Actions ---- */}
               {activeTab === "preview" && (
                 <div className="flex items-center gap-2">
-                  {videoParts.every((vp) => vp.approved) && videoParts.length > 0 ? (
+                  {isStepReview ? (
+                    videoParts.length > 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        {videoParts.filter((vp) => vp.approved).length} / {previewTotalParts} approved
+                      </p>
+                    ) : videoPolling ? (
+                      <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--brand-pink)]" />
+                        Rendering videos...
+                      </p>
+                    ) : null
+                  ) : previewAllCompleted ? (
                     <p className="flex items-center gap-2 text-xs text-emerald-400">
                       <CheckCircle2 className="h-3.5 w-3.5" />
-                      All {videoParts.length} parts approved
+                      All {previewTotalParts} parts completed
                     </p>
                   ) : videoParts.length > 0 ? (
                     <p className="text-xs text-muted-foreground">
-                      {videoParts.filter((vp) => vp.approved).length} / {videoParts.length} approved
+                      {previewReadyCount} / {previewTotalParts} ready
                     </p>
                   ) : videoPolling ? (
                     <p className="flex items-center gap-2 text-xs text-muted-foreground">
