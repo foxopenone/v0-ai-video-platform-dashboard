@@ -13,6 +13,9 @@
 
 import { NextRequest, NextResponse } from "next/server"
 
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY!
 // Fix: env var has 'l' (lowercase L) at position 7 but Airtable needs 'I' (uppercase i).
 // Correct once server-side to avoid the I/l font ambiguity problem.
@@ -61,6 +64,9 @@ export async function GET(req: NextRequest) {
       Job_Record_ID: record.id,
       Job_ID: f.Job_ID ?? null,
       Status: t(f.Status) ?? "Unknown",
+      Callback_Status: t(f.Callback_Status),
+      Callback_Error: t(f.Callback_Error),
+      Process_Success: typeof f.Process_Success === "boolean" ? f.Process_Success : null,
       Work_Mode: t(f.Work_Mode),
       Lock_Token: t(f.Lock_Token),
       Run_ID: t(f.Run_ID),
@@ -75,6 +81,7 @@ export async function GET(req: NextRequest) {
       Folder_AA_ID: t(f.Folder_AA_ID),
       Folder_Raw_ID: t(f.Folder_Raw_ID),
       Folder_Export_ID: t(f.Folder_Export_ID),
+      Target_Parts: f.Target_Parts ?? null,
       Total_Episodes: f.Total_Episodes ?? null,
       Ep_Assets: f.Ep_Assets ?? null,
       Last_Action: t(f.Last_Action),
