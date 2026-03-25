@@ -91,6 +91,7 @@ interface StepReviewProps {
   bibleR2Key: string
   currentStatus: string // e.g. "S3_Bible_Check" | "S5_Script_Check" | "S8_Render" | "S9_Done"
   projectTitle?: string
+  videoCount?: number
   workMode?: "Full_Auto" | "Step_Review" // Controls whether approval buttons are enabled
   onClose: () => void
   onApproved?: () => void
@@ -111,7 +112,7 @@ interface ProgressProps {
   onStop?: () => void
   onPost?: (jobRecordId: string, videoParts: Array<{ part: string; url: string }>) => void
   /** Called when status reaches a Check state -- parent should switch to step_review */
-  onReviewReady?: (data: { lockToken: string; bibleR2Key: string; currentStatus: string; workMode?: "Full_Auto" | "Step_Review" }) => void
+  onReviewReady?: (data: { lockToken: string; bibleR2Key: string; currentStatus: string; videoCount?: number; workMode?: "Full_Auto" | "Step_Review" }) => void
 }
 
 // ---------- Legacy Props ----------
@@ -288,6 +289,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
     if (props.mode === "progress") {
       return Math.max(Number((props as ProgressProps).videoCount || 0), 1)
     }
+    if (props.mode === "step_review") {
+      return Math.max(Number((props as StepReviewProps).videoCount || 0), 1)
+    }
     return 1
   })
   // Full Auto progress tracking
@@ -341,8 +345,8 @@ export function ReviewRoom(props: ReviewRoomProps) {
     const isBibleApproved = isDone || isPreviewPhase || isVoicePhase || /S4|Visual/i.test(status)
 
     if (isDone) {
-      setApprovedPhases(new Set(["bible", "voiceover", "preview"]))
-      setIsCompleted(true)
+      setApprovedPhases(new Set(["bible", "voiceover"]))
+      setIsCompleted(isFullAuto)
       setActiveTab("preview")
       return
     }
@@ -371,7 +375,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
     setIsCompleted(false)
     setApprovedPhases(new Set())
     setActiveTab("bible")
-  }, [])
+  }, [isFullAuto])
 
   const canPollNow = useCallback(() => {
     if (typeof document === "undefined") return true
@@ -403,9 +407,33 @@ export function ReviewRoom(props: ReviewRoomProps) {
     return next
   }, [])
 
+  const resolveStableExpectedVideoParts = useCallback((...counts: Array<number | string | null | undefined>) => {
+    return mergeExpectedVideoParts(...counts)
+  }, [mergeExpectedVideoParts])
+
+  const getObservedVideoPartCount = useCallback((videos: Array<{ part?: string | number; url?: string | null }> | null | undefined) => {
+    if (!Array.isArray(videos) || videos.length === 0) return 0
+    let highestPart = 0
+    for (const video of videos) {
+      const partNum = Number(video?.part ?? 0)
+      if (Number.isFinite(partNum) && partNum > highestPart) highestPart = partNum
+    }
+    return Math.max(videos.length, highestPart)
+  }, [])
+
   useEffect(() => {
     mergeExpectedVideoParts(scriptData?.parts?.length || 0)
   }, [scriptData?.parts?.length, mergeExpectedVideoParts])
+
+  useEffect(() => {
+    if (props.mode === "step_review") {
+      mergeExpectedVideoParts((props as StepReviewProps).videoCount || 0)
+      return
+    }
+    if (props.mode === "progress") {
+      mergeExpectedVideoParts((props as ProgressProps).videoCount || 0)
+    }
+  }, [props, mergeExpectedVideoParts])
 
   // Auto-select first video part with a URL when videos arrive (only once)
   useEffect(() => {
@@ -595,10 +623,17 @@ export function ReviewRoom(props: ReviewRoomProps) {
       setVideoRenderStartTime(Date.now())
       setVideoRenderProgress(isDone ? 95 : 0)
       // Also load script data for VO tab browsing (critical for ALL_DONE state)
-      fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}`)
+      fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}&_ts=${Date.now()}`, {
+        cache: "no-store",
+      })
         .then((r) => r.ok ? r.json() : Promise.reject(new Error(`API ${r.status}`)))
         .then((job) => {
-          mergeExpectedVideoParts(job.Target_Parts, job.Total_Episodes)
+          mergeExpectedVideoParts(
+            (props as StepReviewProps).videoCount,
+            job.Target_Parts,
+            job.Video_Parts,
+            job.Total_Episodes
+          )
           if (job.Script_R2_Key) {
             console.log("[v0] ALL_DONE: Loading script from R2 for VO tab", job.Script_R2_Key)
             setScriptR2Key(job.Script_R2_Key)
@@ -621,7 +656,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
     if (/S5_Script|S5/i.test(statusStr) && !isVoApproved) {
       setActiveTab("voiceover")
       // Fetch the script using job-status to get Script_R2_Key
-      fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}`)
+      fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}&_ts=${Date.now()}`, {
+        cache: "no-store",
+      })
         .then((r) => r.ok ? r.json() : Promise.reject(new Error(`API ${r.status}`)))
         .then((job) => {
           const sKey = job.Script_R2_Key
@@ -1078,7 +1115,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
       }
 
       try {
-        const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}`)
+        const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}&_ts=${Date.now()}`, {
+          cache: "no-store",
+        })
         if (!res.ok) {
           failCount++
           if (failCount >= 3) {
@@ -1144,7 +1183,6 @@ export function ReviewRoom(props: ReviewRoomProps) {
     const { jobRecordId } = props as StepReviewProps
     let stopped = false
     let pollCount = 0
-    let doneButIncompleteHits = 0
     const MAX_POLLS = 300 // ~15 minutes at 3s intervals
     
     console.log("[v0] Full_Auto poller STARTED for record:", jobRecordId)
@@ -1161,7 +1199,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
       }
       
       try {
-        const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}`)
+        const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}&_ts=${Date.now()}`, {
+          cache: "no-store",
+        })
         if (!res.ok) return
         
         const job = await res.json()
@@ -1207,14 +1247,6 @@ export function ReviewRoom(props: ReviewRoomProps) {
         // Load / merge Final Videos if available
         let filteredVideos: Array<{ part: string; url: string }> = []
         // Expected output parts should come from target parts / script parts, not source episodes.
-        const expectedParts = Math.max(
-          Number(job.Target_Parts || 0),
-          Number((scriptData?.parts?.length || 0)),
-          Number((videoParts?.length || 0)),
-          1,
-        )
-        mergeExpectedVideoParts(expectedParts, filteredVideos.length)
-
         if (job.Final_Video) {
           let finalVideos: Array<{ part: string; url: string }> = []
           try {
@@ -1255,6 +1287,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
               return merged
             })
             setVideoRenderProgress(100)
+            mergeExpectedVideoParts(getObservedVideoPartCount(filteredVideos))
             // Auto-select first video
             if (filteredVideos.length > 0 && !selectedVideoPartId) {
               setSelectedVideoPartId(String(filteredVideos[0].part))
@@ -1264,11 +1297,17 @@ export function ReviewRoom(props: ReviewRoomProps) {
         
         // Check if done
         if (job.Status === "S9_Done" || job.Status === "ALL_DONE") {
-          // Prevent stale one-part UI when status flips before Final_Video is fully written.
-          if (filteredVideos.length < expectedParts && doneButIncompleteHits < 8) {
-            doneButIncompleteHits++
+          const resolvedExpectedParts = resolveStableExpectedVideoParts(
+            expectedVideoParts,
+            (props as StepReviewProps).videoCount,
+            Number(job.Target_Parts || 0),
+            Number((scriptData?.parts?.length || 0)),
+            getObservedVideoPartCount(filteredVideos),
+            1
+          )
+          if (filteredVideos.length < resolvedExpectedParts || filteredVideos.some((fv) => !fv.url)) {
             console.log(
-              `[v0] Full_Auto: done but waiting for all parts (${filteredVideos.length}/${expectedParts}), retry ${doneButIncompleteHits}/8`
+              `[v0] Full_Auto: waiting for all parts before completion (${filteredVideos.length}/${resolvedExpectedParts})`
             )
             return
           }
@@ -1290,7 +1329,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
     const interval = setInterval(poll, STATUS_POLL_INTERVAL_MS)
     return () => { stopped = true; clearInterval(interval); console.log("[v0] Full_Auto poller STOPPED") }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isStepReview, isFullAuto, isCompleted, canPollNow, hasBackendErrorSignal, buildJobErrorMessage, stopPollingWithBackendError, scriptData?.parts?.length, videoParts?.length, selectedVideoPartId])
+  }, [isStepReview, isFullAuto, isCompleted, canPollNow, hasBackendErrorSignal, buildJobErrorMessage, stopPollingWithBackendError, expectedVideoParts, (props as StepReviewProps).videoCount, scriptData?.parts?.length, videoParts?.length, selectedVideoPartId])
 
   // ── Final Preview: Video Polling (after VO Approve or S8_Render auto-detect) ──
   useEffect(() => {
@@ -1315,7 +1354,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
       }
 
       try {
-        const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}`)
+        const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}&_ts=${Date.now()}`, {
+          cache: "no-store",
+        })
         if (!res.ok) {
           failCount++
           if (failCount >= 3) {
@@ -1399,13 +1440,14 @@ export function ReviewRoom(props: ReviewRoomProps) {
           })
 
           // Only stop when expected part count is fully present and all have URLs.
-          const expectedParts = Math.max(
+          const expectedParts = resolveStableExpectedVideoParts(
+            expectedVideoParts,
+            (props as StepReviewProps).videoCount,
             Number(job.Target_Parts || 0),
             Number((scriptData?.parts?.length || 0)),
-            Number((filteredFinalVideos?.length || 0)),
-            1,
+            getObservedVideoPartCount(filteredFinalVideos),
+            1
           )
-          mergeExpectedVideoParts(expectedParts, filteredFinalVideos.length)
           const allReady = filteredFinalVideos.length >= expectedParts && filteredFinalVideos.every((fv) => !!fv.url)
           if (allReady && job.Status === "S9_Done") {
             console.log(`[v0] All videos done (${filteredFinalVideos.length}/${expectedParts}), status S9_Done. Stopping video poller.`)
@@ -1428,7 +1470,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
     poll()
     const interval = setInterval(poll, STATUS_POLL_INTERVAL_MS)
     return () => { stopped = true; clearInterval(interval); console.log("[v0] Video poller STOPPED") }
-  }, [videoPolling, isStepReview, canPollNow, hasBackendErrorSignal, buildJobErrorMessage, stopPollingWithBackendError, scriptData?.parts?.length])
+  }, [videoPolling, isStepReview, canPollNow, hasBackendErrorSignal, buildJobErrorMessage, stopPollingWithBackendError, expectedVideoParts, (props as StepReviewProps).videoCount, scriptData?.parts?.length])
 
   // ── Legacy mode: no more mock data. Show loading=false immediately. ──
   useEffect(() => {
@@ -1558,13 +1600,13 @@ export function ReviewRoom(props: ReviewRoomProps) {
     let consecutiveHits = 0
     let stopped = false
     let failCount = 0
-    let doneButIncompleteHits = 0
-
     const poll = async () => {
       if (stopped) return
       if (!canPollNow()) return
       try {
-        const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}`)
+        const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(jobRecordId)}&_ts=${Date.now()}`, {
+          cache: "no-store",
+        })
         if (!res.ok) {
           failCount++
           console.log(`[v0] Progress poll FAILED: HTTP ${res.status} (fail #${failCount})`)
@@ -1596,10 +1638,11 @@ export function ReviewRoom(props: ReviewRoomProps) {
           v && v.url && !deletedParts.includes(String(v.part))
         )
         setProgressVideoParts(filteredVideos)
-        const expectedParts = Math.max(
-          Number(job.Target_Parts || 0),
-          Number(job.Total_Episodes || 0),
+        const expectedParts = resolveStableExpectedVideoParts(
+          expectedVideoParts,
           Number((props as ProgressProps).videoCount || 0),
+          Number(job.Target_Parts || 0),
+          getObservedVideoPartCount(filteredVideos),
           1
         )
         const allVideosReady = filteredVideos.length >= expectedParts
@@ -1611,17 +1654,13 @@ export function ReviewRoom(props: ReviewRoomProps) {
           return
         }
 
-        // Avoid stopping too early when Status is done but Final_Video is still partially synced.
-        if (isDoneStatus && !allVideosReady && doneButIncompleteHits < 8) {
-          doneButIncompleteHits++
-          console.log(
-            `[v0] Progress done-but-incomplete: ${filteredVideos.length}/${expectedParts}, retry ${doneButIncompleteHits}/8`
-          )
+        // Only complete preview when all expected parts are actually ready.
+        if (isDoneStatus && !allVideosReady) {
+          console.log(`[v0] Progress waiting for all parts: ${filteredVideos.length}/${expectedParts}`)
           return
         }
 
-        // If done (with enough retries) or all parts ready, mark completed
-        if (isDoneStatus || allVideosReady) {
+        if (isDoneStatus && allVideosReady) {
           stopped = true
           setProgressPolling(false)
           setProgressCompleted(true)
@@ -1635,7 +1674,13 @@ export function ReviewRoom(props: ReviewRoomProps) {
       console.log("[v0] TRANSITIONING to step_review! Status:", job.Status, "Bible_R2_Key:", job.Bible_R2_Key, "Work_Mode:", job.Work_Mode)
       stopped = true
       setProgressPolling(false)
-      onReviewReady?.({ lockToken: job.Lock_Token || "", bibleR2Key: job.Bible_R2_Key, currentStatus: job.Status, workMode: job.Work_Mode || "Step_Review" })
+      onReviewReady?.({
+        lockToken: job.Lock_Token || "",
+        bibleR2Key: job.Bible_R2_Key,
+        currentStatus: job.Status,
+        videoCount: expectedParts,
+        workMode: job.Work_Mode || "Step_Review",
+      })
           return
         }
 
@@ -1664,7 +1709,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
     const interval = setInterval(poll, PROGRESS_POLL_INTERVAL_MS)
     return () => { stopped = true; clearInterval(interval); console.log("[v0] Progress poller STOPPED") }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isProgress, canPollNow, hasBackendErrorSignal, buildJobErrorMessage, stopPollingWithBackendError])
+  }, [isProgress, canPollNow, hasBackendErrorSignal, buildJobErrorMessage, stopPollingWithBackendError, expectedVideoParts, resolveStableExpectedVideoParts])
 
   if (isProgress) {
     const { projectTitle, jobRecordId } = props as ProgressProps
@@ -2211,7 +2256,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                               {videoStopped
                                 ? "Stopped"
                                 : allDone
-                                  ? `All ${videoParts.length} parts rendered`
+                                  ? `All ${totalParts} parts rendered`
                                   : videoParts.length > 0
                                     ? `${readyCount} of ${totalParts} parts ready`
                                     : "Rendering in progress..."}
@@ -2398,9 +2443,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
                         {videoParts.map((vp) => {
                           const isSelected = vp.part === selectedVideoPartId
                           const hasUrl = !!vp.url && !vp.redoing
-                          const isManuallyApprovable = isStepReview
-                          const isSettled = isManuallyApprovable ? vp.approved : hasUrl
-                          const partPct = isSettled ? 100 : vp.redoing ? 35 : hasUrl ? 100 : 60
+                          const isManuallyApprovable = isStepReview && !isCompleted
+                          const isSettled = isCompleted ? hasUrl : isManuallyApprovable ? vp.approved : hasUrl
+                          const partPct = isSettled || hasUrl ? 100 : vp.redoing ? 35 : 60
 
                           return (
                             <div
@@ -2418,14 +2463,14 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                 {/* Status icon */}
                                 <div className={cn(
                                   "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
-                                  isSettled ? "bg-emerald-500/15" : hasUrl ? "bg-[var(--brand-pink)]/10" : "bg-secondary/20"
+                                  isSettled ? "bg-emerald-500/15" : hasUrl ? "bg-sky-500/12" : "bg-secondary/20"
                                 )}>
                                   {vp.redoing ? (
                                     <Loader2 className="h-4.5 w-4.5 animate-spin text-amber-400" />
                                   ) : isSettled ? (
                                     <CheckCircle2 className="h-4.5 w-4.5 text-emerald-400" />
                                   ) : hasUrl ? (
-                                    <Play className="h-4.5 w-4.5 text-[var(--brand-pink)]" />
+                                    <Play className="h-4.5 w-4.5 text-sky-400" />
                                   ) : (
                                     <Loader2 className="h-4.5 w-4.5 animate-spin text-muted-foreground/50" />
                                   )}
@@ -2442,12 +2487,12 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                         : vp.redoing
                                           ? "bg-amber-500/15 text-amber-400"
                                           : hasUrl
-                                            ? "bg-[var(--brand-pink)]/10 text-[var(--brand-pink)]"
+                                            ? "bg-sky-500/12 text-sky-400"
                                             : "bg-secondary/20 text-muted-foreground/60"
                                     )}>
-                                      {isManuallyApprovable
-                                        ? (vp.approved ? "Approved" : vp.redoing ? "Redoing" : hasUrl ? "Ready" : "Rendering")
-                                        : (vp.redoing ? "Redoing" : hasUrl ? "Completed" : "Rendering")}
+                                      {isCompleted
+                                        ? (vp.redoing ? "Redoing" : hasUrl ? "Completed" : "Rendering")
+                                        : (vp.redoing ? "Redoing" : vp.approved ? "Approved" : hasUrl ? "Ready" : "Rendering")}
                                     </span>
                                   </div>
 
@@ -2462,7 +2507,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                                           : vp.redoing
                                             ? "rgb(251 191 36)"
                                             : hasUrl
-                                              ? "var(--brand-pink)"
+                                              ? "rgb(56 189 248)"
                                               : "linear-gradient(90deg, var(--brand-pink), var(--brand-purple))",
                                       }}
                                     >

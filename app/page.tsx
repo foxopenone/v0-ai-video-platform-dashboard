@@ -122,6 +122,16 @@ export default function Page() {
     [pollableProjects]
   )
 
+  const getObservedVideoPartCount = useCallback((videos: Array<{ part?: string | number; url?: string | null }> | null | undefined) => {
+    if (!Array.isArray(videos) || videos.length === 0) return 0
+    let highestPart = 0
+    for (const video of videos) {
+      const partNum = Number(video?.part ?? 0)
+      if (Number.isFinite(partNum) && partNum > highestPart) highestPart = partNum
+    }
+    return Math.max(videos.length, highestPart)
+  }, [])
+
   // Continuously refresh only active cards, using one bulk API call.
   useEffect(() => {
     if (pollableProjects.length === 0) return
@@ -132,8 +142,9 @@ export default function Page() {
       if (document.visibilityState !== "visible") return
 
       try {
-        const res = await fetch("/api/job-status-bulk", {
+        const res = await fetch(`/api/job-status-bulk?_ts=${Date.now()}`, {
           method: "POST",
+          cache: "no-store",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             record_ids: pollableProjects
@@ -178,7 +189,13 @@ export default function Page() {
             }
 
             const readyVideoCount = finalVideos.filter((v) => typeof v?.url === "string" && v.url.trim()).length
-            const totalParts = Math.max(Number(job.Target_Parts || 0), Number(job.Total_Episodes || 0), 0)
+            const observedVideoParts = getObservedVideoPartCount(finalVideos)
+            const totalParts = Math.max(
+              Number(job.Target_Parts || 0),
+              Number(p.episodes || 0),
+              observedVideoParts,
+              0
+            )
             const allVideosReady = totalParts > 0 ? readyVideoCount >= totalParts : readyVideoCount > 0
             const isDone = /S9_Done|ALL_DONE|DONE|COMPLETE/i.test(status) || allVideosReady
             const isFailed = ["Error", "Failed", "Stopped"].includes(status) || /error|failed|stopped|fatal|abort|cancel/i.test(status)
@@ -271,7 +288,10 @@ export default function Page() {
       )
     }
     setProgressData(null) // close progress if open
-    setStepReviewData(data)
+    setStepReviewData({
+      ...data,
+      videoCount: Math.max(Number(data.videoCount || 0), 1),
+    })
   }, [])
 
   // Browser back button: push history state when entering review/progress mode
@@ -304,6 +324,7 @@ export default function Page() {
         bibleR2Key={stepReviewData.bibleR2Key}
         currentStatus={stepReviewData.currentStatus || "S3_Bible_Check"}
         projectTitle={stepReviewData.projectTitle}
+        videoCount={stepReviewData.videoCount}
         workMode={stepReviewData.workMode}
         onClose={() => {
           setStepReviewData(null)
@@ -440,6 +461,7 @@ onStop={async () => {
             bibleR2Key: data.bibleR2Key,
             currentStatus: data.currentStatus,
             projectTitle: progressData.projectTitle,
+            videoCount: Math.max(Number(data.videoCount || 0), Number(progressData.videoCount || 0), 1),
             workMode: data.workMode || "Step_Review",
           })
           setProgressData(null)
@@ -468,7 +490,9 @@ onStop={async () => {
             // For pending_review / approved / completed / posted cards, try quick fetch to jump directly to review
             if (inserted.status === "pending_review" || inserted.status === "approved" || inserted.status === "completed" || inserted.status === "posted") {
               try {
-                const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(recordId)}`)
+                const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(recordId)}&_ts=${Date.now()}`, {
+                  cache: "no-store",
+                })
                 if (res.ok) {
                   const job = await res.json()
                   console.log("[v0] Opening project - job.Status:", job.Status, "job:", job)
@@ -481,6 +505,20 @@ onStop={async () => {
                       bibleR2Key: bibleKey,
                       currentStatus: job.Status,
                       projectTitle: inserted.title,
+                      videoCount: Math.max(
+                        Number(job.Target_Parts || 0),
+                        Number(inserted.episodes || 0),
+                        getObservedVideoPartCount(Array.isArray(job.Final_Video) ? job.Final_Video : (() => {
+                          if (typeof job.Final_Video !== "string" || !job.Final_Video.trim()) return []
+                          try {
+                            const parsed = JSON.parse(job.Final_Video)
+                            return Array.isArray(parsed) ? parsed : []
+                          } catch {
+                            return []
+                          }
+                        })()),
+                        1
+                      ),
                       workMode: job.Work_Mode || "Step_Review",
                     })
                     return
@@ -497,7 +535,9 @@ onStop={async () => {
             if (!project?.airtableRecordId) return
             const recordId = project.airtableRecordId
             // Fetch videos from backend then post
-            fetch(`/api/job-status?record_id=${encodeURIComponent(recordId)}`)
+            fetch(`/api/job-status?record_id=${encodeURIComponent(recordId)}&_ts=${Date.now()}`, {
+              cache: "no-store",
+            })
               .then((r) => r.ok ? r.json() : Promise.reject(new Error(`API ${r.status}`)))
               .then((job: Record<string, unknown>) => {
                 let finalVideos: Array<{ part: string; url: string }> = []
@@ -542,7 +582,10 @@ onStop={async () => {
                 jobRecordId: item.id,
                 bibleR2Key: "",
                 currentStatus: "ALL_DONE",
-                title: item.title,
+                projectTitle: item.title,
+                videoCount: Math.max(item.videoParts.length, 1),
+                lockToken: "",
+                workMode: "Step_Review",
               })
             }
           }}
