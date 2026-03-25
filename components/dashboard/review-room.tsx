@@ -1551,13 +1551,29 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const [progressPolling, setProgressPolling] = useState(true)
   const [progressError, setProgressError] = useState<string | null>(null)
   const [progressCompleted, setProgressCompleted] = useState(false)
+  const [progressStopped, setProgressStopped] = useState(false)
   const [progressVideoParts, setProgressVideoParts] = useState<Array<{ part: string; url: string }>>([])
   const [animatedPct, setAnimatedPct] = useState(0) // Smoothly animated percentage for progress bar
 
-  // Animate progress bar percentage - NEVER stops, always slowly increasing
-  // This gives users confidence that the backend is working
+  const handleStopProgress = useCallback(async () => {
+    setProgressPolling(false)
+    setProgressCompleted(false)
+    setProgressStopped(true)
+    setProgressError(null)
+    setProgressStatus("Stopped")
+    try {
+      const fn = (props as ProgressProps).onStop
+      if (fn) await fn()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to stop job"
+      setProgressStopped(false)
+      setProgressError(`[Stop Failed] ${message}`)
+    }
+  }, [props])
+
+  // Animate progress bar percentage - keeps moving during active processing
   useEffect(() => {
-    if (!isProgress || !progressPolling) return
+    if (!isProgress || !progressPolling || progressError || progressCompleted || progressStopped) return
     const STAGE_PCT: Record<string, number> = {
       "Loading...": 2,
       S1_Ingestion: 8, S1_Upload: 5,
@@ -1569,30 +1585,25 @@ export function ReviewRoom(props: ReviewRoomProps) {
       S7_Render: 85, S8_Render: 92,
       S9_Done: 100,
     }
-    const targetPct = STAGE_PCT[progressStatus] ?? 5
-    // Calculate max allowed (next stage - 1, but never exceed 99 unless done)
-    const maxAllowed = progressStatus === "S9_Done" ? 100 : Math.min(targetPct + 8, 99)
+    const floorPct = STAGE_PCT[progressStatus] ?? 5
+    const capPct = progressStatus === "S9_Done" ? 100 : 99.8
     
     const interval = setInterval(() => {
       setAnimatedPct((prev) => {
-        // If below target, move faster towards it
-        if (prev < targetPct) {
-          const step = Math.max(0.5, (targetPct - prev) * 0.1)
-          return Math.min(prev + step, targetPct)
+        if (prev < floorPct) {
+          const catchUpStep = Math.max(0.8, (floorPct - prev) * 0.18)
+          return Math.min(prev + catchUpStep, floorPct)
         }
-        // If at or above target but below max, keep slowly creeping up
-        // This ensures the progress bar NEVER stops moving
-        if (prev < maxAllowed) {
-          // Slow creep: 0.1-0.3% per tick, slowing down as we approach max
-          const remaining = maxAllowed - prev
-          const creepStep = Math.max(0.05, remaining * 0.02)
-          return Math.min(prev + creepStep, maxAllowed)
+        if (prev < capPct) {
+          const remaining = capPct - prev
+          const creepStep = Math.max(0.12, remaining * 0.01)
+          return Math.min(prev + creepStep, capPct)
         }
         return prev
       })
     }, ANIMATION_TICK_MS)
     return () => clearInterval(interval)
-  }, [isProgress, progressPolling, progressStatus])
+  }, [isProgress, progressPolling, progressStatus, progressError, progressCompleted, progressStopped])
 
   useEffect(() => {
     if (!isProgress) return
@@ -1650,6 +1661,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
         if (hasBackendErrorSignal(job)) {
           stopped = true
+          setProgressStopped(false)
           stopPollingWithBackendError(buildJobErrorMessage(job))
           return
         }
@@ -1663,6 +1675,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
         if (isDoneStatus && allVideosReady) {
           stopped = true
           setProgressPolling(false)
+          setProgressStopped(false)
           setProgressCompleted(true)
           setProgressVideoParts(filteredVideos)
           return
@@ -1757,17 +1770,16 @@ export function ReviewRoom(props: ReviewRoomProps) {
                   <button onClick={onClose} className="rounded-lg border border-border/40 px-4 py-2 text-xs text-muted-foreground hover:bg-secondary/30">
                     Back to Home
                   </button>
-                  <button
-                    onClick={() => {
-                      setProgressPolling(false)
-                      const fn = (props as ProgressProps).onStop
-                      if (fn) fn()
-                      else onClose()
-                    }}
-                    className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-400 hover:bg-red-500/20"
-                  >
-                    <StopCircle className="h-3.5 w-3.5" />
-                    Stop
+                </div>
+              </div>
+            ) : progressStopped ? (
+              <div className="flex flex-col items-center gap-3 text-center">
+                <StopCircle className="h-10 w-10 text-red-400" />
+                <p className="text-sm font-medium text-red-400">Stopped</p>
+                <p className="text-xs text-muted-foreground">The backend job has been stopped.</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <button onClick={onClose} className="rounded-lg border border-border/40 px-4 py-2 text-xs text-muted-foreground hover:bg-secondary/30">
+                    Back to Home
                   </button>
                 </div>
               </div>
@@ -1885,12 +1897,7 @@ export function ReviewRoom(props: ReviewRoomProps) {
                 Back to Home
               </button>
               <button
-                onClick={() => {
-                  setProgressPolling(false)
-                  const fn = (props as ProgressProps).onStop
-                  if (fn) fn()
-                  else onClose()
-                }}
+                onClick={handleStopProgress}
                 className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20"
               >
                 <StopCircle className="h-3.5 w-3.5" />

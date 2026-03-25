@@ -360,8 +360,6 @@ onStop={async () => {
       )
     )
   }
-  setStepReviewData(null)
-  if (window.history.state?.reviewOpen) window.history.back()
   }}
         onPost={(jobRecordId, videoParts) => {
           const project = insertedProjects.find((p) => p.airtableRecordId === jobRecordId)
@@ -426,8 +424,6 @@ onStop={async () => {
       )
     )
   }
-  setProgressData(null)
-  if (window.history.state?.reviewOpen) window.history.back()
   }}
         onPost={(jobRecordId, videoParts) => {
           const project = insertedProjects.find((p) => p.airtableRecordId === jobRecordId)
