@@ -232,6 +232,21 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const STATUS_POLL_INTERVAL_MS = 15000
   const PROGRESS_POLL_INTERVAL_MS = 15000
   const ANIMATION_TICK_MS = 500
+  const PROGRESS_STALL_TIMEOUT_DEFAULT_MS = 4 * 60 * 1000
+  const PROGRESS_STALL_TIMEOUT_BY_STAGE_MS: Record<string, number> = {
+    S1_Ingestion: 3 * 60 * 1000,
+    S1_Upload: 3 * 60 * 1000,
+    S2_Preproc: 6 * 60 * 1000,
+    S2_Brain: 8 * 60 * 1000,
+    S3_Bible: 5 * 60 * 1000,
+    S4_Script: 5 * 60 * 1000,
+    S4_Visuals: 6 * 60 * 1000,
+    S5_Script: 5 * 60 * 1000,
+    S6_VO: 5 * 60 * 1000,
+    S6_Audio: 5 * 60 * 1000,
+    S7_Render: 12 * 60 * 1000,
+    S8_Render: 12 * 60 * 1000,
+  }
   const isStepReview = props.mode === "step_review"
   const isProgress = props.mode === "progress"
   const onClose = props.onClose
@@ -1554,6 +1569,8 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const [progressStopped, setProgressStopped] = useState(false)
   const [progressVideoParts, setProgressVideoParts] = useState<Array<{ part: string; url: string }>>([])
   const [animatedPct, setAnimatedPct] = useState(0) // Smoothly animated percentage for progress bar
+  const progressLastChangeAtRef = useRef(Date.now())
+  const progressSignatureRef = useRef("")
 
   const handleStopProgress = useCallback(async () => {
     setProgressPolling(false)
@@ -1607,6 +1624,12 @@ export function ReviewRoom(props: ReviewRoomProps) {
 
   useEffect(() => {
     if (!isProgress) return
+    progressLastChangeAtRef.current = Date.now()
+    progressSignatureRef.current = ""
+  }, [isProgress, jobRecordId])
+
+  useEffect(() => {
+    if (!isProgress) return
     const { jobRecordId, onReviewReady } = props as ProgressProps
     let consecutiveHits = 0
     let stopped = false
@@ -1656,6 +1679,33 @@ export function ReviewRoom(props: ReviewRoomProps) {
           getObservedVideoPartCount(filteredVideos),
           1
         )
+        const progressSignature = JSON.stringify({
+          status: String(job.Status || ""),
+          callbackStatus: String(job.Callback_Status || ""),
+          callbackError: String(job.Callback_Error || ""),
+          processSuccess: String(job.Process_Success),
+          lastAction: String(job.Last_Action || ""),
+          lastError: String(job.Last_Error || ""),
+          bibleKey: String(job.Bible_R2_Key || ""),
+          scriptKey: String(job.Script_R2_Key || ""),
+          voKey: String(job.VO_R2_Key || ""),
+          finalVideo: String(job.Final_Video || ""),
+          finalVideoCount: filteredVideos.length,
+        })
+        if (progressSignature !== progressSignatureRef.current) {
+          progressSignatureRef.current = progressSignature
+          progressLastChangeAtRef.current = Date.now()
+        } else {
+          const stallTimeout =
+            PROGRESS_STALL_TIMEOUT_BY_STAGE_MS[String(job.Status || "")] ?? PROGRESS_STALL_TIMEOUT_DEFAULT_MS
+          if (Date.now() - progressLastChangeAtRef.current >= stallTimeout) {
+            stopped = true
+            setProgressPolling(false)
+            setProgressStopped(false)
+            setProgressError(`[Backend Timeout] ${String(job.Status || "Unknown")} stalled with no new output.`)
+            return
+          }
+        }
         const allVideosReady = filteredVideos.length >= expectedParts
         const isDoneStatus = /S9_Done|ALL_DONE|DONE|COMPLETE/i.test(String(job.Status || ""))
 
@@ -1746,6 +1796,8 @@ export function ReviewRoom(props: ReviewRoomProps) {
   }
 
     const info = STAGE_LABELS[progressStatus] || { label: progressStatus, pct: 0 }
+    const displayedProgressPct = progressCompleted ? 100 : Math.min(99, Math.floor(animatedPct))
+    const progressBarValue = progressCompleted ? 100 : Math.min(animatedPct, 99.4)
 
     return (
       <div className="fixed inset-0 z-50 flex flex-col bg-background">
@@ -1871,9 +1923,9 @@ export function ReviewRoom(props: ReviewRoomProps) {
             <div className="w-full">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[10px] text-muted-foreground">Processing...</span>
-                <span className="text-xs font-semibold tabular-nums text-foreground">{Math.round(animatedPct)}%</span>
+                <span className="text-xs font-semibold tabular-nums text-foreground">{displayedProgressPct}%</span>
               </div>
-              <AnimatedProgress value={animatedPct} size="md" />
+              <AnimatedProgress value={progressBarValue} size="md" />
             </div>
 
             {/* S8 special message */}
