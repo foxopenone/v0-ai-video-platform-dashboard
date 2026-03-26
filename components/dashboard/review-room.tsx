@@ -232,20 +232,21 @@ export function ReviewRoom(props: ReviewRoomProps) {
   const STATUS_POLL_INTERVAL_MS = 15000
   const PROGRESS_POLL_INTERVAL_MS = 15000
   const ANIMATION_TICK_MS = 500
-  const PROGRESS_STALL_TIMEOUT_DEFAULT_MS = 4 * 60 * 1000
+  const PROGRESS_STALL_TIMEOUT_BUFFER_MS = 6 * 60 * 1000
+  const PROGRESS_STALL_TIMEOUT_DEFAULT_MS = 4 * 60 * 1000 + PROGRESS_STALL_TIMEOUT_BUFFER_MS
   const PROGRESS_STALL_TIMEOUT_BY_STAGE_MS: Record<string, number> = {
-    S1_Ingestion: 3 * 60 * 1000,
-    S1_Upload: 3 * 60 * 1000,
-    S2_Preproc: 6 * 60 * 1000,
-    S2_Brain: 8 * 60 * 1000,
-    S3_Bible: 5 * 60 * 1000,
-    S4_Script: 5 * 60 * 1000,
-    S4_Visuals: 6 * 60 * 1000,
-    S5_Script: 5 * 60 * 1000,
-    S6_VO: 5 * 60 * 1000,
-    S6_Audio: 5 * 60 * 1000,
-    S7_Render: 12 * 60 * 1000,
-    S8_Render: 12 * 60 * 1000,
+    S1_Ingestion: 3 * 60 * 1000 + PROGRESS_STALL_TIMEOUT_BUFFER_MS,
+    S1_Upload: 3 * 60 * 1000 + PROGRESS_STALL_TIMEOUT_BUFFER_MS,
+    S2_Preproc: 6 * 60 * 1000 + PROGRESS_STALL_TIMEOUT_BUFFER_MS,
+    S2_Brain: 8 * 60 * 1000 + PROGRESS_STALL_TIMEOUT_BUFFER_MS,
+    S3_Bible: 5 * 60 * 1000 + PROGRESS_STALL_TIMEOUT_BUFFER_MS,
+    S4_Script: 5 * 60 * 1000 + PROGRESS_STALL_TIMEOUT_BUFFER_MS,
+    S4_Visuals: 6 * 60 * 1000 + PROGRESS_STALL_TIMEOUT_BUFFER_MS,
+    S5_Script: 5 * 60 * 1000 + PROGRESS_STALL_TIMEOUT_BUFFER_MS,
+    S6_VO: 5 * 60 * 1000 + PROGRESS_STALL_TIMEOUT_BUFFER_MS,
+    S6_Audio: 5 * 60 * 1000 + PROGRESS_STALL_TIMEOUT_BUFFER_MS,
+    S7_Render: 12 * 60 * 1000 + PROGRESS_STALL_TIMEOUT_BUFFER_MS,
+    S8_Render: 12 * 60 * 1000 + PROGRESS_STALL_TIMEOUT_BUFFER_MS,
   }
   const isStepReview = props.mode === "step_review"
   const isProgress = props.mode === "progress"
