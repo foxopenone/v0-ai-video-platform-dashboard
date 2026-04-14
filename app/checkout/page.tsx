@@ -2,7 +2,8 @@
 
 import { useState, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
-import { ArrowLeft, Loader2, Shield, Sparkles } from "lucide-react"
+import { ArrowLeft, Loader2, Shield } from "lucide-react"
+import Image from "next/image"
 import { cn } from "@/lib/utils"
 
 // Card brand SVG icons
@@ -237,17 +238,25 @@ function CheckoutContent() {
           <div className="relative">
             <div className="flex items-start justify-between">
               <div className="flex-1">
-                {/* Plan/Product Name */}
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--brand-pink)] to-[var(--brand-purple)]">
-                    <Sparkles className="h-5 w-5 text-white" />
+                {/* Plan/Product Name with Logo */}
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="relative h-12 w-12 overflow-hidden rounded-xl bg-black/50 p-1">
+                    <Image
+                      src="/images/shortee-icon.png"
+                      alt="Shortee.TV"
+                      fill
+                      className="object-contain"
+                    />
                   </div>
-                  <span className="text-lg font-semibold text-foreground">
-                    {type === "credits" 
-                      ? (isChinese ? "充值积分" : "Top Up Credits")
-                      : (isChinese ? planInfo?.nameCn : planInfo?.name)
-                    }
-                  </span>
+                  <div>
+                    <span className="text-lg font-semibold text-foreground block">
+                      {type === "credits" 
+                        ? (isChinese ? "充值积分" : "Top Up Credits")
+                        : (isChinese ? planInfo?.nameCn : planInfo?.name)
+                      }
+                    </span>
+                    <span className="text-xs text-muted-foreground">Shortee.TV</span>
+                  </div>
                 </div>
                 
                 {/* Credits - LARGE AND PROMINENT */}
