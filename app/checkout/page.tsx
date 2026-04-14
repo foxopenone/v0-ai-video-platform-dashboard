@@ -4,7 +4,6 @@ import { useState, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { ArrowLeft, Loader2, Shield } from "lucide-react"
 import Image from "next/image"
-import Link from "next/link"
 import { cn } from "@/lib/utils"
 
 // Card brand SVG icons
@@ -223,13 +222,13 @@ function CheckoutContent() {
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-[var(--brand-purple)]/5">
       <div className="mx-auto max-w-xl px-4 py-8 sm:py-12">
         {/* Back button */}
-        <Link
+        <a
           href="/"
-          className="mb-8 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors group"
+          className="mb-8 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors group cursor-pointer"
         >
           <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
           {isChinese ? "返回" : "Back"}
-        </Link>
+        </a>
 
         {/* Order Summary Card */}
         <div className="relative mb-8 overflow-hidden rounded-2xl border border-border/30 bg-gradient-to-br from-[var(--brand-pink)]/10 via-background to-[var(--brand-purple)]/10 p-6">
