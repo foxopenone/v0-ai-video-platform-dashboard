@@ -223,14 +223,11 @@ function CheckoutContent() {
       <div className="mx-auto max-w-xl px-4 py-8 sm:py-12">
         {/* Back button */}
         <button
+          type="button"
           onClick={() => {
-            if (window.history.length > 1) {
-              router.back()
-            } else {
-              router.push("/")
-            }
+            window.history.back()
           }}
-          className="mb-8 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors group"
+          className="mb-8 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors group cursor-pointer"
         >
           <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
           {isChinese ? "返回" : "Back"}
