@@ -238,40 +238,40 @@ function CheckoutContent() {
           <div className="relative">
             <div className="flex items-start justify-between">
               <div className="flex-1">
-                {/* Plan/Product Name with Logo */}
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="relative h-12 w-12 overflow-hidden rounded-xl bg-black/50 p-1">
+                {/* Header with Logo and Plan Name */}
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-black p-1.5 shadow-lg">
                     <Image
                       src="/images/shortee-icon.png"
-                      alt="Shortee.TV"
+                      alt="CatCut.Vip"
                       fill
                       className="object-contain"
                     />
                   </div>
-                  <div>
-                    <span className="text-lg font-semibold text-foreground block">
+                  <div className="flex flex-col">
+                    <span className="text-xl font-bold text-foreground">
                       {type === "credits" 
                         ? (isChinese ? "充值积分" : "Top Up Credits")
                         : (isChinese ? planInfo?.nameCn : planInfo?.name)
                       }
                     </span>
-                    <span className="text-xs text-muted-foreground">Shortee.TV</span>
+                    <span className="text-sm text-[var(--brand-pink)]">CatCut.Vip</span>
                   </div>
                 </div>
                 
-                {/* Credits - LARGE AND PROMINENT */}
-                <div className="mb-2">
-                  <span className="text-4xl font-bold bg-gradient-to-r from-[var(--brand-pink)] to-[var(--brand-purple)] bg-clip-text text-transparent">
+                {/* Credits - LARGE AND PROMINENT - centered */}
+                <div className="text-center py-4">
+                  <span className="text-5xl font-bold bg-gradient-to-r from-[var(--brand-pink)] to-[var(--brand-purple)] bg-clip-text text-transparent">
                     {type === "credits" ? amount : (plan === "pro" ? "1250" : "300")}
                   </span>
-                  <span className="ml-2 text-xl font-semibold text-foreground">
+                  <span className="ml-2 text-2xl font-semibold text-foreground">
                     {isChinese ? "积分" : "Credits"}
                   </span>
                 </div>
                 
-                {/* Price - smaller, less prominent */}
-                <p className="text-sm text-muted-foreground">
-                  {isChinese ? "仅需" : "Only"} <span className="font-medium text-foreground">${getTotal()}</span>
+                {/* Price - smaller, centered */}
+                <p className="text-center text-sm text-muted-foreground">
+                  {isChinese ? "仅需" : "Only"} <span className="font-medium text-foreground/80">${getTotal()}</span>
                 </p>
               </div>
             </div>
