@@ -1,18 +1,20 @@
 "use client"
 
 import { useState } from "react"
-import { Check, Zap, Crown, CreditCard, Loader2 } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Check, Zap, Crown, CreditCard } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface PricingSectionProps {
   currentPlan?: "free" | "basic" | "pro"
   userCredits?: number
+  lang?: string // 语言设置
 }
 
 const CREDIT_AMOUNTS = [10, 20, 30, 50, 100]
 
-export function PricingSection({ currentPlan = "free", userCredits = 12 }: PricingSectionProps) {
-  const [loadingPlan, setLoadingPlan] = useState<string | null>(null)
+export function PricingSection({ currentPlan = "free", userCredits = 12, lang = "EN" }: PricingSectionProps) {
+  const router = useRouter()
   const [selectedCreditAmount, setSelectedCreditAmount] = useState<number>(20)
   const [selectedPlanId, setSelectedPlanId] = useState<string>("pro") // 默认选中 Pro
 
@@ -25,39 +27,17 @@ export function PricingSection({ currentPlan = "free", userCredits = 12 }: Prici
     }
   }
 
-  // 调用 Stripe Checkout API
-  const handleCheckout = async (type: "subscription" | "credits", plan?: string, amount?: number) => {
-    const key = type === "subscription" ? plan : `credits-${amount}`
-    setLoadingPlan(key || null)
-
-    try {
-      const body: Record<string, unknown> = { type }
-      if (type === "subscription" && plan) {
-        body.plan = plan
-      } else if (type === "credits" && amount) {
-        body.amount = amount
-      }
-
-      const res = await fetch("https://n8n-production-8abb.up.railway.app/webhook/stripe-create-checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      })
-
-      if (!res.ok) {
-        throw new Error("Failed to create checkout session")
-      }
-
-      const data = await res.json()
-      if (data.url) {
-        window.location.href = data.url
-      }
-    } catch (error) {
-      console.error("Checkout error:", error)
-      alert("Failed to start checkout. Please try again.")
-    } finally {
-      setLoadingPlan(null)
+  // 跳转到支付方式选择页面
+  const handlePurchase = (type: "plan" | "credits", plan?: string, amount?: number) => {
+    const params = new URLSearchParams()
+    params.set("type", type)
+    params.set("lang", lang)
+    if (type === "plan" && plan) {
+      params.set("plan", plan)
+    } else if (type === "credits" && amount) {
+      params.set("amount", amount.toString())
     }
+    router.push(`/checkout?${params.toString()}`)
   }
 
   const plans = [
@@ -78,17 +58,17 @@ export function PricingSection({ currentPlan = "free", userCredits = 12 }: Prici
     },
     {
       id: "basic",
-      name: "Basic Plan",
+      name: "Member",
       price: 29,
       credits: 300,
-      description: "For creators who need more power",
+      description: lang === "中" ? "为需要更多能力的创作者" : "For creators who need more power",
       features: [
-        "300 Credits included",
-        "Additional credits $0.10 each",
-        "Priority rendering",
-        "Email support",
+        lang === "中" ? "包含 300 积分" : "300 Credits included",
+        lang === "中" ? "额外积分 $0.10/个" : "Additional credits $0.10 each",
+        lang === "中" ? "优先渲染" : "Priority rendering",
+        lang === "中" ? "邮件支持" : "Email support",
       ],
-      buttonText: currentPlan === "basic" ? "Current Plan" : "Subscribe",
+      buttonText: currentPlan === "basic" ? (lang === "中" ? "当前套餐" : "Current Plan") : (lang === "中" ? "购买" : "Purchase"),
       buttonDisabled: currentPlan === "basic",
       icon: CreditCard,
     },
@@ -97,15 +77,15 @@ export function PricingSection({ currentPlan = "free", userCredits = 12 }: Prici
       name: "Pro",
       price: 99,
       credits: 1250,
-      description: "For professional creators",
+      description: lang === "中" ? "为专业创作者" : "For professional creators",
       features: [
-        "1250 Credits included",
-        "Additional credits $0.08 each",
-        "4K export",
-        "Priority support",
-        "Custom voice cloning",
+        lang === "中" ? "包含 1250 积分" : "1250 Credits included",
+        lang === "中" ? "额外积分 $0.08/个" : "Additional credits $0.08 each",
+        lang === "中" ? "4K 导出" : "4K export",
+        lang === "中" ? "优先支持" : "Priority support",
+        lang === "中" ? "自定义声音克隆" : "Custom voice cloning",
       ],
-      buttonText: currentPlan === "pro" ? "Current Plan" : "Upgrade to Pro",
+      buttonText: currentPlan === "pro" ? (lang === "中" ? "当前套餐" : "Current Plan") : (lang === "中" ? "购买 Pro" : "Purchase Pro"),
       buttonDisabled: currentPlan === "pro",
       popular: true,
       icon: Crown,
@@ -167,10 +147,10 @@ export function PricingSection({ currentPlan = "free", userCredits = 12 }: Prici
             <button
               onClick={() => {
                 if (plan.id !== "free" && !plan.buttonDisabled) {
-                  handleCheckout("subscription", plan.id)
+                  handlePurchase("plan", plan.id)
                 }
               }}
-              disabled={plan.buttonDisabled || loadingPlan === plan.id}
+              disabled={plan.buttonDisabled}
               className={cn(
                 "mt-5 w-full rounded-lg py-2 text-xs font-medium transition-all",
                 plan.popular
@@ -180,11 +160,7 @@ export function PricingSection({ currentPlan = "free", userCredits = 12 }: Prici
                     : "border border-border/40 text-foreground hover:bg-secondary/30"
               )}
             >
-              {loadingPlan === plan.id ? (
-                <Loader2 className="mx-auto h-4 w-4 animate-spin" />
-              ) : (
-                plan.buttonText
-              )}
+              {plan.buttonText}
             </button>
           </div>
         )})}
@@ -237,15 +213,10 @@ export function PricingSection({ currentPlan = "free", userCredits = 12 }: Prici
             </div>
           </div>
           <button
-            onClick={() => handleCheckout("credits", undefined, selectedCreditAmount)}
-            disabled={loadingPlan?.startsWith("credits")}
-            className="mt-4 w-full rounded-lg bg-[var(--brand-pink)] py-2 text-xs font-bold text-white transition-all hover:opacity-90 disabled:opacity-50"
+            onClick={() => handlePurchase("credits", undefined, selectedCreditAmount)}
+            className="mt-4 w-full rounded-lg bg-[var(--brand-pink)] py-2 text-xs font-bold text-white transition-all hover:opacity-90"
           >
-            {loadingPlan?.startsWith("credits") ? (
-              <Loader2 className="mx-auto h-4 w-4 animate-spin" />
-            ) : (
-              "Buy Credits"
-            )}
+            {lang === "中" ? "购买积分" : "Buy Credits"}
           </button>
         </div>
       </div>
