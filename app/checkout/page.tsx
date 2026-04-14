@@ -236,39 +236,48 @@ function CheckoutContent() {
           
           <div className="relative">
             <div className="flex items-start justify-between">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Sparkles className="h-5 w-5 text-[var(--brand-pink)]" />
-                  <span className="text-sm font-medium text-[var(--brand-pink)]">
+              <div className="flex-1">
+                {/* Plan/Product Name */}
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--brand-pink)] to-[var(--brand-purple)]">
+                    <Sparkles className="h-5 w-5 text-white" />
+                  </div>
+                  <span className="text-lg font-semibold text-foreground">
                     {type === "credits" 
-                      ? (isChinese ? "购买积分" : "Buy Credits")
+                      ? (isChinese ? "充值积分" : "Top Up Credits")
                       : (isChinese ? planInfo?.nameCn : planInfo?.name)
                     }
                   </span>
                 </div>
-                <h1 className="text-3xl font-bold text-foreground">
-                  ${getTotal()}
-                </h1>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {type === "credits"
-                    ? (isChinese ? `${amount} 积分` : `${amount} Credits`)
-                    : (isChinese ? planInfo?.descriptionCn : planInfo?.description)
-                  }
+                
+                {/* Credits - LARGE AND PROMINENT */}
+                <div className="mb-2">
+                  <span className="text-4xl font-bold bg-gradient-to-r from-[var(--brand-pink)] to-[var(--brand-purple)] bg-clip-text text-transparent">
+                    {type === "credits" ? amount : (plan === "pro" ? "1250" : "300")}
+                  </span>
+                  <span className="ml-2 text-xl font-semibold text-foreground">
+                    {isChinese ? "积分" : "Credits"}
+                  </span>
+                </div>
+                
+                {/* Price - smaller, less prominent */}
+                <p className="text-sm text-muted-foreground">
+                  {isChinese ? "仅需" : "Only"} <span className="font-medium text-foreground">${getTotal()}</span>
                 </p>
-              </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--brand-pink)] to-[var(--brand-purple)]">
-                <Sparkles className="h-6 w-6 text-white" />
               </div>
             </div>
 
             {/* Features for plans */}
             {type === "plan" && planInfo && (
-              <div className="mt-4 flex flex-wrap gap-2">
-                {(isChinese ? planInfo.featuresCn : planInfo.features).map((feature, i) => (
-                  <span key={i} className="inline-flex items-center rounded-full bg-secondary/50 px-3 py-1 text-xs font-medium text-muted-foreground">
-                    {feature}
-                  </span>
-                ))}
+              <div className="mt-5 pt-4 border-t border-border/20">
+                <p className="text-xs text-muted-foreground mb-2">{isChinese ? "包含权益" : "Included benefits"}</p>
+                <div className="flex flex-wrap gap-2">
+                  {(isChinese ? planInfo.featuresCn : planInfo.features).map((feature, i) => (
+                    <span key={i} className="inline-flex items-center rounded-full bg-[var(--brand-pink)]/10 border border-[var(--brand-pink)]/20 px-3 py-1 text-xs font-medium text-[var(--brand-pink)]">
+                      {feature}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
           </div>
