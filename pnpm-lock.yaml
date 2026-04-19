@@ -102,6 +102,18 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.97.0
         version: 2.97.0
+      '@tailwindcss/postcss':
+        specifier: ^4.1.13
+        version: 4.1.18
+      '@types/node':
+        specifier: ^22
+        version: 22.19.11
+      '@types/react':
+        specifier: 19.2.7
+        version: 19.2.7
+      '@types/react-dom':
+        specifier: 19.2.3
+        version: 19.2.3(@types/react@19.2.7)
       autoprefixer:
         specifier: ^10.4.20
         version: 10.4.24(postcss@8.5.6)
@@ -132,6 +144,9 @@ importers:
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      postcss:
+        specifier: ^8.5
+        version: 8.5.6
       react:
         specifier: 19.2.3
         version: 19.2.3
@@ -159,37 +174,21 @@ importers:
       tailwind-merge:
         specifier: ^2.5.5
         version: 2.6.1
+      tailwindcss:
+        specifier: ^3.4.17
+        version: 3.4.19
       tailwindcss-animate:
         specifier: ^1.0.7
         version: 1.0.7(tailwindcss@3.4.19)
+      typescript:
+        specifier: 5.7.3
+        version: 5.7.3
       vaul:
         specifier: ^1.1.2
         version: 1.1.2(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       zod:
         specifier: ^3.24.1
         version: 3.25.76
-    devDependencies:
-      '@tailwindcss/postcss':
-        specifier: ^4.1.13
-        version: 4.1.18
-      '@types/node':
-        specifier: ^22
-        version: 22.19.11
-      '@types/react':
-        specifier: 19.2.7
-        version: 19.2.7
-      '@types/react-dom':
-        specifier: 19.2.3
-        version: 19.2.3(@types/react@19.2.7)
-      postcss:
-        specifier: ^8.5
-        version: 8.5.6
-      tailwindcss:
-        specifier: ^3.4.17
-        version: 3.4.19
-      typescript:
-        specifier: 5.7.3
-        version: 5.7.3
 
 packages:
 

@@ -1,626 +1,240 @@
 "use client"
 
-import { useState, useCallback, useEffect, useMemo, useRef } from "react"
-import { useRouter } from "next/navigation"
-import { Header } from "@/components/dashboard/header"
-import { WorkspaceSection } from "@/components/dashboard/workspace-section"
-import { ProjectsSection } from "@/components/dashboard/projects-section"
-import { DiscoveryFeed } from "@/components/dashboard/discovery-feed"
-import { PricingSection } from "@/components/dashboard/pricing-section"
-import { ReviewRoom } from "@/components/dashboard/review-room"
-import type { InsertedProject, StepReviewData } from "@/components/dashboard/config-form"
-import { stopJob } from "@/lib/mock-api"
+import { Search, Play, Plus, ChevronLeft, ChevronRight, Flame, Sparkles, Coins } from "lucide-react"
+import { useState } from "react"
+import Image from "next/image"
 
-export default function Page() {
-  const router = useRouter()
-  const [stepReviewData, setStepReviewData] = useState<StepReviewData | null>(null)
-  const [progressData, setProgressData] = useState<{ jobRecordId: string; projectTitle: string; videoCount?: number } | null>(null)
-  const [insertedProjects, setInsertedProjects] = useState<InsertedProject[]>([])
-  const reviewStateStorageKey = "shortee_active_review_room"
-  // Posted items for Discovery feed
-  const [postedItems, setPostedItems] = useState<Array<{ id: string; title: string; author: string; videoParts: Array<{ part: string; url: string }> }>>(() => {
-    try {
-      const saved = localStorage.getItem("postedItems")
-      return saved ? JSON.parse(saved) : []
-    } catch { return [] }
-  })
-  // Track hidden/deleted project IDs (array for React state diffing)
-  const [hiddenProjectIds, setHiddenProjectIds] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem("hiddenProjectIds")
-      return saved ? JSON.parse(saved) : []
-    } catch { return [] }
-  })
+// 严格按照原设计的数据
+const featuredDrama = {
+  title: "I made a deal with the future",
+  subtitle: "我与未来做交易-1",
+  image: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/01-idCSPSBcN6l5h0ZMTEp4yH33ZC0Trg.jpg",
+}
 
-  // Restore insertedProjects from localStorage on mount.
-  // 1) Remove entries without airtableRecordId (useless - can't track)
-  // 2) Deduplicate by id and airtableRecordId
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("insertedProjects")
-      if (saved) {
-        const parsed: InsertedProject[] = JSON.parse(saved)
-        const seenIds = new Set<string>()
-        const seenRecords = new Set<string>()
-        const cleaned = parsed.filter((p) => {
-          // Remove entries that have no airtableRecordId -- they can't be tracked
-          if (!p.airtableRecordId) return false
-          if (seenIds.has(p.id)) return false
-          if (seenRecords.has(p.airtableRecordId)) return false
-          seenIds.add(p.id)
-          seenRecords.add(p.airtableRecordId)
-          return true
-        })
-        localStorage.setItem("insertedProjects", JSON.stringify(cleaned))
-        setInsertedProjects(cleaned)
-        console.log("[v0] Restored insertedProjects:", cleaned.length, "entries. Removed", parsed.length - cleaned.length, "stale/dupe entries.")
-      }
-    } catch {}
-  }, [])
+const rankingDramas = [
+  { id: 1, title: "After Being Hurt by a Scumbag", cover: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/01-idCSPSBcN6l5h0ZMTEp4yH33ZC0Trg.jpg" },
+  { id: 2, title: "Oops, My Cat Princess Identity is Out!", cover: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/01-idCSPSBcN6l5h0ZMTEp4yH33ZC0Trg.jpg" },
+  { id: 3, title: "Different Names, Same Love", cover: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/01-idCSPSBcN6l5h0ZMTEp4yH33ZC0Trg.jpg" },
+  { id: 4, title: "After the Storm", cover: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/01-idCSPSBcN6l5h0ZMTEp4yH33ZC0Trg.jpg" },
+]
 
-  useEffect(() => {
-    try {
-      const saved = sessionStorage.getItem(reviewStateStorageKey)
-      if (!saved) return
-      const parsed = JSON.parse(saved)
-      if (parsed?.mode === "step_review" && parsed?.data?.jobRecordId) {
-        setStepReviewData(parsed.data)
-        return
-      }
-      if (parsed?.mode === "progress" && parsed?.data?.jobRecordId) {
-        setProgressData(parsed.data)
-      }
-    } catch {}
-  }, [])
+const newReleases = [
+  { id: 1, title: "Daddy, You Got the Wrong Mommy!", cover: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/01-idCSPSBcN6l5h0ZMTEp4yH33ZC0Trg.jpg" },
+  { id: 2, title: "Secret Romance", cover: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/01-idCSPSBcN6l5h0ZMTEp4yH33ZC0Trg.jpg" },
+  { id: 3, title: "Love in the City", cover: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/01-idCSPSBcN6l5h0ZMTEp4yH33ZC0Trg.jpg" },
+]
 
-  useEffect(() => {
-    try {
-      if (stepReviewData) {
-        sessionStorage.setItem(reviewStateStorageKey, JSON.stringify({ mode: "step_review", data: stepReviewData }))
-        return
-      }
-      if (progressData) {
-        sessionStorage.setItem(reviewStateStorageKey, JSON.stringify({ mode: "progress", data: progressData }))
-        return
-      }
-      sessionStorage.removeItem(reviewStateStorageKey)
-    } catch {}
-  }, [stepReviewData, progressData])
+const tabs = ["All", "Ranking", "Micro", "New", "Trending"]
 
-  // Some providers may return auth code on "/".
-  // Force it through /auth/callback so code exchange is handled in one place.
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    if (window.location.hostname.toLowerCase() === "shortee.tv") {
-      window.location.replace(`https://www.shortee.tv${window.location.pathname}${window.location.search}${window.location.hash}`)
-      return
-    }
-    const url = new URL(window.location.href)
-    const hasAuthCode = !!url.searchParams.get("code")
-    const hasAuthError = !!url.searchParams.get("error") || !!url.searchParams.get("error_description")
-    if (url.pathname === "/" && (hasAuthCode || hasAuthError)) {
-      router.replace(`/auth/callback${url.search}`)
-    }
-  }, [router])
-
-  const pollableProjects = useMemo(
-    () =>
-      insertedProjects.filter(
-        (p) =>
-          !!p.airtableRecordId &&
-          !["completed", "posted", "stopped"].includes(p.status)
-      ),
-    [insertedProjects]
-  )
-
-  const pollableKey = useMemo(
-    () =>
-      pollableProjects
-        .map((p) => `${p.id}:${p.airtableRecordId}:${p.status}`)
-        .sort()
-        .join("|"),
-    [pollableProjects]
-  )
-
-  const getObservedVideoPartCount = useCallback((videos: Array<{ part?: string | number; url?: string | null }> | null | undefined) => {
-    if (!Array.isArray(videos) || videos.length === 0) return 0
-    let highestPart = 0
-    for (const video of videos) {
-      const partNum = Number(video?.part ?? 0)
-      if (Number.isFinite(partNum) && partNum > highestPart) highestPart = partNum
-    }
-    return Math.max(videos.length, highestPart)
-  }, [])
-
-  // Continuously refresh only active cards, using one bulk API call.
-  useEffect(() => {
-    if (pollableProjects.length === 0) return
-
-    let cancelled = false
-
-    const refreshCards = async () => {
-      if (document.visibilityState !== "visible") return
-
-      try {
-        const res = await fetch(`/api/job-status-bulk?_ts=${Date.now()}`, {
-          method: "POST",
-          cache: "no-store",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            record_ids: pollableProjects
-              .map((p) => p.airtableRecordId)
-              .filter(Boolean),
-          }),
-        })
-
-        if (!res.ok || cancelled) return
-
-        const payload = await res.json()
-        if (cancelled) return
-
-        const jobs = Array.isArray(payload?.records) ? payload.records : []
-        const jobMap = new Map<string, Record<string, unknown>>(
-          jobs.map((job: Record<string, unknown>) => [String(job.Job_Record_ID || ""), job])
-        )
-
-        setInsertedProjects((prev) => {
-          let changed = false
-          const next = prev.map((p) => {
-            if (!p.airtableRecordId || ["completed", "posted", "stopped"].includes(p.status)) {
-              return p
-            }
-
-            const job = jobMap.get(p.airtableRecordId)
-            if (!job) return p
-
-            const betterTitle = job.Job_ID ? `Job #${job.Job_ID}${job.Total_Episodes ? ` (${job.Total_Episodes} EP)` : ""}` : null
-            const status = String(job.Status || "").trim()
-            const hasR2Key = !!job.Bible_R2_Key
-            const finalVideosRaw = job.Final_Video
-
-            let finalVideos: Array<{ part?: string; url?: string }> = []
-            if (Array.isArray(finalVideosRaw)) {
-              finalVideos = finalVideosRaw
-            } else if (typeof finalVideosRaw === "string" && finalVideosRaw.trim()) {
-              try {
-                const parsed = JSON.parse(finalVideosRaw)
-                if (Array.isArray(parsed)) finalVideos = parsed
-              } catch {}
-            }
-
-            const readyVideoCount = finalVideos.filter((v) => typeof v?.url === "string" && v.url.trim()).length
-            const observedVideoParts = getObservedVideoPartCount(finalVideos)
-            const totalParts = Math.max(
-              Number(job.Target_Parts || 0),
-              Number(p.episodes || 0),
-              observedVideoParts,
-              0
-            )
-            const allVideosReady = totalParts > 0 ? readyVideoCount >= totalParts : readyVideoCount > 0
-            const isDone = /S9_Done|ALL_DONE|DONE|COMPLETE/i.test(status) || allVideosReady
-            const isFailed = ["Error", "Failed", "Stopped"].includes(status) || /error|failed|stopped|fatal|abort|cancel/i.test(status)
-
-            const nextStatus =
-              isDone ? "completed" as const :
-              isFailed && status === "Stopped" ? "stopped" as const :
-              isFailed ? "completed" as const :
-              hasR2Key ? "pending_review" as const :
-              "processing" as const
-
-            const nextProject = {
-              ...p,
-              status: p.status === "posted" ? "posted" : nextStatus,
-              progress: isDone || hasR2Key ? 100 : p.progress,
-              ...(betterTitle && p.title.startsWith("New Project") ? { title: betterTitle } : {}),
-              ...(totalParts > 0 ? { episodes: totalParts } : {}),
-            }
-            if (
-              nextProject.status !== p.status ||
-              nextProject.progress !== p.progress ||
-              nextProject.title !== p.title ||
-              nextProject.episodes !== p.episodes
-            ) {
-              changed = true
-              return nextProject
-            }
-            return p
-          })
-          return changed ? next : prev
-        })
-      } catch {
-        // Keep current card state on transient failure
-      }
-    }
-
-    refreshCards()
-    const interval = window.setInterval(refreshCards, 60000)
-
-    return () => {
-      cancelled = true
-      window.clearInterval(interval)
-    }
-  }, [pollableKey, pollableProjects])
-
-  // Persist insertedProjects to localStorage on every change (skip first render)
-  const hasMounted = useRef(false)
-  useEffect(() => {
-    if (!hasMounted.current) { hasMounted.current = true; return }
-    try {
-      localStorage.setItem("insertedProjects", JSON.stringify(insertedProjects))
-    } catch {}
-  }, [insertedProjects])
-
-  const handleProjectInsert = useCallback((project: InsertedProject) => {
-    setInsertedProjects((prev) => {
-      // Prevent duplicate: skip if same id or same airtableRecordId already exists
-      if (prev.some((p) => p.id === project.id)) return prev
-      if (project.airtableRecordId && prev.some((p) => p.airtableRecordId === project.airtableRecordId)) return prev
-      return [project, ...prev]
-    })
-  }, [])
-
-  const handleProjectDelete = useCallback((id: string) => {
-    // Remove from insertedProjects if it's there
-    setInsertedProjects((prev) => prev.filter((p) => p.id !== id))
-    // Also mark it hidden for mock/placeholder cards
-    setHiddenProjectIds((prev) => {
-      if (prev.includes(id)) return prev
-      const next = [...prev, id]
-      try { localStorage.setItem("hiddenProjectIds", JSON.stringify(next)) } catch {}
-      return next
-    })
-  }, [])
-
-  const handleProjectUpdate = useCallback((id: string, updates: Partial<InsertedProject>) => {
-    setInsertedProjects((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, ...updates } : p))
-    )
-  }, [])
-
-  const handleStepReviewReady = useCallback((data: StepReviewData) => {
-    if (data.frontendJobId) {
-      setInsertedProjects((prev) =>
-        prev.map((p) =>
-          p.id === data.frontendJobId
-            ? { ...p, status: "pending_review" as const, progress: 100 }
-            : p
-        )
-      )
-    }
-    setProgressData(null) // close progress if open
-    setStepReviewData({
-      ...data,
-      videoCount: Math.max(Number(data.videoCount || 0), 1),
-    })
-  }, [])
-
-  // Browser back button: push history state when entering review/progress mode
-  // and listen for popstate to close them gracefully.
-  const isInSubView = !!(stepReviewData || progressData)
-  useEffect(() => {
-    if (isInSubView) {
-      window.history.pushState({ reviewOpen: true }, "")
-    }
-  }, [isInSubView])
-
-  useEffect(() => {
-    const handlePopState = () => {
-      // User pressed browser back -- close any open sub-view
-      if (stepReviewData) setStepReviewData(null)
-      if (progressData) setProgressData(null)
-    }
-    window.addEventListener("popstate", handlePopState)
-    return () => window.removeEventListener("popstate", handlePopState)
-  }, [stepReviewData, progressData])
-
-  // Step Review mode (real data from R2)
-  if (stepReviewData) {
-    return (
-      <ReviewRoom
-        key={`review-${stepReviewData.jobRecordId}-${stepReviewData.currentStatus}`}
-        mode="step_review"
-        jobRecordId={stepReviewData.jobRecordId}
-        lockToken={stepReviewData.lockToken}
-        bibleR2Key={stepReviewData.bibleR2Key}
-        currentStatus={stepReviewData.currentStatus || "S3_Bible_Check"}
-        projectTitle={stepReviewData.projectTitle}
-        videoCount={stepReviewData.videoCount}
-        workMode={stepReviewData.workMode}
-        onClose={() => {
-          setStepReviewData(null)
-          if (window.history.state?.reviewOpen) window.history.back()
-        }}
-        onDelete={() => {
-          handleProjectDelete(
-            insertedProjects.find((p) => p.airtableRecordId === stepReviewData.jobRecordId)?.id
-              ?? stepReviewData.jobRecordId
-          )
-          setStepReviewData(null)
-        }}
-        onApproved={() => {
-          // Update the card to "approved" so it shows Approved badge
-          setInsertedProjects((prev) =>
-            prev.map((p) =>
-              p.airtableRecordId === stepReviewData.jobRecordId
-                ? { ...p, status: "approved" as const }
-                : p
-            )
-          )
-        }}
-onStop={async () => {
-  // Stop job in backend
-  if (stepReviewData?.jobRecordId) {
-    await stopJob(stepReviewData.jobRecordId)
-    // Update local project status
-    setInsertedProjects((prev) =>
-      prev.map((p) =>
-        p.airtableRecordId === stepReviewData.jobRecordId
-          ? { ...p, status: "stopped" as InsertedProject["status"] }
-          : p
-      )
-    )
-  }
-  }}
-        onPost={(jobRecordId, videoParts) => {
-          const project = insertedProjects.find((p) => p.airtableRecordId === jobRecordId)
-          const item = {
-            id: jobRecordId,
-            title: project?.title || stepReviewData?.projectTitle || "Untitled",
-            author: "You",
-            videoParts,
-          }
-          setPostedItems((prev) => {
-            if (prev.some((p) => p.id === jobRecordId)) return prev
-            const next = [item, ...prev]
-            localStorage.setItem("postedItems", JSON.stringify(next))
-            return next
-          })
-          // Update project status to "posted"
-          setInsertedProjects((prev) =>
-            prev.map((p) =>
-              p.airtableRecordId === jobRecordId
-                ? { ...p, status: "posted" as InsertedProject["status"] }
-                : p
-            )
-          )
-          // Close review room after posting
-          setStepReviewData(null)
-          if (window.history.state?.reviewOpen) window.history.back()
-        }}
-      />
-    )
-  }
-
-  // Progress mode (real project, waiting for review status)
-  if (progressData) {
-    return (
-      <ReviewRoom
-        key={`progress-${progressData.jobRecordId}`}
-        mode="progress"
-        jobRecordId={progressData.jobRecordId}
-        projectTitle={progressData.projectTitle}
-        videoCount={progressData.videoCount}
-        onClose={() => {
-          setProgressData(null)
-          if (window.history.state?.reviewOpen) window.history.back()
-        }}
-        onDelete={() => {
-          handleProjectDelete(
-            insertedProjects.find((p) => p.airtableRecordId === progressData.jobRecordId)?.id
-              ?? progressData.jobRecordId
-          )
-          setProgressData(null)
-        }}
-onStop={async () => {
-  // Stop job in backend
-  if (progressData?.jobRecordId) {
-    await stopJob(progressData.jobRecordId)
-    // Update local project status
-    setInsertedProjects((prev) =>
-      prev.map((p) =>
-        p.airtableRecordId === progressData.jobRecordId
-          ? { ...p, status: "stopped" as InsertedProject["status"] }
-          : p
-      )
-    )
-  }
-  }}
-        onPost={(jobRecordId, videoParts) => {
-          const project = insertedProjects.find((p) => p.airtableRecordId === jobRecordId)
-          const item = {
-            id: jobRecordId,
-            title: project?.title || progressData.projectTitle,
-            author: "You",
-            videoParts,
-          }
-          setPostedItems((prev) => {
-            if (prev.some((p) => p.id === jobRecordId)) return prev
-            const next = [item, ...prev]
-            localStorage.setItem("postedItems", JSON.stringify(next))
-            return next
-          })
-          setInsertedProjects((prev) =>
-            prev.map((p) =>
-              p.airtableRecordId === jobRecordId
-                ? { ...p, status: "posted" as InsertedProject["status"] }
-                : p
-            )
-          )
-          setProgressData(null)
-          if (window.history.state?.reviewOpen) window.history.back()
-        }}
-        onReviewReady={(data) => {
-          // Transition from progress -> step_review
-          setStepReviewData({
-            jobRecordId: progressData.jobRecordId,
-            lockToken: data.lockToken,
-            bibleR2Key: data.bibleR2Key,
-            currentStatus: data.currentStatus,
-            projectTitle: progressData.projectTitle,
-            videoCount: Math.max(Number(data.videoCount || 0), Number(progressData.videoCount || 0), 1),
-            workMode: data.workMode || "Step_Review",
-          })
-          setProgressData(null)
-        }}
-      />
-    )
-  }
-
-
+export default function ReeLeeHomePage() {
+  const [activeTab, setActiveTab] = useState("All")
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <Header />
-
-      <main className="mx-auto w-full max-w-[1400px] flex-1 px-6 py-5">
-        <WorkspaceSection onProjectInsert={handleProjectInsert} onProjectUpdate={handleProjectUpdate} onStepReviewReady={handleStepReviewReady} />
-        <div className="my-5 h-px bg-border/20" />
-        <ProjectsSection
-          onProjectDelete={handleProjectDelete}
-          hiddenProjectIds={hiddenProjectIds}
-          onProjectClick={async (id) => {
-            const inserted = insertedProjects.find((p) => p.id === id)
-            const recordId = inserted?.airtableRecordId
-            if (!recordId) return
-
-            // For pending_review / approved / completed / posted cards, try quick fetch to jump directly to review
-            if (inserted.status === "pending_review" || inserted.status === "approved" || inserted.status === "completed" || inserted.status === "posted") {
-              try {
-                const res = await fetch(`/api/job-status?record_id=${encodeURIComponent(recordId)}&_ts=${Date.now()}`, {
-                  cache: "no-store",
-                })
-                if (res.ok) {
-                  const job = await res.json()
-                  console.log("[v0] Opening project - job.Status:", job.Status, "job:", job)
-                  // Always use Bible_R2_Key for bible loading; Script_R2_Key is fetched separately by ReviewRoom
-                  const bibleKey = job.Bible_R2_Key
-                  if (bibleKey) {
-                    setStepReviewData({
-                      jobRecordId: recordId,
-                      lockToken: job.Lock_Token || "",
-                      bibleR2Key: bibleKey,
-                      currentStatus: job.Status,
-                      projectTitle: inserted.title,
-                      videoCount: Math.max(
-                        Number(job.Target_Parts || 0),
-                        Number(inserted.episodes || 0),
-                        getObservedVideoPartCount(Array.isArray(job.Final_Video) ? job.Final_Video : (() => {
-                          if (typeof job.Final_Video !== "string" || !job.Final_Video.trim()) return []
-                          try {
-                            const parsed = JSON.parse(job.Final_Video)
-                            return Array.isArray(parsed) ? parsed : []
-                          } catch {
-                            return []
-                          }
-                        })()),
-                        1
-                      ),
-                      workMode: job.Work_Mode || "Step_Review",
-                    })
-                    return
-                  }
-                }
-              } catch { /* fall through to progress */ }
-            }
-
-            // Open progress mode for processing cards or if quick fetch failed
-            setProgressData({ jobRecordId: recordId, projectTitle: inserted.title, videoCount: inserted.episodes || 1 })
-          }}
-          onProjectPost={(projectId) => {
-            const project = insertedProjects.find((p) => p.id === projectId)
-            if (!project?.airtableRecordId) return
-            const recordId = project.airtableRecordId
-            // Fetch videos from backend then post
-            fetch(`/api/job-status?record_id=${encodeURIComponent(recordId)}&_ts=${Date.now()}`, {
-              cache: "no-store",
-            })
-              .then((r) => r.ok ? r.json() : Promise.reject(new Error(`API ${r.status}`)))
-              .then((job: Record<string, unknown>) => {
-                let finalVideos: Array<{ part: string; url: string }> = []
-                if (job.Final_Video) {
-                  try {
-                    finalVideos = typeof job.Final_Video === "string"
-                      ? JSON.parse(job.Final_Video as string)
-                      : job.Final_Video as Array<{ part: string; url: string }>
-                  } catch { /* ignore */ }
-                }
-                const item = {
-                  id: recordId,
-                  title: project.title,
-                  author: "You",
-                  videoParts: finalVideos,
-                }
-                setPostedItems((prev) => {
-                  if (prev.some((p) => p.id === recordId)) return prev
-                  const next = [item, ...prev]
-                  localStorage.setItem("postedItems", JSON.stringify(next))
-                  return next
-                })
-                setInsertedProjects((prev) =>
-                  prev.map((p) =>
-                    p.id === projectId
-                      ? { ...p, status: "posted" as InsertedProject["status"] }
-                      : p
-                  )
-                )
-              })
-              .catch((err: Error) => console.error("[v0] Failed to post project:", err))
-          }}
-          insertedProjects={insertedProjects}
-        />
-        <div className="my-5 h-px bg-border/20" />
-        <DiscoveryFeed 
-          postedItems={postedItems} 
-          onPostClick={(item) => {
-            // Open video player modal for posted item
-            if (item.videoParts.length > 0 && item.videoParts[0].url) {
-              setStepReviewData({
-                jobRecordId: item.id,
-                bibleR2Key: "",
-                currentStatus: "ALL_DONE",
-                projectTitle: item.title,
-                videoCount: Math.max(item.videoParts.length, 1),
-                lockToken: "",
-                workMode: "Step_Review",
-              })
-            }
-          }}
-          onDeletePost={(itemId) => {
-            if (confirm("Delete this post from Discovery?")) {
-              setPostedItems((prev) => {
-                const next = prev.filter((p) => p.id !== itemId)
-                localStorage.setItem("postedItems", JSON.stringify(next))
-                return next
-              })
-            }
-          }}
-        />
-        <div className="my-5 h-px bg-border/20" />
-        {/* Pricing Section */}
-        <PricingSection />
-      </main>
-
-      <footer className="border-t border-border/20">
-        <div className="mx-auto flex w-full max-w-[1400px] flex-col items-center justify-between gap-4 px-6 py-4 md:flex-row">
-          <p className="text-xs text-muted-foreground">
-            Shortee.TV &middot; AI Video Production Suite. All rights reserved.
-          </p>
-          <div className="flex items-center gap-6">
-            <span className="cursor-pointer text-xs text-muted-foreground transition-colors hover:text-foreground">
-              Documentation
-            </span>
-            <span className="cursor-pointer text-xs text-muted-foreground transition-colors hover:text-foreground">
-              API Status
-            </span>
-            <span className="cursor-pointer text-xs text-muted-foreground transition-colors hover:text-foreground">
-              Terms
-            </span>
-            <span className="cursor-pointer text-xs text-muted-foreground transition-colors hover:text-foreground">
-              Privacy
-            </span>
+    // 手机尺寸: 390x844 (iPhone 14 标准)
+    <div className="relative mx-auto h-[844px] w-[390px] overflow-hidden bg-[#0a0a0f] font-sans text-white">
+      
+      {/* 状态栏 - 完全按照原设计 */}
+      <div className="flex items-center justify-between px-6 pb-2 pt-3">
+        <span className="text-sm font-semibold">03:04</span>
+        <div className="flex items-center gap-1">
+          <span className="text-xs">SOS</span>
+          <div className="flex gap-0.5">
+            <div className="h-1 w-1 rounded-full bg-white"></div>
+            <div className="h-1 w-1 rounded-full bg-white"></div>
+            <div className="h-1 w-1 rounded-full bg-white/40"></div>
+            <div className="h-1 w-1 rounded-full bg-white/40"></div>
+          </div>
+          <div className="ml-1 flex h-3 w-6 items-center rounded-sm border border-white/60 p-px">
+            <div className="h-full w-1/2 rounded-sm bg-white/60"></div>
           </div>
         </div>
-      </footer>
+      </div>
+
+      {/* 搜索栏 + 充值按钮 (原设计右上角是coins按钮) */}
+      <div className="flex items-center gap-3 px-4 py-3">
+        <div className="flex flex-1 items-center gap-3 rounded-full bg-[#1a1a24] px-4 py-3">
+          <Search className="h-5 w-5 text-gray-500" />
+          <input
+            type="text"
+            placeholder="Search dramas..."
+            className="flex-1 bg-transparent text-sm text-white/90 placeholder-gray-500 outline-none"
+          />
+        </div>
+        {/* 充值按钮 - 粉红渐变，更有活力 */}
+        <button className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-600 shadow-lg shadow-pink-500/30">
+          <Coins className="h-5 w-5 text-white" />
+        </button>
+      </div>
+
+      {/* 分类标签 - 使用粉色高亮，更鲜艳 */}
+      <div className="flex gap-1 px-4 pb-3">
+        {tabs.map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`relative px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === tab ? "text-pink-500" : "text-gray-500"
+            }`}
+          >
+            {tab}
+            {activeTab === tab && (
+              <div className="absolute bottom-0 left-1/2 h-0.5 w-5 -translate-x-1/2 rounded-full bg-gradient-to-r from-pink-500 to-rose-500" />
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* 轮播图 Banner - 按原设计比例 */}
+      <div className="relative mx-4 mb-4 overflow-hidden rounded-2xl" style={{ height: "220px" }}>
+        {/* 背景图 */}
+        <div className="absolute inset-0 bg-gradient-to-br from-purple-900/50 to-pink-900/50">
+          <Image
+            src={featuredDrama.image}
+            alt={featuredDrama.title}
+            fill
+            className="object-cover"
+          />
+        </div>
+        
+        {/* 渐变遮罩 */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
+        
+        {/* 左右箭头 */}
+        <button className="absolute left-3 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm">
+          <ChevronLeft className="h-5 w-5 text-white/80" />
+        </button>
+        <button className="absolute right-3 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm">
+          <ChevronRight className="h-5 w-5 text-white/80" />
+        </button>
+
+        {/* 内容区 */}
+        <div className="absolute bottom-0 left-0 right-0 p-4">
+          <h2 className="mb-1 text-lg font-bold leading-tight">{featuredDrama.title}</h2>
+          <p className="mb-3 text-xs text-white/60">{featuredDrama.subtitle}</p>
+          
+          {/* 按钮组 - 粉色Watch按钮 */}
+          <div className="flex items-center gap-3">
+            <button className="flex items-center gap-2 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-pink-500/40">
+              <Play className="h-4 w-4 fill-white" />
+              Watch
+            </button>
+            <button className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-2.5 text-sm font-medium text-white backdrop-blur-sm">
+              <Plus className="h-4 w-4" />
+              List
+            </button>
+          </div>
+        </div>
+
+        {/* 分页点 */}
+        <div className="absolute bottom-4 right-4 flex gap-1.5">
+          <div className="h-1.5 w-5 rounded-full bg-pink-500" />
+          <div className="h-1.5 w-1.5 rounded-full bg-white/40" />
+          <div className="h-1.5 w-1.5 rounded-full bg-white/40" />
+        </div>
+      </div>
+
+      {/* Ranking 板块 */}
+      <div className="mb-4">
+        <div className="mb-3 flex items-center gap-2 px-4">
+          <h3 className="text-base font-bold">Ranking</h3>
+          <span className="text-lg">🔥</span>
+        </div>
+        
+        <div className="flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide">
+          {rankingDramas.map((drama) => (
+            <div key={drama.id} className="w-[120px] flex-shrink-0">
+              <div className="relative mb-2 aspect-[3/4] overflow-hidden rounded-xl bg-gray-800">
+                <Image
+                  src={drama.cover}
+                  alt={drama.title}
+                  fill
+                  className="object-cover"
+                />
+                {/* 渐变叠加让封面更有层次 */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+              </div>
+              <p className="line-clamp-2 text-xs font-medium leading-tight text-white/90">
+                {drama.title}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* New Releases 板块 */}
+      <div className="mb-20">
+        <div className="mb-3 flex items-center gap-2 px-4">
+          <h3 className="text-base font-bold">New Releases</h3>
+          <span className="text-lg">✨</span>
+        </div>
+        
+        <div className="flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide">
+          {newReleases.map((drama) => (
+            <div key={drama.id} className="w-[120px] flex-shrink-0">
+              <div className="relative mb-2 aspect-[3/4] overflow-hidden rounded-xl bg-gray-800">
+                <Image
+                  src={drama.cover}
+                  alt={drama.title}
+                  fill
+                  className="object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+              </div>
+              <p className="line-clamp-2 text-xs font-medium leading-tight text-white/90">
+                {drama.title}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 底部导航栏 - 按原设计，粉色选中态 */}
+      <div className="absolute bottom-0 left-0 right-0 border-t border-white/5 bg-[#0a0a0f]/95 pb-6 pt-2 backdrop-blur-xl">
+        <div className="flex justify-around">
+          {[
+            { icon: "dramas", label: "Dramas", active: true },
+            { icon: "list", label: "My List", active: false },
+            { icon: "shorts", label: "Shorts", active: false },
+            { icon: "rewards", label: "Rewards", active: false },
+            { icon: "me", label: "Me", active: false },
+          ].map((item) => (
+            <button
+              key={item.label}
+              className={`flex flex-col items-center gap-1 ${
+                item.active ? "text-pink-500" : "text-gray-500"
+              }`}
+            >
+              {item.icon === "dramas" && (
+                <Play className={`h-6 w-6 ${item.active ? "fill-pink-500" : ""}`} />
+              )}
+              {item.icon === "list" && (
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
+                </svg>
+              )}
+              {item.icon === "shorts" && (
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
+                </svg>
+              )}
+              {item.icon === "rewards" && (
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 11.25v8.25a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5v-8.25M12 4.875A2.625 2.625 0 109.375 7.5H12m0-2.625V7.5m0-2.625A2.625 2.625 0 1114.625 7.5H12m0 0V21m-8.625-9.75h18a1.5 1.5 0 001.5-1.5v-1.5a1.5 1.5 0 00-1.5-1.5h-18a1.5 1.5 0 00-1.5 1.5v1.5a1.5 1.5 0 001.5 1.5z" />
+                </svg>
+              )}
+              {item.icon === "me" && (
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                </svg>
+              )}
+              <span className="text-[10px] font-medium">{item.label}</span>
+            </button>
+          ))}
+        </div>
+        
+        {/* Home Indicator */}
+        <div className="absolute bottom-2 left-1/2 h-1 w-32 -translate-x-1/2 rounded-full bg-white/20" />
+      </div>
     </div>
   )
 }
