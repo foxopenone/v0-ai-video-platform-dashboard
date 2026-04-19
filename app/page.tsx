@@ -1,376 +1,159 @@
 "use client"
 
-import { Search, Settings, Play, Plus, ChevronLeft, ChevronRight, Flame, Sparkles } from "lucide-react"
+import { Search, Play, Plus, ChevronLeft, ChevronRight, Flame, Sparkles, Coins } from "lucide-react"
 import { useState } from "react"
+import Image from "next/image"
 
+// 严格按照原设计的数据
 const featuredDrama = {
-  title: "I Made a Deal with the Future",
-  subtitle: "我与未来做交易",
-  episode: "Episode 1",
+  title: "I made a deal with the future",
+  subtitle: "我与未来做交易-1",
+  image: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/01-idCSPSBcN6l5h0ZMTEp4yH33ZC0Trg.jpg",
 }
 
 const rankingDramas = [
-  { id: 1, title: "After Being Hurt by a Scumbag" },
-  { id: 2, title: "Oops, My Cat Princess Identity" },
-  { id: 3, title: "Different Names, Same Love" },
-  { id: 4, title: "After the Storm" },
+  { id: 1, title: "After Being Hurt by a Scumbag", cover: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/01-idCSPSBcN6l5h0ZMTEp4yH33ZC0Trg.jpg" },
+  { id: 2, title: "Oops, My Cat Princess Identity is Out!", cover: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/01-idCSPSBcN6l5h0ZMTEp4yH33ZC0Trg.jpg" },
+  { id: 3, title: "Different Names, Same Love", cover: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/01-idCSPSBcN6l5h0ZMTEp4yH33ZC0Trg.jpg" },
+  { id: 4, title: "After the Storm", cover: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/01-idCSPSBcN6l5h0ZMTEp4yH33ZC0Trg.jpg" },
 ]
 
 const newReleases = [
-  { id: 1, title: "Daddy, You Got the Wrong Mommy" },
-  { id: 2, title: "Secret Romance" },
-  { id: 3, title: "Love in the City" },
-  { id: 4, title: "Destined Hearts" },
+  { id: 1, title: "Daddy, You Got the Wrong Mommy!", cover: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/01-idCSPSBcN6l5h0ZMTEp4yH33ZC0Trg.jpg" },
+  { id: 2, title: "Secret Romance", cover: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/01-idCSPSBcN6l5h0ZMTEp4yH33ZC0Trg.jpg" },
+  { id: 3, title: "Love in the City", cover: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/01-idCSPSBcN6l5h0ZMTEp4yH33ZC0Trg.jpg" },
 ]
 
 const tabs = ["All", "Ranking", "Micro", "New", "Trending"]
 
-export default function ReeLeeDesignPage() {
+export default function ReeLeeHomePage() {
   const [activeTab, setActiveTab] = useState("All")
 
   return (
-    <div 
-      style={{ 
-        minHeight: "100vh",
-        backgroundColor: "#08080c",
-        color: "white",
-        maxWidth: "430px",
-        margin: "0 auto",
-        position: "relative",
-        fontFamily: "system-ui, -apple-system, sans-serif"
-      }}
-    >
-      {/* Status bar */}
-      <div style={{ 
-        display: "flex", 
-        justifyContent: "space-between", 
-        alignItems: "center",
-        padding: "12px 24px 8px"
-      }}>
-        <span style={{ fontSize: "14px", fontWeight: 500 }}>03:04</span>
-        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-          <span style={{ fontSize: "12px" }}>SOS</span>
-          <span style={{ opacity: 0.6 }}>●●○</span>
-          <div style={{ 
-            width: "24px", 
-            height: "12px", 
-            border: "1px solid rgba(255,255,255,0.6)", 
-            borderRadius: "3px",
-            padding: "1px",
-            marginLeft: "4px"
-          }}>
-            <div style={{ width: "50%", height: "100%", backgroundColor: "rgba(255,255,255,0.6)", borderRadius: "2px" }} />
+    // 手机尺寸: 390x844 (iPhone 14 标准)
+    <div className="relative mx-auto h-[844px] w-[390px] overflow-hidden bg-[#0a0a0f] font-sans text-white">
+      
+      {/* 状态栏 - 完全按照原设计 */}
+      <div className="flex items-center justify-between px-6 pb-2 pt-3">
+        <span className="text-sm font-semibold">03:04</span>
+        <div className="flex items-center gap-1">
+          <span className="text-xs">SOS</span>
+          <div className="flex gap-0.5">
+            <div className="h-1 w-1 rounded-full bg-white"></div>
+            <div className="h-1 w-1 rounded-full bg-white"></div>
+            <div className="h-1 w-1 rounded-full bg-white/40"></div>
+            <div className="h-1 w-1 rounded-full bg-white/40"></div>
+          </div>
+          <div className="ml-1 flex h-3 w-6 items-center rounded-sm border border-white/60 p-px">
+            <div className="h-full w-1/2 rounded-sm bg-white/60"></div>
           </div>
         </div>
       </div>
 
-      {/* Search Bar */}
-      <div style={{ padding: "8px 16px 16px" }}>
-        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-          <div style={{ 
-            flex: 1, 
-            display: "flex", 
-            alignItems: "center", 
-            gap: "12px",
-            backgroundColor: "#16151f",
-            borderRadius: "16px",
-            padding: "12px 16px",
-            border: "1px solid rgba(37, 35, 54, 0.5)"
-          }}>
-            <Search style={{ width: "20px", height: "20px", color: "#6b6788" }} />
-            <input
-              type="text"
-              placeholder="Search dramas..."
-              style={{ 
-                backgroundColor: "transparent", 
-                border: "none", 
-                outline: "none",
-                color: "rgba(255,255,255,0.9)",
-                fontSize: "14px",
-                flex: 1
-              }}
-            />
-          </div>
-          <button style={{ 
-            width: "44px", 
-            height: "44px", 
-            borderRadius: "12px",
-            backgroundColor: "#16151f",
-            border: "1px solid rgba(37, 35, 54, 0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer"
-          }}>
-            <Settings style={{ width: "20px", height: "20px", color: "#c9a87c" }} />
-          </button>
+      {/* 搜索栏 + 充值按钮 (原设计右上角是coins按钮) */}
+      <div className="flex items-center gap-3 px-4 py-3">
+        <div className="flex flex-1 items-center gap-3 rounded-full bg-[#1a1a24] px-4 py-3">
+          <Search className="h-5 w-5 text-gray-500" />
+          <input
+            type="text"
+            placeholder="Search dramas..."
+            className="flex-1 bg-transparent text-sm text-white/90 placeholder-gray-500 outline-none"
+          />
         </div>
+        {/* 充值按钮 - 粉红渐变，更有活力 */}
+        <button className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-600 shadow-lg shadow-pink-500/30">
+          <Coins className="h-5 w-5 text-white" />
+        </button>
       </div>
 
-      {/* Category Tabs */}
-      <div style={{ padding: "0 16px 16px", display: "flex", gap: "4px" }}>
+      {/* 分类标签 - 使用粉色高亮，更鲜艳 */}
+      <div className="flex gap-1 px-4 pb-3">
         {tabs.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            style={{ 
-              padding: "8px 16px",
-              fontSize: "14px",
-              fontWeight: 500,
-              borderRadius: "24px",
-              border: "none",
-              backgroundColor: "transparent",
-              color: activeTab === tab ? "#c9a87c" : "#6b6788",
-              cursor: "pointer",
-              position: "relative"
-            }}
+            className={`relative px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === tab ? "text-pink-500" : "text-gray-500"
+            }`}
           >
             {tab}
             {activeTab === tab && (
-              <div style={{ 
-                position: "absolute",
-                bottom: 0,
-                left: "50%",
-                transform: "translateX(-50%)",
-                width: "20px",
-                height: "2px",
-                background: "linear-gradient(to right, #c9a87c, #d4b896)",
-                borderRadius: "2px"
-              }} />
+              <div className="absolute bottom-0 left-1/2 h-0.5 w-5 -translate-x-1/2 rounded-full bg-gradient-to-r from-pink-500 to-rose-500" />
             )}
           </button>
         ))}
       </div>
 
-      {/* Featured Banner */}
-      <div style={{ padding: "0 16px 24px" }}>
-        <div style={{ 
-          position: "relative",
-          borderRadius: "24px",
-          overflow: "hidden",
-          aspectRatio: "16/10",
-          backgroundColor: "#1e1d2a"
-        }}>
-          {/* Gradient overlay */}
-          <div style={{ 
-            position: "absolute",
-            inset: 0,
-            background: "linear-gradient(to top, #08080c 0%, rgba(8,8,12,0.4) 50%, transparent 100%)",
-            zIndex: 1
-          }} />
-          
-          {/* Placeholder for image */}
-          <div style={{ 
-            position: "absolute",
-            inset: 0,
-            background: "linear-gradient(135deg, #2a2940 0%, #1a1928 100%)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center"
-          }}>
-            <span style={{ color: "#6b6788", fontSize: "14px" }}>Featured Image</span>
-          </div>
-          
-          {/* Navigation Arrows */}
-          <button style={{ 
-            position: "absolute",
-            left: "12px",
-            top: "50%",
-            transform: "translateY(-50%)",
-            zIndex: 20,
-            width: "36px",
-            height: "36px",
-            borderRadius: "50%",
-            backgroundColor: "rgba(0,0,0,0.3)",
-            backdropFilter: "blur(12px)",
-            border: "1px solid rgba(255,255,255,0.1)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer"
-          }}>
-            <ChevronLeft style={{ width: "20px", height: "20px", color: "rgba(255,255,255,0.8)" }} />
-          </button>
-          <button style={{ 
-            position: "absolute",
-            right: "12px",
-            top: "50%",
-            transform: "translateY(-50%)",
-            zIndex: 20,
-            width: "36px",
-            height: "36px",
-            borderRadius: "50%",
-            backgroundColor: "rgba(0,0,0,0.3)",
-            backdropFilter: "blur(12px)",
-            border: "1px solid rgba(255,255,255,0.1)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer"
-          }}>
-            <ChevronRight style={{ width: "20px", height: "20px", color: "rgba(255,255,255,0.8)" }} />
-          </button>
+      {/* 轮播图 Banner - 按原设计比例 */}
+      <div className="relative mx-4 mb-4 overflow-hidden rounded-2xl" style={{ height: "220px" }}>
+        {/* 背景图 */}
+        <div className="absolute inset-0 bg-gradient-to-br from-purple-900/50 to-pink-900/50">
+          <Image
+            src={featuredDrama.image}
+            alt={featuredDrama.title}
+            fill
+            className="object-cover"
+          />
+        </div>
+        
+        {/* 渐变遮罩 */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
+        
+        {/* 左右箭头 */}
+        <button className="absolute left-3 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm">
+          <ChevronLeft className="h-5 w-5 text-white/80" />
+        </button>
+        <button className="absolute right-3 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm">
+          <ChevronRight className="h-5 w-5 text-white/80" />
+        </button>
 
-          {/* Content */}
-          <div style={{ 
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            padding: "20px",
-            zIndex: 20
-          }}>
-            <h2 style={{ 
-              fontSize: "20px", 
-              fontWeight: 600, 
-              marginBottom: "4px",
-              letterSpacing: "-0.02em"
-            }}>
-              {featuredDrama.title}
-            </h2>
-            <p style={{ 
-              fontSize: "14px", 
-              color: "rgba(255,255,255,0.5)", 
-              marginBottom: "16px" 
-            }}>
-              {featuredDrama.subtitle} · {featuredDrama.episode}
-            </p>
-            
-            {/* Action Buttons */}
-            <div style={{ display: "flex", gap: "12px" }}>
-              <button style={{ 
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                padding: "10px 24px",
-                background: "linear-gradient(to right, #c9a87c, #d4b896)",
-                borderRadius: "24px",
-                border: "none",
-                color: "#1a1714",
-                fontWeight: 600,
-                fontSize: "14px",
-                cursor: "pointer",
-                boxShadow: "0 4px 20px rgba(201,168,124,0.3)"
-              }}>
-                <Play style={{ width: "16px", height: "16px", fill: "currentColor" }} />
-                Watch
-              </button>
-              <button style={{ 
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                padding: "10px 20px",
-                backgroundColor: "rgba(255,255,255,0.1)",
-                backdropFilter: "blur(12px)",
-                borderRadius: "24px",
-                border: "1px solid rgba(255,255,255,0.1)",
-                color: "rgba(255,255,255,0.9)",
-                fontWeight: 500,
-                fontSize: "14px",
-                cursor: "pointer"
-              }}>
-                <Plus style={{ width: "16px", height: "16px" }} />
-                My List
-              </button>
-            </div>
+        {/* 内容区 */}
+        <div className="absolute bottom-0 left-0 right-0 p-4">
+          <h2 className="mb-1 text-lg font-bold leading-tight">{featuredDrama.title}</h2>
+          <p className="mb-3 text-xs text-white/60">{featuredDrama.subtitle}</p>
+          
+          {/* 按钮组 - 粉色Watch按钮 */}
+          <div className="flex items-center gap-3">
+            <button className="flex items-center gap-2 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-pink-500/40">
+              <Play className="h-4 w-4 fill-white" />
+              Watch
+            </button>
+            <button className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-2.5 text-sm font-medium text-white backdrop-blur-sm">
+              <Plus className="h-4 w-4" />
+              List
+            </button>
           </div>
+        </div>
 
-          {/* Pagination Dots */}
-          <div style={{ 
-            position: "absolute",
-            bottom: "20px",
-            right: "20px",
-            zIndex: 20,
-            display: "flex",
-            gap: "6px"
-          }}>
-            <div style={{ width: "20px", height: "6px", borderRadius: "3px", backgroundColor: "#c9a87c" }} />
-            <div style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "rgba(255,255,255,0.3)" }} />
-            <div style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "rgba(255,255,255,0.3)" }} />
-          </div>
+        {/* 分页点 */}
+        <div className="absolute bottom-4 right-4 flex gap-1.5">
+          <div className="h-1.5 w-5 rounded-full bg-pink-500" />
+          <div className="h-1.5 w-1.5 rounded-full bg-white/40" />
+          <div className="h-1.5 w-1.5 rounded-full bg-white/40" />
         </div>
       </div>
 
-      {/* Ranking Section */}
-      <div style={{ paddingBottom: "24px" }}>
-        <div style={{ 
-          display: "flex", 
-          alignItems: "center", 
-          gap: "8px", 
-          padding: "0 16px", 
-          marginBottom: "16px" 
-        }}>
-          <h3 style={{ fontSize: "18px", fontWeight: 600, letterSpacing: "-0.02em" }}>Ranking</h3>
-          <div style={{ 
-            width: "20px", 
-            height: "20px", 
-            borderRadius: "50%",
-            background: "linear-gradient(135deg, #ff6b35, #f7931e)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center"
-          }}>
-            <Flame style={{ width: "12px", height: "12px", color: "white" }} />
-          </div>
+      {/* Ranking 板块 */}
+      <div className="mb-4">
+        <div className="mb-3 flex items-center gap-2 px-4">
+          <h3 className="text-base font-bold">Ranking</h3>
+          <span className="text-lg">🔥</span>
         </div>
         
-        <div style={{ 
-          display: "flex", 
-          gap: "12px", 
-          padding: "0 16px",
-          overflowX: "auto"
-        }}>
-          {rankingDramas.map((drama, index) => (
-            <div key={drama.id} style={{ flexShrink: 0, width: "140px", cursor: "pointer" }}>
-              <div style={{ 
-                position: "relative",
-                borderRadius: "16px",
-                overflow: "hidden",
-                marginBottom: "8px",
-                aspectRatio: "3/4",
-                backgroundColor: "#16151f"
-              }}>
-                {/* Rank Badge */}
-                <div style={{ 
-                  position: "absolute",
-                  top: "8px",
-                  left: "8px",
-                  zIndex: 10,
-                  width: "28px",
-                  height: "28px",
-                  borderRadius: "8px",
-                  backgroundColor: "rgba(0,0,0,0.6)",
-                  backdropFilter: "blur(8px)",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center"
-                }}>
-                  <span style={{ fontSize: "12px", fontWeight: 700, color: "#c9a87c" }}>{index + 1}</span>
-                </div>
-                
-                {/* Placeholder */}
-                <div style={{ 
-                  width: "100%",
-                  height: "100%",
-                  background: "linear-gradient(135deg, #1e1d2a, #16151f)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center"
-                }}>
-                  <span style={{ color: "#6b6788", fontSize: "12px" }}>Cover</span>
-                </div>
+        <div className="flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide">
+          {rankingDramas.map((drama) => (
+            <div key={drama.id} className="w-[120px] flex-shrink-0">
+              <div className="relative mb-2 aspect-[3/4] overflow-hidden rounded-xl bg-gray-800">
+                <Image
+                  src={drama.cover}
+                  alt={drama.title}
+                  fill
+                  className="object-cover"
+                />
+                {/* 渐变叠加让封面更有层次 */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
               </div>
-              <p style={{ 
-                fontSize: "14px", 
-                color: "rgba(255,255,255,0.8)", 
-                fontWeight: 500,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                display: "-webkit-box",
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: "vertical"
-              }}>
+              <p className="line-clamp-2 text-xs font-medium leading-tight text-white/90">
                 {drama.title}
               </p>
             </div>
@@ -378,85 +161,26 @@ export default function ReeLeeDesignPage() {
         </div>
       </div>
 
-      {/* New Releases Section */}
-      <div style={{ paddingBottom: "120px" }}>
-        <div style={{ 
-          display: "flex", 
-          alignItems: "center", 
-          gap: "8px", 
-          padding: "0 16px", 
-          marginBottom: "16px" 
-        }}>
-          <h3 style={{ fontSize: "18px", fontWeight: 600, letterSpacing: "-0.02em" }}>New Releases</h3>
-          <div style={{ 
-            width: "20px", 
-            height: "20px", 
-            borderRadius: "50%",
-            background: "linear-gradient(135deg, #c9a87c, #9b7f5a)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center"
-          }}>
-            <Sparkles style={{ width: "12px", height: "12px", color: "white" }} />
-          </div>
+      {/* New Releases 板块 */}
+      <div className="mb-20">
+        <div className="mb-3 flex items-center gap-2 px-4">
+          <h3 className="text-base font-bold">New Releases</h3>
+          <span className="text-lg">✨</span>
         </div>
         
-        <div style={{ 
-          display: "flex", 
-          gap: "12px", 
-          padding: "0 16px",
-          overflowX: "auto"
-        }}>
+        <div className="flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide">
           {newReleases.map((drama) => (
-            <div key={drama.id} style={{ flexShrink: 0, width: "140px", cursor: "pointer" }}>
-              <div style={{ 
-                position: "relative",
-                borderRadius: "16px",
-                overflow: "hidden",
-                marginBottom: "8px",
-                aspectRatio: "3/4",
-                backgroundColor: "#16151f"
-              }}>
-                {/* New Badge */}
-                <div style={{ 
-                  position: "absolute",
-                  top: "8px",
-                  right: "8px",
-                  zIndex: 10,
-                  padding: "2px 8px",
-                  borderRadius: "6px",
-                  background: "linear-gradient(to right, #c9a87c, #d4b896)",
-                  fontSize: "10px",
-                  fontWeight: 700,
-                  color: "#1a1714",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em"
-                }}>
-                  New
-                </div>
-                
-                {/* Placeholder */}
-                <div style={{ 
-                  width: "100%",
-                  height: "100%",
-                  background: "linear-gradient(135deg, #1e1d2a, #16151f)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center"
-                }}>
-                  <span style={{ color: "#6b6788", fontSize: "12px" }}>Cover</span>
-                </div>
+            <div key={drama.id} className="w-[120px] flex-shrink-0">
+              <div className="relative mb-2 aspect-[3/4] overflow-hidden rounded-xl bg-gray-800">
+                <Image
+                  src={drama.cover}
+                  alt={drama.title}
+                  fill
+                  className="object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
               </div>
-              <p style={{ 
-                fontSize: "14px", 
-                color: "rgba(255,255,255,0.8)", 
-                fontWeight: 500,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                display: "-webkit-box",
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: "vertical"
-              }}>
+              <p className="line-clamp-2 text-xs font-medium leading-tight text-white/90">
                 {drama.title}
               </p>
             </div>
@@ -464,85 +188,52 @@ export default function ReeLeeDesignPage() {
         </div>
       </div>
 
-      {/* Bottom Navigation */}
-      <div style={{ 
-        position: "fixed",
-        bottom: 0,
-        left: 0,
-        right: 0,
-        maxWidth: "430px",
-        margin: "0 auto",
-        zIndex: 50
-      }}>
-        <div style={{ 
-          backgroundColor: "rgba(13, 12, 20, 0.95)",
-          backdropFilter: "blur(20px)",
-          borderTop: "1px solid rgba(37, 35, 54, 0.3)",
-          padding: "8px 8px 32px"
-        }}>
-          <div style={{ display: "flex", justifyContent: "space-around" }}>
-            {[
-              { icon: "dramas", label: "Dramas", active: true },
-              { icon: "list", label: "My List", active: false },
-              { icon: "shorts", label: "Shorts", active: false },
-              { icon: "rewards", label: "Rewards", active: false },
-              { icon: "me", label: "Me", active: false },
-            ].map((item) => (
-              <button
-                key={item.label}
-                style={{ 
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "4px",
-                  padding: "8px 16px",
-                  borderRadius: "12px",
-                  border: "none",
-                  backgroundColor: "transparent",
-                  color: item.active ? "#c9a87c" : "#6b6788",
-                  cursor: "pointer"
-                }}
-              >
-                {item.icon === "dramas" && <Play style={{ width: "24px", height: "24px", fill: item.active ? "#c9a87c" : "none" }} />}
-                {item.icon === "list" && (
-                  <svg style={{ width: "24px", height: "24px" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
-                  </svg>
-                )}
-                {item.icon === "shorts" && (
-                  <svg style={{ width: "24px", height: "24px" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
-                  </svg>
-                )}
-                {item.icon === "rewards" && (
-                  <svg style={{ width: "24px", height: "24px" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 11.25v8.25a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5v-8.25M12 4.875A2.625 2.625 0 109.375 7.5H12m0-2.625V7.5m0-2.625A2.625 2.625 0 1114.625 7.5H12m0 0V21m-8.625-9.75h18a1.5 1.5 0 001.5-1.5v-1.5a1.5 1.5 0 00-1.5-1.5h-18a1.5 1.5 0 00-1.5 1.5v1.5a1.5 1.5 0 001.5 1.5z" />
-                  </svg>
-                )}
-                {item.icon === "me" && (
-                  <svg style={{ width: "24px", height: "24px" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                  </svg>
-                )}
-                <span style={{ fontSize: "10px", fontWeight: 500, letterSpacing: "0.02em" }}>
-                  {item.label}
-                </span>
-              </button>
-            ))}
-          </div>
+      {/* 底部导航栏 - 按原设计，粉色选中态 */}
+      <div className="absolute bottom-0 left-0 right-0 border-t border-white/5 bg-[#0a0a0f]/95 pb-6 pt-2 backdrop-blur-xl">
+        <div className="flex justify-around">
+          {[
+            { icon: "dramas", label: "Dramas", active: true },
+            { icon: "list", label: "My List", active: false },
+            { icon: "shorts", label: "Shorts", active: false },
+            { icon: "rewards", label: "Rewards", active: false },
+            { icon: "me", label: "Me", active: false },
+          ].map((item) => (
+            <button
+              key={item.label}
+              className={`flex flex-col items-center gap-1 ${
+                item.active ? "text-pink-500" : "text-gray-500"
+              }`}
+            >
+              {item.icon === "dramas" && (
+                <Play className={`h-6 w-6 ${item.active ? "fill-pink-500" : ""}`} />
+              )}
+              {item.icon === "list" && (
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
+                </svg>
+              )}
+              {item.icon === "shorts" && (
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
+                </svg>
+              )}
+              {item.icon === "rewards" && (
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 11.25v8.25a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5v-8.25M12 4.875A2.625 2.625 0 109.375 7.5H12m0-2.625V7.5m0-2.625A2.625 2.625 0 1114.625 7.5H12m0 0V21m-8.625-9.75h18a1.5 1.5 0 001.5-1.5v-1.5a1.5 1.5 0 00-1.5-1.5h-18a1.5 1.5 0 00-1.5 1.5v1.5a1.5 1.5 0 001.5 1.5z" />
+                </svg>
+              )}
+              {item.icon === "me" && (
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                </svg>
+              )}
+              <span className="text-[10px] font-medium">{item.label}</span>
+            </button>
+          ))}
         </div>
         
         {/* Home Indicator */}
-        <div style={{ 
-          position: "absolute",
-          bottom: "8px",
-          left: "50%",
-          transform: "translateX(-50%)",
-          width: "128px",
-          height: "4px",
-          backgroundColor: "rgba(255,255,255,0.2)",
-          borderRadius: "2px"
-        }} />
+        <div className="absolute bottom-2 left-1/2 h-1 w-32 -translate-x-1/2 rounded-full bg-white/20" />
       </div>
     </div>
   )
