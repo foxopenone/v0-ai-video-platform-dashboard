@@ -468,8 +468,15 @@ onStop={async () => {
 
 
 
-  return (
+return (
     <div className="flex min-h-screen flex-col bg-background">
+      {/* Quick link to ReeLee mobile design */}
+      <a 
+        href="/reelee-design" 
+        className="fixed top-4 right-4 z-50 px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-500 text-white text-sm font-medium rounded-full shadow-lg hover:shadow-xl transition-shadow"
+      >
+        View ReeLee Design
+      </a>
       <Header />
 
       <main className="mx-auto w-full max-w-[1400px] flex-1 px-6 py-5">
